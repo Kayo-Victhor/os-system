@@ -1,16 +1,14 @@
 import express from "express";
 import cors from "cors";
 
+import healthRoutes from "./routes/health.routes.js";
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({
-    status: "ok"
-  });
-});
+app.use("/health", healthRoutes);
 
 const PORT = 3333;
 
