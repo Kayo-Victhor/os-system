@@ -8,6 +8,9 @@ export const createCustomerSchema = z.object({
   address: z.string().max(255).optional()
 });
 
+export const updateCustomerSchema =
+  createCustomerSchema.partial();
+
 export type CreateCustomerInput = z.infer<
   typeof createCustomerSchema
 >;

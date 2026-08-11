@@ -37,7 +37,6 @@ export function authMiddleware(
 
     return;
   }
-
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
@@ -49,9 +48,11 @@ export function authMiddleware(
       return;
     }
 
-    req.userId = decoded.sub;
-
-    if (decoded.role !== "ADMIN" && decoded.role !== "USER") {
+    if (
+      decoded.role !== "ADMIN" &&
+      decoded.role !== "USER" &&
+      decoded.role !== "TECHNICIAN"
+    ) {
       res.status(401).json({
         error: "Role inválida",
       });
@@ -60,15 +61,6 @@ export function authMiddleware(
     }
 
     req.userId = decoded.sub;
-
-    if (decoded.role !== "ADMIN" && decoded.role !== "USER") {
-      res.status(401).json({
-        error: "Role inválida",
-      });
-
-      return;
-    }
-
     req.userRole = decoded.role;
 
     next();

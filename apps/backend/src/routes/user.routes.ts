@@ -6,16 +6,21 @@ import {
 } from "../controllers/user.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
-import { requireRole } from "../middlewares/role.middleware.js";
+import { requirePermission } from "../middlewares/permission.middleware.js";
 
 const router = Router();
 
-router.post("/", createUserController);
+router.post(
+  "/",
+  authMiddleware,
+  requirePermission("USER_CREATE"),
+  createUserController
+);
 
 router.get(
   "/",
   authMiddleware,
-  requireRole("ADMIN"),
+  requirePermission("USER_READ"),
   listUsersController
 );
 

@@ -11,6 +11,7 @@ export async function createUser(data: CreateUserInput) {
       name: data.name,
       email: data.email,
       password: passwordHash,
+      role: data.role
     },
     select: {
       id: true,
@@ -18,8 +19,8 @@ export async function createUser(data: CreateUserInput) {
       email: true,
       role: true,
       createdAt: true,
-      updatedAt: true,
-    },
+      updatedAt: true
+    }
   });
 }
 
