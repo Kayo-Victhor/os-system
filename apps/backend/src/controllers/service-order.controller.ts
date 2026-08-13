@@ -15,6 +15,7 @@ import {
   updateServiceOrderSchema,
   assignTechnicianSchema,
   updateServiceOrderStatusSchema,
+  listServiceOrdersQuerySchema,
 } from "../schemas/service-order.schema.js";
 
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
@@ -66,11 +67,22 @@ export async function createServiceOrderController(
 // =====================================================
 
 export async function listServiceOrdersController(
-  _req: Request,
+  req: Request,
   res: Response,
 ) {
+  const result = listServiceOrdersQuerySchema.safeParse(req.query);
+
+  if (!result.success) {
+    res.status(400).json({
+      error: "Filtros inválidos",
+      details: result.error.flatten(),
+    });
+
+    return;
+  }
+
   try {
-    const serviceOrders = await listServiceOrders();
+    const serviceOrders = await listServiceOrders(result.data);
 
     res.json(serviceOrders);
   } catch (error) {

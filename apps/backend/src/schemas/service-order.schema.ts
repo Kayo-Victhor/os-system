@@ -31,6 +31,16 @@ export const assignTechnicianSchema = z.object({
   technicianId: z.string().uuid().nullable(),
 });
 
+export const listServiceOrdersQuerySchema = z.object({
+  status: z
+    .enum(["OPEN", "IN_PROGRESS", "WAITING", "COMPLETED", "CANCELLED"])
+    .optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  customerId: z.string().uuid().optional(),
+  technicianId: z.string().uuid().optional(),
+  search: z.string().min(1).max(150).optional(),
+});
+
 export type CreateServiceOrderInput = z.infer<typeof createServiceOrderSchema>;
 
 export type UpdateServiceOrderInput = z.infer<typeof updateServiceOrderSchema>;

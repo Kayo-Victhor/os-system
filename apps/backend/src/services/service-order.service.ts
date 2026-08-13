@@ -4,7 +4,11 @@ import type {
   UpdateServiceOrderInput,
 } from "../schemas/service-order.schema.js";
 
-import type { ServiceOrderStatus } from "../generated/prisma/client.js";
+import type {
+  ServiceOrderStatus,
+  ServiceOrderPriority,
+  Prisma,
+} from "../generated/prisma/client.js";
 
 export async function createServiceOrder(
   data: CreateServiceOrderInput,
@@ -21,8 +25,32 @@ export async function createServiceOrder(
   });
 }
 
-export async function listServiceOrders() {
+export interface ListServiceOrdersFilters {
+  status?: ServiceOrderStatus;
+  priority?: ServiceOrderPriority;
+  customerId?: string;
+  technicianId?: string;
+  search?: string;
+}
+
+export async function listServiceOrders(filters: ListServiceOrdersFilters = {}) {
+  const where: Prisma.ServiceOrderWhereInput = {
+    status: filters.status,
+    priority: filters.priority,
+    customerId: filters.customerId,
+    technicianId: filters.technicianId,
+    ...(filters.search
+      ? {
+          OR: [
+            { title: { contains: filters.search, mode: "insensitive" } },
+            { description: { contains: filters.search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
   return prisma.serviceOrder.findMany({
+    where,
     orderBy: {
       createdAt: "desc",
     },

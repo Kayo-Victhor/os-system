@@ -23,8 +23,9 @@ export async function createUser(data: CreateUserInput) {
   });
 }
 
-export async function listUsers() {
+export async function listUsers(filters: { role?: "ADMIN" | "USER" | "TECHNICIAN" } = {}) {
   return prisma.user.findMany({
+    where: filters.role ? { role: filters.role } : {},
     select: {
       id: true,
       name: true,

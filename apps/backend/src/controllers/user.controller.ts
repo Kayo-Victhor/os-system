@@ -44,11 +44,17 @@ export async function createUserController(
 }
 
 export async function listUsersController(
-  _req: Request,
+  req: Request,
   res: Response
 ) {
   try {
-    const users = await listUsers();
+    const role = req.query.role;
+    const validRoles = ["ADMIN", "USER", "TECHNICIAN"] as const;
+    const roleFilter = validRoles.includes(role as (typeof validRoles)[number])
+      ? (role as (typeof validRoles)[number])
+      : undefined;
+
+    const users = await listUsers({ role: roleFilter });
 
     res.json(users);
   } catch (error) {

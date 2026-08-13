@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import type { CreateCustomerInput } from "../schemas/customer.schema.js";
+import type { Prisma } from "../generated/prisma/client.js";
 
 export async function createCustomer(data: CreateCustomerInput) {
   return prisma.customer.create({
@@ -7,8 +8,23 @@ export async function createCustomer(data: CreateCustomerInput) {
   });
 }
 
-export async function listCustomers() {
+export interface ListCustomersFilters {
+  search?: string;
+}
+
+export async function listCustomers(filters: ListCustomersFilters = {}) {
+  const where: Prisma.CustomerWhereInput = filters.search
+    ? {
+        OR: [
+          { name: { contains: filters.search, mode: "insensitive" } },
+          { email: { contains: filters.search, mode: "insensitive" } },
+          { document: { contains: filters.search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
   return prisma.customer.findMany({
+    where,
     orderBy: {
       createdAt: "desc"
     }

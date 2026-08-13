@@ -47,9 +47,14 @@ export async function createCustomerController(req: Request, res: Response) {
   }
 }
 
-export async function listCustomersController(_req: Request, res: Response) {
+export async function listCustomersController(req: Request, res: Response) {
   try {
-    const customers = await listCustomers();
+    const search =
+      typeof req.query.search === "string" && req.query.search.trim().length > 0
+        ? req.query.search.trim()
+        : undefined;
+
+    const customers = await listCustomers({ search });
 
     res.json(customers);
   } catch (error) {
