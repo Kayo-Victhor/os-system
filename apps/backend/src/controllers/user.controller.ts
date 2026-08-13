@@ -6,6 +6,7 @@ import {
 } from "../services/user.service.js";
 
 import { createUserSchema } from "../schemas/user.schema.js";
+import { mapPrismaError } from "../lib/prisma-errors.js";
 
 export async function createUserController(
   req: Request,
@@ -27,6 +28,13 @@ export async function createUserController(
 
     res.status(201).json(user);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({

@@ -13,6 +13,8 @@ import {
   updateCustomerSchema,
 } from "../schemas/customer.schema.js";
 
+import { mapPrismaError } from "../lib/prisma-errors.js";
+
 export async function createCustomerController(req: Request, res: Response) {
   const result = createCustomerSchema.safeParse(req.body);
 
@@ -30,6 +32,13 @@ export async function createCustomerController(req: Request, res: Response) {
 
     res.status(201).json(customer);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
@@ -110,6 +119,13 @@ export async function updateCustomerController(
 
     res.json(updatedCustomer);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
