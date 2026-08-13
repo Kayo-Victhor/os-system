@@ -1,8 +1,8 @@
 import "dotenv/config";
 
-import bcrypt from "bcrypt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { hashPassword } from "../src/lib/password.js";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL
@@ -13,7 +13,8 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const passwordHash = await bcrypt.hash("admin123456", 10);
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD ?? "admin123456";
+  const passwordHash = await hashPassword(seedPassword);
 
   const admin = await prisma.user.upsert({
     where: {
@@ -31,6 +32,13 @@ async function main() {
   });
 
   console.log("Admin criado:", admin.email);
+
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.warn(
+      "Aviso: SEED_ADMIN_PASSWORD não definido, usando senha padrão de desenvolvimento. " +
+        "Defina SEED_ADMIN_PASSWORD no .env antes de rodar o seed em qualquer ambiente compartilhado.",
+    );
+  }
 }
 
 main()

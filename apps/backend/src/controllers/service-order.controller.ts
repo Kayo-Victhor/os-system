@@ -253,7 +253,7 @@ export async function assignTechnicianController(
 // =====================================================
 
 export async function updateServiceOrderStatusController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
   const result = updateServiceOrderStatusSchema.safeParse(req.body);
@@ -273,6 +273,21 @@ export async function updateServiceOrderStatusController(
     if (!serviceOrder) {
       res.status(404).json({
         error: "Ordem de serviço não encontrada",
+      });
+
+      return;
+    }
+
+    // OS_UPDATE_STATUS lets a TECHNICIAN update status in general, but that
+    // must not extend to orders assigned to someone else — otherwise any
+    // technician could change the state of any order in the system just by
+    // knowing/guessing its id.
+    if (
+      req.userRole === "TECHNICIAN" &&
+      serviceOrder.technicianId !== req.userId
+    ) {
+      res.status(403).json({
+        error: "Você só pode atualizar o status de ordens atribuídas a você",
       });
 
       return;

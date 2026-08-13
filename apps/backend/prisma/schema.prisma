@@ -38,6 +38,23 @@ model User {
   updatedAt        DateTime       @updatedAt
   createdOrders    ServiceOrder[] @relation("CreatedOrders")
   technicianOrders ServiceOrder[] @relation("TechnicianOrders")
+  refreshTokens    RefreshToken[]
+}
+
+// Refresh tokens are stored as a hash (never the raw token) so a database
+// leak alone can't be used to impersonate a session. Rotation on every use
+// (see auth.service.ts) means a stolen-but-already-used token is a signal
+// of theft, not just a valid credential.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Customer {
