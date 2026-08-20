@@ -31,6 +31,14 @@ export function mapPrismaError(error: unknown): KnownErrorResponse | null {
         status: 404,
         body: { error: "Registro não encontrado" },
       };
+    case "P2003":
+      return {
+        status: 409,
+        body: {
+          error:
+            "Não é possível excluir este registro pois ele possui vínculos com outros dados",
+        },
+      };
     default:
       return null;
   }
