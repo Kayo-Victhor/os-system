@@ -12,6 +12,9 @@ import { ServiceOrderDetailPage } from "./pages/ServiceOrderDetailPage.tsx";
 import { CustomersListPage } from "./pages/CustomersListPage.tsx";
 import { CustomerNewPage } from "./pages/CustomerNewPage.tsx";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage.tsx";
+import { TechniciansListPage } from "./pages/TechniciansListPage.tsx";
+import { UsersListPage } from "./pages/UsersListPage.tsx";
+import { UserNewPage } from "./pages/UserNewPage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 
 function App() {
@@ -76,6 +79,32 @@ function App() {
               element={
                 <RequirePermission permission="CUSTOMER_READ">
                   <CustomerDetailPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="/technicians"
+              element={
+                <RequirePermission permission="OS_READ">
+                  <TechniciansListPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="/users"
+              element={
+                <RequirePermission permission="USER_READ">
+                  <UsersListPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/users/new"
+              element={
+                <RequirePermission permission="USER_CREATE">
+                  <UserNewPage />
                 </RequirePermission>
               }
             />
