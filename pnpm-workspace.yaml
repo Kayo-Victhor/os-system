@@ -3,6 +3,6 @@ packages:
   - "packages/*"
 allowBuilds:
   '@prisma/engines': true
-  bcrypt: true
+  argon2: true
   esbuild: false
   prisma: true
