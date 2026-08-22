@@ -11,6 +11,7 @@ enum UserRole {
   ADMIN
   USER
   TECHNICIAN
+  CUSTOMER
 }
 
 enum ServiceOrderStatus {

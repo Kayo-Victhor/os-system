@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
 import type { CreateUserInput, UpdateUserInput } from "../schemas/user.schema.js";
+import type { UserRole } from "../generated/prisma/client.js";
 
 export async function createUser(data: CreateUserInput) {
   const passwordHash = await hashPassword(data.password);
@@ -23,7 +24,7 @@ export async function createUser(data: CreateUserInput) {
   });
 }
 
-export async function listUsers(filters: { role?: "ADMIN" | "USER" | "TECHNICIAN" } = {}) {
+export async function listUsers(filters: { role?: UserRole } = {}) {
   return prisma.user.findMany({
     where: filters.role ? { role: filters.role } : {},
     select: {

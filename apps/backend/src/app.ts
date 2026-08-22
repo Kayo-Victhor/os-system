@@ -39,9 +39,9 @@ app.use("/health", healthRoutes);
 app.use(apiRateLimiter);
 
 // /auth is intentionally NOT behind csrfProtection:
-//  - /auth/login happens before any CSRF cookie exists, so there's nothing
-//    to double-submit yet (it's already protected by its own rate limiter
-//    and by SameSite=Lax, which blocks the cross-site form submissions that
+//  - /auth/register and /auth/login happen before any CSRF cookie exists,
+//    so there's nothing to double-submit yet (both are rate limited, and
+//    SameSite=Lax already blocks the cross-site form submissions that
 //    matter here).
 //  - /auth/refresh and /auth/logout only ever act on the caller's own
 //    session (rotate or end it) — a forged cross-site call can't exfiltrate

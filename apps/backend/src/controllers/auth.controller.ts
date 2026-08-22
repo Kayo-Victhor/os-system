@@ -1,11 +1,14 @@
 import type { Response } from "express";
 
 import { loginSchema } from "../schemas/auth.schema.js";
+import { registerSchema } from "../schemas/user.schema.js";
 import {
   loginUser,
   refreshSession,
   revokeRefreshToken,
+  registerCustomer,
 } from "../services/auth.service.js";
+import { mapPrismaError } from "../lib/prisma-errors.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { prisma } from "../lib/prisma.js";
 import { generateCsrfToken } from "../lib/tokens.js";
@@ -24,6 +27,41 @@ function setSessionCookies(res: Response, session: SessionResult) {
   res.cookie(ACCESS_TOKEN_COOKIE, session.accessToken, accessTokenCookieOptions());
   res.cookie(REFRESH_TOKEN_COOKIE, session.refreshToken, refreshTokenCookieOptions());
   res.cookie(CSRF_COOKIE, generateCsrfToken(), csrfCookieOptions());
+}
+
+export async function registerController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const result = registerSchema.safeParse(req.body);
+
+  if (!result.success) {
+    res.status(400).json({
+      error: "Dados inválidos",
+      details: result.error.flatten(),
+    });
+
+    return;
+  }
+
+  try {
+    const user = await registerCustomer(result.data);
+
+    res.status(201).json({ user });
+  } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Erro ao criar conta",
+    });
+  }
 }
 
 export async function loginController(

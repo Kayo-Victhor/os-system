@@ -11,7 +11,9 @@ export interface CreateUserInput {
 export interface UpdateUserInput {
   name?: string;
   email?: string;
-  role?: UserRole;
+  // Matches the backend's updateUserSchema — CUSTOMER is deliberately not
+  // settable here, see EDITABLE_ROLES in pages/UsersListPage.tsx.
+  role?: "ADMIN" | "USER" | "TECHNICIAN";
 }
 
 export function listUsers(role?: UserRole) {

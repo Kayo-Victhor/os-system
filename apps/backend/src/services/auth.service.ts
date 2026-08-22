@@ -1,6 +1,8 @@
 import { prisma } from "../lib/prisma.js";
-import { verifyPassword } from "../lib/password.js";
+import { verifyPassword, hashPassword } from "../lib/password.js";
 import type { LoginInput } from "../schemas/auth.schema.js";
+import type { RegisterInput } from "../schemas/user.schema.js";
+import type { UserRole } from "../generated/prisma/client.js";
 import {
   signAccessToken,
   generateRefreshToken,
@@ -15,7 +17,7 @@ export interface SessionResult {
     id: string;
     name: string;
     email: string;
-    role: "ADMIN" | "USER" | "TECHNICIAN";
+    role: UserRole;
   };
 }
 
@@ -129,5 +131,34 @@ export async function revokeRefreshToken(presentedToken: string) {
   await prisma.refreshToken.updateMany({
     where: { tokenHash, revokedAt: null },
     data: { revokedAt: new Date() },
+  });
+}
+
+/**
+ * Public self-registration. The created account's role is always
+ * CUSTOMER — this is not a parameter and there is no code path by which
+ * a caller can influence it (see schemas/user.schema.ts#registerSchema).
+ * Does not create a session (no auto-login): the account is created and
+ * the caller logs in separately via POST /auth/login, same as an account
+ * created by an admin through POST /users.
+ */
+export async function registerCustomer(data: RegisterInput) {
+  const passwordHash = await hashPassword(data.password);
+
+  return prisma.user.create({
+    data: {
+      name: data.name,
+      email: data.email,
+      password: passwordHash,
+      role: "CUSTOMER",
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }

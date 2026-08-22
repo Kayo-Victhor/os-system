@@ -55,7 +55,7 @@ export async function listUsersController(
 ) {
   try {
     const role = req.query.role;
-    const validRoles = ["ADMIN", "USER", "TECHNICIAN"] as const;
+    const validRoles = ["ADMIN", "USER", "TECHNICIAN", "CUSTOMER"] as const;
     const roleFilter = validRoles.includes(role as (typeof validRoles)[number])
       ? (role as (typeof validRoles)[number])
       : undefined;

@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "USER" | "TECHNICIAN";
+export type UserRole = "ADMIN" | "USER" | "TECHNICIAN" | "CUSTOMER";
 
 export type ServiceOrderStatus =
   | "OPEN"
@@ -86,4 +86,5 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
   USER: "Atendente",
   TECHNICIAN: "Técnico",
+  CUSTOMER: "Cliente",
 };

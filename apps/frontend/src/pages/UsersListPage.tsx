@@ -10,6 +10,13 @@ import { RoleBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconPlus } from "../components/icons.tsx";
 
+// Matches the backend's updateUserSchema role enum exactly — CUSTOMER is
+// deliberately excluded: converting a self-registered customer account to
+// staff (or vice versa) isn't a supported operation on this endpoint, so
+// it isn't offered as a choice (see PATCH /users/:id in
+// schemas/user.schema.ts).
+const EDITABLE_ROLES: UserRole[] = ["ADMIN", "USER", "TECHNICIAN"];
+
 export function UsersListPage() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRecord[] | null>(null);
@@ -102,7 +109,7 @@ export function UsersListPage() {
                     <td>{u.name}</td>
                     <td>{u.email}</td>
                     <td>
-                      {isSelf ? (
+                      {isSelf || u.role === "CUSTOMER" ? (
                         <RoleBadge role={u.role} />
                       ) : (
                         <select
@@ -113,7 +120,7 @@ export function UsersListPage() {
                           onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
                           aria-label={`Alterar papel de ${u.name}`}
                         >
-                          {(Object.keys(ROLE_LABELS) as UserRole[]).map((role) => (
+                          {EDITABLE_ROLES.map((role) => (
                             <option key={role} value={role}>
                               {ROLE_LABELS[role]}
                             </option>

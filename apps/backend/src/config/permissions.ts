@@ -36,7 +36,19 @@ export const permissions = {
     "CUSTOMER_READ",
     "OS_READ",
     "OS_UPDATE_STATUS"
-  ]
+  ],
+
+  // Deliberately minimal: a CUSTOMER account (self-registered via
+  // POST /auth/register) has no defined link yet to a business Customer
+  // record (name/phone/document/service-order history) — that link (by
+  // email match? an explicit customerId set at registration? something
+  // else?) is a real product decision this project hasn't made. Rather
+  // than guess, CUSTOMER gets no listed permissions beyond what every
+  // authenticated user already has regardless of role (GET /auth/me,
+  // POST /auth/logout, POST /auth/refresh — none of which go through
+  // requirePermission). A customer-facing portal (view their own service
+  // orders, etc.) is a follow-up, not implemented here.
+  CUSTOMER: []
 } as const satisfies Record<UserRole, readonly string[]>;
 
 export type Permission =
