@@ -21,6 +21,7 @@ import {
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 
 import { prisma } from "../lib/prisma.js";
+import { mapPrismaError } from "../lib/prisma-errors.js";
 
 // =====================================================
 // CRIAR OS
@@ -54,6 +55,13 @@ export async function createServiceOrderController(
 
     res.status(201).json(serviceOrder);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
@@ -160,6 +168,13 @@ export async function updateServiceOrderController(
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
@@ -191,6 +206,13 @@ export async function deleteServiceOrderController(
 
     res.status(204).send();
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
@@ -252,6 +274,13 @@ export async function assignTechnicianController(
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
@@ -312,6 +341,13 @@ export async function updateServiceOrderStatusController(
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    const known = mapPrismaError(error);
+
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({

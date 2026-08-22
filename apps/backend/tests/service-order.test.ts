@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import request from "supertest";
+
+vi.mock("../src/lib/prisma.js", async () => {
+  const { prismaMock } = await import("./helpers/prisma-mock.js");
+  return { prisma: prismaMock };
+});
 
 import app from "../src/app.js";
 import { prismaMock, resetPrismaMock } from "./helpers/prisma-mock.js";

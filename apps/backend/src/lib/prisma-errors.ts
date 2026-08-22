@@ -36,7 +36,7 @@ export function mapPrismaError(error: unknown): KnownErrorResponse | null {
         status: 409,
         body: {
           error:
-            "Não é possível excluir este registro pois ele possui vínculos com outros dados",
+            "Não foi possível concluir a operação: um registro relacionado não existe ou ainda está sendo referenciado por outros dados",
         },
       };
     default:

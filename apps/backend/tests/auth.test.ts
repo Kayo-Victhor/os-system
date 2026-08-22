@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import request from "supertest";
+
+// Hoisted by vitest above the imports below, so lib/prisma.js is mocked
+// before app.js (which imports it transitively) is ever evaluated.
+vi.mock("../src/lib/prisma.js", async () => {
+  const { prismaMock } = await import("./helpers/prisma-mock.js");
+  return { prisma: prismaMock };
+});
 
 import app from "../src/app.js";
 import { prismaMock, resetPrismaMock } from "./helpers/prisma-mock.js";
