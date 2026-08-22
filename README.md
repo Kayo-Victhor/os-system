@@ -176,6 +176,10 @@ Não existe um papel `CUSTOMER` com login próprio — clientes são registros
 gerenciados pela equipe (ADMIN/USER), não contas de usuário. Essa é a
 estrutura que já existia no projeto original e foi preservada.
 
+> A página "Técnicos" é uma visão sobre a lista de usuários (filtrada por
+> `role=TECHNICIAN`), então ela segue a mesma permissão de "Usuários —
+> visualizar" (apenas ADMIN) — não é uma permissão separada.
+
 ## Segurança
 
 Resumo do que está implementado (detalhes no código, especialmente

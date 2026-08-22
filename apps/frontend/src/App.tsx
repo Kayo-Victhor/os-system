@@ -86,7 +86,7 @@ function App() {
             <Route
               path="/technicians"
               element={
-                <RequirePermission permission="OS_READ">
+                <RequirePermission permission="USER_READ">
                   <TechniciansListPage />
                 </RequirePermission>
               }

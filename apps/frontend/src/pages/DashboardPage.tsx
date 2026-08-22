@@ -8,6 +8,7 @@ import * as usersApi from "../api/users.ts";
 import type { ServiceOrder } from "../api/types.ts";
 import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
+import { ApiError } from "../api/client.ts";
 
 interface DashboardData {
   orders: ServiceOrder[];
@@ -25,19 +26,38 @@ export function DashboardPage() {
     setLoading(true);
     setError(null);
 
-    try {
-      const [orders, customers, technicians] = await Promise.all([
-        can("OS_READ") ? serviceOrdersApi.listServiceOrders() : Promise.resolve([]),
-        can("CUSTOMER_READ") ? customersApi.listCustomers() : Promise.resolve([]),
-        can("OS_READ") ? usersApi.listUsers("TECHNICIAN") : Promise.resolve([]),
-      ]);
+    const [ordersResult, customersResult, techniciansResult] = await Promise.allSettled([
+      can("OS_READ") ? serviceOrdersApi.listServiceOrders() : Promise.resolve([]),
+      can("CUSTOMER_READ") ? customersApi.listCustomers() : Promise.resolve([]),
+      can("OS_READ") ? usersApi.listUsers("TECHNICIAN") : Promise.resolve([]),
+    ]);
 
-      setData({ orders, customerCount: customers.length, technicianCount: technicians.length });
-    } catch {
-      setError("Não foi possível carregar o painel.");
-    } finally {
+    // Any one of these three widgets can fail independently (e.g. a
+    // transient error fetching orders shouldn't hide the customer count).
+    // We only show the full-page error state if every source failed —
+    // otherwise render with whatever succeeded and fall back to empty
+    // arrays for the rest, same as "no data yet".
+    const failures = [ordersResult, customersResult, techniciansResult].filter(
+      (r) => r.status === "rejected",
+    );
+
+    if (failures.length === 3) {
+      const first = failures[0] as PromiseRejectedResult;
+      setError(
+        first.reason instanceof ApiError
+          ? first.reason.message
+          : "Não foi possível carregar o painel.",
+      );
       setLoading(false);
+      return;
     }
+
+    setData({
+      orders: ordersResult.status === "fulfilled" ? ordersResult.value : [],
+      customerCount: customersResult.status === "fulfilled" ? customersResult.value.length : 0,
+      technicianCount: techniciansResult.status === "fulfilled" ? techniciansResult.value.length : 0,
+    });
+    setLoading(false);
   }, [can]);
 
   useEffect(() => {

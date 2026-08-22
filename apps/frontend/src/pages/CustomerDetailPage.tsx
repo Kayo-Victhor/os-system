@@ -29,22 +29,34 @@ export function CustomerDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [orderHistoryError, setOrderHistoryError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoadError(null);
+    setOrderHistoryError(null);
 
     try {
-      const [customerData, orderData] = await Promise.all([
-        customersApi.getCustomer(id),
-        can("OS_READ") ? serviceOrdersApi.listServiceOrders({ customerId: id }) : Promise.resolve([]),
-      ]);
+      const customerData = await customersApi.getCustomer(id);
       setCustomer(customerData);
-      setOrders(orderData);
     } catch (err) {
       setLoadError(
         err instanceof ApiError && err.status === 404
           ? "Cliente não encontrado."
           : "Não foi possível carregar o cliente.",
+      );
+      return;
+    }
+
+    if (!can("OS_READ")) return;
+
+    try {
+      setOrders(await serviceOrdersApi.listServiceOrders({ customerId: id }));
+    } catch (err) {
+      // The customer loaded fine — don't blank the whole page over the
+      // order-history widget failing. Show it inline instead.
+      setOrderHistoryError(
+        err instanceof ApiError ? err.message : "Não foi possível carregar o histórico de ordens.",
       );
     }
   }, [id, can]);
@@ -185,7 +197,9 @@ export function CustomerDetailPage() {
         {can("OS_READ") && (
           <div className="card detail-section">
             <h2>Histórico de ordens de serviço</h2>
-            {orders.length === 0 ? (
+            {orderHistoryError ? (
+              <ErrorBanner message={orderHistoryError} />
+            ) : orders.length === 0 ? (
               <EmptyState title="Nenhuma ordem de serviço para este cliente." />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

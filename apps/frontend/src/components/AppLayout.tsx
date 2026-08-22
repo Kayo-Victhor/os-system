@@ -27,7 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Painel", icon: IconDashboard, end: true },
   { to: "/service-orders", label: "Ordens de serviço", icon: IconOrders, permission: "OS_READ" },
   { to: "/customers", label: "Clientes", icon: IconCustomers, permission: "CUSTOMER_READ" },
-  { to: "/technicians", label: "Técnicos", icon: IconTechnician, permission: "OS_READ" },
+  { to: "/technicians", label: "Técnicos", icon: IconTechnician, permission: "USER_READ" },
   { to: "/users", label: "Usuários", icon: IconUsersAdmin, permission: "USER_READ" },
 ];
 
