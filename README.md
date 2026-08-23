@@ -1,7 +1,7 @@
 # OS System
 
 Sistema de gerenciamento de ordens de serviço: clientes, técnicos, ordens de
-serviço e controle de acesso por papel (ADMIN / USER / TECHNICIAN).
+serviço e controle de acesso por papel (ADMIN / USER / TECHNICIAN / CUSTOMER).
 
 ## Sumário
 
@@ -15,6 +15,7 @@ serviço e controle de acesso por papel (ADMIN / USER / TECHNICIAN).
 - [Testes](#testes)
 - [Build](#build)
 - [Papéis e permissões](#papéis-e-permissões)
+- [Registro público de clientes](#registro-público-de-clientes)
 - [Segurança](#segurança)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Limitações conhecidas](#limitações-conhecidas)
@@ -99,12 +100,16 @@ cd apps/backend
 pnpm prisma migrate dev
 ```
 
-> A migration `20260813200000_add_refresh_token` (tabela `RefreshToken`,
-> necessária para o fluxo de sessão) foi escrita manualmente, pois não havia
-> um banco de dados disponível no ambiente em que ela foi criada para gerá-la
-> via `prisma migrate dev`. Ela ainda **precisa ser validada** rodando o
-> comando acima contra um banco descartável antes de aplicar em qualquer
-> ambiente real.
+> Duas migrations foram escritas manualmente, pois nenhuma sessão de
+> trabalho neste projeto teve um banco de dados disponível para gerá-las
+> via `prisma migrate dev`:
+> - `20260813200000_add_refresh_token` (tabela `RefreshToken`, necessária
+>   para o fluxo de sessão)
+> - `20260821193500_add_customer_role` (adiciona `CUSTOMER` ao enum
+>   `UserRole`, para o registro público de clientes)
+>
+> Ambas **precisam ser validadas** rodando o comando acima contra um banco
+> descartável antes de aplicar em qualquer ambiente real.
 
 Populando um usuário administrador inicial:
 
@@ -119,13 +124,23 @@ compartilhado).
 
 ## Executando em desenvolvimento
 
-Da raiz do monorepo (sobe backend e frontend juntos via Turborepo):
+Da raiz do monorepo, um único comando inicia backend e frontend juntos:
 
 ```bash
 pnpm dev
 ```
 
-Ou individualmente:
+Isso roda algumas verificações rápidas antes de iniciar (dependências
+instaladas, `apps/backend/.env` configurado, PostgreSQL respondendo na
+porta configurada — sem nunca iniciar/parar/reiniciar o banco) e então
+inicia os dois serviços via Turborepo, com cada linha de saída prefixada
+pelo nome do pacote (`backend:` / `frontend:`) para ficar claro qual
+serviço está produzindo qual log.
+
+Backend em `http://localhost:3333`, frontend em `http://localhost:5173`.
+
+Comandos individuais continuam funcionando normalmente, sem passar pelas
+verificações acima:
 
 ```bash
 pnpm --filter backend dev    # API em http://localhost:3333
@@ -134,16 +149,54 @@ pnpm --filter frontend dev   # SPA em http://localhost:5173
 
 ## Testes
 
+O backend tem dois níveis de teste:
+
+- **Testes unitários** (`apps/backend/tests/*.test.ts`) — Prisma mockado
+  por arquivo (`tests/helpers/prisma-mock.ts`), não tocam em banco de
+  dados nenhum. Rápidos, cobrem lógica de controller/validação/permissão
+  isoladamente.
+- **Testes de integração** (`apps/backend/tests/integration/*.test.ts`) —
+  Prisma real, contra um banco de dados **dedicado exclusivamente a
+  testes**. Cobrem os fluxos reais de ponta a ponta: login de verdade
+  (não um token forjado), criação de registros reais, verificação de
+  relacionamentos no banco, rotação de refresh token, etc.
+
+### Configurando o banco de testes
+
+**Nunca use o banco de desenvolvimento (`os_system`) para os testes** — a
+suíte de integração apaga todos os dados de todas as tabelas antes de
+cada teste.
+
 ```bash
-pnpm --filter backend test
+# Crie um banco dedicado, ex.: os_system_test
+createdb os_system_test   # ou via psql/ferramenta gráfica de sua preferência
+
+cd apps/backend
+cp .env.test.example .env.test
+# edite .env.test com a DATABASE_URL do banco de testes
+
+pnpm prisma migrate deploy   # aplica as migrations no banco de testes
 ```
 
-Os testes do backend rodam contra um mock do Prisma
-(`apps/backend/tests/helpers/prisma-mock.ts`), sem necessidade de um banco de
-dados real. Cobrem autenticação (login, sessão, refresh, logout),
-autorização por papel, CSRF, e as regras de negócio principais (um
-TECHNICIAN só altera status de ordens atribuídas a ele; proteções contra
-excluir/rebaixar o último ADMIN; erros de duplicidade retornando 409).
+O `.env.test` é carregado **apenas** pela suíte de testes
+(`tests/setup.ts`) — nunca pelo `.env` principal, e nunca é lido por
+`pnpm dev`. Há uma proteção que interrompe a suíte inteira, com um erro
+claro, caso `DATABASE_URL` não contenha a palavra "test" — isso existe
+especificamente para impedir que os testes rodem por engano contra
+`os_system` ou qualquer banco de produção.
+
+### Rodando
+
+```bash
+pnpm test                      # roda tudo (unitários + integração) via Turborepo
+pnpm --filter backend test     # equivalente, direto no backend
+```
+
+Os testes de integração rodam com `fileParallelism` desabilitado
+(configurado em `vitest.config.ts`) — como compartilham um único banco
+real e cada um limpa as tabelas antes de rodar, arquivos de teste
+precisam executar em sequência, não em paralelo, para não apagar dados
+uns dos outros no meio da execução.
 
 O frontend ainda não tem suíte de testes automatizados — veja
 [Limitações conhecidas](#limitações-conhecidas).
@@ -158,27 +211,66 @@ Roda `tsc` + `vite build` no frontend e `tsc` no backend via Turborepo.
 
 ## Papéis e permissões
 
-| Recurso                  | ADMIN | USER (atendente) | TECHNICIAN |
-| ------------------------- | :---: | :---------------: | :---------: |
-| Usuários — criar/editar/excluir | ✅ | ❌ | ❌ |
-| Usuários — visualizar     | ✅    | ❌                 | ❌          |
-| Clientes — criar/editar   | ✅    | ✅                 | ❌          |
-| Clientes — excluir        | ✅    | ❌                 | ❌          |
-| Clientes — visualizar     | ✅    | ✅                 | ✅          |
-| Ordens de serviço — criar | ✅    | ✅                 | ❌          |
-| Ordens de serviço — editar (título/descrição/prioridade) | ✅ | ❌ | ❌ |
-| Ordens de serviço — excluir | ✅  | ❌                 | ❌          |
-| Ordens de serviço — visualizar | ✅ | ✅              | ✅          |
-| Ordens de serviço — atribuir técnico | ✅ | ❌         | ❌          |
-| Ordens de serviço — alterar status | ✅ | ❌           | ✅ (apenas as suas) |
-
-Não existe um papel `CUSTOMER` com login próprio — clientes são registros
-gerenciados pela equipe (ADMIN/USER), não contas de usuário. Essa é a
-estrutura que já existia no projeto original e foi preservada.
+| Recurso                  | ADMIN | USER (atendente) | TECHNICIAN | CUSTOMER |
+| ------------------------- | :---: | :---------------: | :---------: | :------: |
+| Usuários — criar/editar/excluir | ✅ | ❌ | ❌ | ❌ |
+| Usuários — visualizar     | ✅    | ❌                 | ❌          | ❌       |
+| Clientes — criar/editar   | ✅    | ✅                 | ❌          | ❌       |
+| Clientes — excluir        | ✅    | ❌                 | ❌          | ❌       |
+| Clientes — visualizar     | ✅    | ✅                 | ✅          | ❌       |
+| Ordens de serviço — criar | ✅    | ✅                 | ❌          | ❌       |
+| Ordens de serviço — editar (título/descrição/prioridade) | ✅ | ❌ | ❌ | ❌ |
+| Ordens de serviço — excluir | ✅  | ❌                 | ❌          | ❌       |
+| Ordens de serviço — visualizar | ✅ | ✅              | ✅          | ❌       |
+| Ordens de serviço — atribuir técnico | ✅ | ❌         | ❌          | ❌       |
+| Ordens de serviço — alterar status | ✅ | ❌           | ✅ (apenas as suas) | ❌ |
 
 > A página "Técnicos" é uma visão sobre a lista de usuários (filtrada por
 > `role=TECHNICIAN`), então ela segue a mesma permissão de "Usuários —
 > visualizar" (apenas ADMIN) — não é uma permissão separada.
+
+### Sobre o papel CUSTOMER
+
+`CUSTOMER` é um papel de login real (ver
+[Registro público de clientes](#registro-público-de-clientes) abaixo),
+diferente do registro de negócio `Customer` (nome/telefone/documento de
+um cliente, gerenciado pela equipe via ADMIN/USER — isso não mudou).
+
+O papel CUSTOMER recebe **propositalmente nenhuma permissão** além do que
+qualquer usuário autenticado já tem (`GET /auth/me`, `POST /auth/logout`,
+`POST /auth/refresh` — nenhum desses passa por checagem de permissão).
+Não existe hoje um vínculo definido entre uma conta CUSTOMER e um
+registro `Customer` (por e-mail? por um campo explícito preenchido no
+registro? outra abordagem?) — decidir e implementar isso é um trabalho
+futuro, não inventado aqui sem confirmação. Na prática, uma conta
+CUSTOMER consegue se registrar e fazer login, mas ainda não tem nenhuma
+funcionalidade própria além disso — ela recebe 403 em qualquer
+funcionalidade administrativa, exatamente como esperado.
+
+
+## Registro público de clientes
+
+`POST /auth/register` (público, sem autenticação, mesmo rate limit de
+`/auth/login`) permite que qualquer pessoa crie sua própria conta:
+
+```json
+{
+  "name": "João",
+  "email": "joao@example.com",
+  "password": "senha123456"
+}
+```
+
+A conta criada é **sempre** `CUSTOMER` — o endpoint não aceita um campo
+`role` no corpo da requisição (não é apenas validado e rejeitado: o campo
+simplesmente não existe no schema, então um `role: "ADMIN"` enviado pelo
+cliente é descartado antes de chegar na camada de serviço). Não há
+nenhum caminho de código pelo qual o cliente influencie o papel da conta
+criada.
+
+O endpoint não faz login automático — a conta é criada e a pessoa
+autentica separadamente via `POST /auth/login`, do mesmo jeito que uma
+conta criada por um admin via `POST /users`.
 
 ## Segurança
 
@@ -208,6 +300,8 @@ Resumo do que está implementado (detalhes no código, especialmente
 ## Estrutura do projeto
 
 ```
+scripts/
+  dev-check.mjs      pré-checagens antes de `pnpm dev` (deps, .env, Postgres)
 apps/
   backend/
     prisma/            schema, migrations, seed
@@ -220,7 +314,9 @@ apps/
       lib/               tokens, cookies, hash de senha, erros do Prisma
       routes/
     tests/
-      helpers/           mock do Prisma, helpers de autenticação para testes
+      *.test.ts          testes unitários (Prisma mockado por arquivo)
+      integration/        testes de integração (Prisma real, banco de testes)
+      helpers/            mock do Prisma, fixtures reais, login real para testes
   frontend/
     src/
       api/               cliente HTTP, funções por recurso, tipos
@@ -234,9 +330,25 @@ apps/
 Documentadas aqui em vez de escondidas — para que o próximo passo seja
 óbvio, não uma surpresa:
 
-- **Migration do `RefreshToken` não validada contra um banco real** (veja
-  [Banco de dados e migrations](#banco-de-dados-e-migrations)) — escrita à
-  mão porque o ambiente onde foi criada não tinha PostgreSQL disponível.
+- **Duas migrations ainda não validadas contra um banco real**:
+  `20260813200000_add_refresh_token` e `20260821193500_add_customer_role`
+  (veja [Banco de dados e migrations](#banco-de-dados-e-migrations)) —
+  escritas à mão porque nenhuma sessão de trabalho neste projeto teve
+  acesso a um PostgreSQL real ou a instalação de dependências. Rode
+  `pnpm prisma migrate dev` localmente antes de aplicar a qualquer
+  ambiente real.
+- **Testes de integração escritos mas nunca executados**, pelo mesmo
+  motivo — sem acesso à rede, não foi possível rodar `pnpm install` nem
+  conectar a um PostgreSQL real neste ambiente. Foram revisados
+  estaticamente com bastante cuidado (incluindo rastrear manualmente
+  qual código de status HTTP cada cenário deveria produzir antes de
+  escrever a asserção, o que revelou e corrigiu bugs reais no caminho —
+  veja o changelog no histórico do Git), mas **precisam ser rodados
+  localmente** para confirmar que realmente passam.
+- **Não existe portal do cliente** — o papel CUSTOMER pode se registrar e
+  fazer login, mas não há vínculo definido com o registro de negócio
+  `Customer` nem nenhuma funcionalidade própria além do login. Ver
+  [Sobre o papel CUSTOMER](#sobre-o-papel-customer).
 - **Sem paginação** nos endpoints de listagem (apenas filtros). Adequado
   para o volume atual; deve ser revisitado antes de produção com dados em
   escala.
@@ -253,8 +365,14 @@ Documentadas aqui em vez de escondidas — para que o próximo passo seja
   ou end-to-end.
 - **Sem backend de lint configurado** (`apps/backend` não tem ESLint) — o
   frontend tem; o backend depende apenas do `tsc` para checagem estática.
-- Nenhum comando que requer instalação de dependências (`pnpm install`,
-  `typecheck`, `test`, `build`, `prisma migrate`) pôde ser executado no
-  ambiente onde este trabalho foi feito (sem acesso à rede). Todo o código
-  foi revisado estaticamente com o máximo de cuidado possível, mas **precisa
-  ser validado localmente** antes de ir para produção.
+- Nenhum comando que requer instalação de dependências ou acesso à rede
+  (`pnpm install`, `typecheck`, `test`, `build`, `prisma migrate`, iniciar
+  os servidores de desenvolvimento) pôde ser executado em nenhuma sessão
+  de trabalho neste projeto até agora. Todo o código foi revisado
+  estaticamente com o máximo de cuidado possível — incluindo, nesta
+  sessão, testar isoladamente partes que não dependiam de rede/Postgres
+  (sintaxe do script de pré-checagem, resolução de todos os imports do
+  frontend, checagem de chaves/parênteses balanceados nos arquivos
+  alterados) — mas o projeto como um todo **precisa ser validado
+  localmente** (`pnpm install && pnpm dev`, e a suíte de testes) antes de
+  ir para produção.
