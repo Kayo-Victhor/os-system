@@ -4,7 +4,7 @@
   "private": true,
   "description": "Sistema de Ordem de Serviço",
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "node scripts/dev-check.mjs",
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test"
