@@ -13,6 +13,7 @@ import { csrfProtection } from "./middlewares/csrf.middleware.js";
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
 const corsOrigin = process.env.CORS_ORIGIN;
 
