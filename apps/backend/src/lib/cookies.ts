@@ -18,7 +18,7 @@ const REFRESH_COOKIE_PATH = "/auth/refresh";
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: "lax",
+  sameSite: isProduction ? "none" : "lax",
   path: "/",
 };
 
@@ -45,7 +45,7 @@ export function csrfCookieOptions(): CookieOptions {
   return {
     httpOnly: false,
     secure: isProduction,
-    sameSite: "lax",
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
   };
