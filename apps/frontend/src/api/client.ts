@@ -45,8 +45,11 @@ async function attemptRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
-function buildUrl(path: string, query?: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}${path}`);
+function buildUrl(
+  path: string,
+  query?: Record<string, string | undefined>,
+) {
+  const url = new URL(`${API_URL}${path}`, window.location.origin);
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
