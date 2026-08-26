@@ -13,7 +13,7 @@ const isProduction = process.env.NODE_ENV === "production";
 // Scope the refresh cookie to the one endpoint that needs it, so it's never
 // sent on ordinary API calls (reduces exposure if any endpoint were ever
 // vulnerable to token leakage via logs, proxies, etc).
-const REFRESH_COOKIE_PATH = "/auth/refresh";
+const REFRESH_COOKIE_PATH = "/api/auth/refresh";
 
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
