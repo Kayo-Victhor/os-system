@@ -50,21 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // const login = useCallback(async (email: string, password: string) => {
-  //   const { user } = await authApi.login(email, password);
-  //   setUser(user);
-  //   setStatus("authenticated");
-  // }, []);
   const login = useCallback(async (email: string, password: string) => {
-  console.log("AUTH CONTEXT: login começou", email);
-
-  const result = await authApi.login(email, password);
-
-  console.log("AUTH CONTEXT: api.login terminou", result);
-
-  setUser(result.user);
-  setStatus("authenticated");
-}, []);
+    const { user } = await authApi.login(email, password);
+    setUser(user);
+    setStatus("authenticated");
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -80,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const can = useCallback(
-    (permission: Permission) => (user ? roleHasPermission(user.role, permission) : false),
+    (permission: Permission) =>
+      user ? roleHasPermission(user.role, permission) : false,
     [user],
   );
 

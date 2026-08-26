@@ -16,7 +16,8 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (status === "authenticated") {
-    const redirectTo = (location.state as { from?: string } | null)?.from ?? "/";
+    const redirectTo =
+      (location.state as { from?: string } | null)?.from ?? "/";
     return <Navigate to={redirectTo} replace />;
   }
 
@@ -26,12 +27,13 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
-      console.log("LOGIN CHAMADO", { email, password });
       await login(email, password);
       navigate("/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
-        setError("Muitas tentativas de login. Aguarde alguns minutos e tente novamente.");
+        setError(
+          "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+        );
       } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
@@ -77,7 +79,11 @@ export function LoginPage() {
             )}
           </Field>
 
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={submitting}
+          >
             {submitting ? "Entrando..." : "Entrar"}
           </button>
         </form>

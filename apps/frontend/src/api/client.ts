@@ -59,37 +59,7 @@ function buildUrl(path: string, query?: Record<string, string | undefined>) {
   return url.toString();
 }
 
-// async function rawRequest(path: string, options: RequestOptions) {
-//   const method = options.method ?? "GET";
-//   const headers: Record<string, string> = {};
-
-//   if (options.body !== undefined) {
-//     headers["Content-Type"] = "application/json";
-//   }
-
-//   if (method !== "GET") {
-//     const csrfToken = readCookie("csrf_token");
-//     if (csrfToken) {
-//       headers["x-csrf-token"] = csrfToken;
-//     }
-//   }
-
-//   return fetch(buildUrl(path, options.query), {
-//     method,
-//     credentials: "include",
-//     headers,
-//     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-//   });
-// }
-async function rawRequest(
-  path: string,
-  options: RequestOptions,
-) {
-  console.log("RAW REQUEST ENTROU", {
-    path,
-    method: options.method ?? "GET",
-  });
-
+async function rawRequest(path: string, options: RequestOptions) {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
 
@@ -99,37 +69,17 @@ async function rawRequest(
 
   if (method !== "GET") {
     const csrfToken = readCookie("csrf_token");
-
-    console.log("CSRF TOKEN EXISTE?", !!csrfToken);
-
     if (csrfToken) {
       headers["x-csrf-token"] = csrfToken;
     }
   }
 
-  const url = buildUrl(path, options.query);
-
-  console.log("ANTES DO FETCH", {
-    url,
-    method,
-  });
-
-  const response = await fetch(url, {
+  return fetch(buildUrl(path, options.query), {
     method,
     credentials: "include",
     headers,
-    body:
-      options.body !== undefined
-        ? JSON.stringify(options.body)
-        : undefined,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
-
-  console.log("FETCH TERMINOU", {
-    status: response.status,
-    ok: response.ok,
-  });
-
-  return response;
 }
 
 /**
@@ -140,74 +90,20 @@ async function rawRequest(
  * itself fails (refresh token expired/revoked too), the 401 propagates and
  * AuthContext handles sending them to the login screen.
  */
-// export async function apiRequest<T>(
-//   path: string,
-//   options: RequestOptions = {},
-// ): Promise<T> {
-//   let res = await rawRequest(path, options);
-
-//   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-//     const refreshed = await attemptRefresh();
-
-//     if (refreshed) {
-//       res = await rawRequest(path, options);
-//     }
-//   }
-
-//   if (!res.ok) {
-//     let body: { error?: string; details?: unknown } = {};
-
-//     try {
-//       body = await res.json();
-//     } catch {
-//       // Non-JSON error body (e.g. a proxy/network error page) — fall
-//       // through to the generic message below.
-//     }
-
-//     throw new ApiError(
-//       body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
-//       res.status,
-//       body.details,
-//     );
-//   }
-
-//   if (res.status === 204) {
-//     return undefined as T;
-//   }
-
-//   return res.json() as Promise<T>;
-// }
-
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  console.log("API REQUEST ENTROU", {
-    path,
-    method: options.method ?? "GET",
-  });
-
-  console.log("ANTES DO RAW REQUEST");
-
   let res = await rawRequest(path, options);
-
-  console.log("DEPOIS DO RAW REQUEST", {
-    status: res.status,
-  });
 
   if (
     res.status === 401 &&
     path !== "/auth/login" &&
     path !== "/auth/refresh"
   ) {
-    console.log("401 RECEBIDO, TENTANDO REFRESH");
-
     const refreshed = await attemptRefresh();
 
-    console.log("RESULTADO DO REFRESH", refreshed);
-
     if (refreshed) {
-      console.log("REPETINDO REQUEST APÓS REFRESH");
       res = await rawRequest(path, options);
     }
   }
@@ -218,13 +114,9 @@ export async function apiRequest<T>(
     try {
       body = await res.json();
     } catch {
-      // Resposta não-JSON.
+      // Non-JSON error body (e.g. a proxy/network error page) — fall
+      // through to the generic message below.
     }
-
-    console.log("API REQUEST FALHOU", {
-      status: res.status,
-      error: body.error,
-    });
 
     throw new ApiError(
       body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
@@ -234,11 +126,8 @@ export async function apiRequest<T>(
   }
 
   if (res.status === 204) {
-    console.log("API REQUEST → 204");
     return undefined as T;
   }
-
-  console.log("API REQUEST SUCESSO");
 
   return res.json() as Promise<T>;
 }

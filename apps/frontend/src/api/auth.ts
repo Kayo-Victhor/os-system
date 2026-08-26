@@ -1,14 +1,7 @@
 import { apiRequest } from "./client.ts";
 import type { AuthUser } from "./types.ts";
 
-// export function login(email: string, password: string) {
-//   return apiRequest<{ user: AuthUser }>("/auth/login", {
-//     method: "POST",
-//     body: { email, password },
-//   });
-// }
 export function login(email: string, password: string) {
-  console.log("AUTH API: chamando apiRequest");
 
   return apiRequest<{ user: AuthUser }>("/auth/login", {
     method: "POST",
