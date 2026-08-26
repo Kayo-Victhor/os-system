@@ -59,7 +59,32 @@ function buildUrl(path: string, query?: Record<string, string | undefined>) {
   return url.toString();
 }
 
-async function rawRequest(path: string, options: RequestOptions) {
+// async function rawRequest(path: string, options: RequestOptions) {
+//   const method = options.method ?? "GET";
+//   const headers: Record<string, string> = {};
+
+//   if (options.body !== undefined) {
+//     headers["Content-Type"] = "application/json";
+//   }
+
+//   if (method !== "GET") {
+//     const csrfToken = readCookie("csrf_token");
+//     if (csrfToken) {
+//       headers["x-csrf-token"] = csrfToken;
+//     }
+//   }
+
+//   return fetch(buildUrl(path, options.query), {
+//     method,
+//     credentials: "include",
+//     headers,
+//     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+//   });
+// }
+async function rawRequest(
+  path: string,
+  options: RequestOptions,
+) {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
 
@@ -69,16 +94,27 @@ async function rawRequest(path: string, options: RequestOptions) {
 
   if (method !== "GET") {
     const csrfToken = readCookie("csrf_token");
+
     if (csrfToken) {
       headers["x-csrf-token"] = csrfToken;
     }
   }
 
-  return fetch(buildUrl(path, options.query), {
+  const url = buildUrl(path, options.query);
+
+  console.log("RAW REQUEST:", {
+    url,
+    method,
+  });
+
+  return fetch(url, {
     method,
     credentials: "include",
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body !== undefined
+        ? JSON.stringify(options.body)
+        : undefined,
   });
 }
 
