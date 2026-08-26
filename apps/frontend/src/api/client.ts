@@ -126,10 +126,53 @@ async function rawRequest(
  * itself fails (refresh token expired/revoked too), the 401 propagates and
  * AuthContext handles sending them to the login screen.
  */
+// export async function apiRequest<T>(
+//   path: string,
+//   options: RequestOptions = {},
+// ): Promise<T> {
+//   let res = await rawRequest(path, options);
+
+//   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
+//     const refreshed = await attemptRefresh();
+
+//     if (refreshed) {
+//       res = await rawRequest(path, options);
+//     }
+//   }
+
+//   if (!res.ok) {
+//     let body: { error?: string; details?: unknown } = {};
+
+//     try {
+//       body = await res.json();
+//     } catch {
+//       // Non-JSON error body (e.g. a proxy/network error page) — fall
+//       // through to the generic message below.
+//     }
+
+//     throw new ApiError(
+//       body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
+//       res.status,
+//       body.details,
+//     );
+//   }
+
+//   if (res.status === 204) {
+//     return undefined as T;
+//   }
+
+//   return res.json() as Promise<T>;
+// }
+
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  console.log("API REQUEST ENTROU", {
+    path,
+    method: options.method ?? "GET",
+  });
+
   let res = await rawRequest(path, options);
 
   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
@@ -146,8 +189,7 @@ export async function apiRequest<T>(
     try {
       body = await res.json();
     } catch {
-      // Non-JSON error body (e.g. a proxy/network error page) — fall
-      // through to the generic message below.
+      // Ignora resposta que não seja JSON.
     }
 
     throw new ApiError(
