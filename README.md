@@ -175,15 +175,24 @@ cd apps/backend
 cp .env.test.example .env.test
 # edite .env.test com a DATABASE_URL do banco de testes
 
-pnpm prisma migrate deploy   # aplica as migrations no banco de testes
+pnpm test:migrate   # aplica as migrations no banco de testes
 ```
+
+> **Não rode `pnpm prisma migrate deploy` diretamente aqui** —
+> `prisma.config.ts` carrega `.env` (o banco de desenvolvimento)
+> incondicionalmente, então isso aplicaria as migrations no lugar
+> errado. `pnpm test:migrate` (`scripts/test-db-migrate.mjs`) força a
+> `DATABASE_URL` de `.env.test`, confirma que ela contém "test" antes de
+> fazer qualquer coisa, e só então roda `prisma migrate deploy`.
 
 O `.env.test` é carregado **apenas** pela suíte de testes
 (`tests/setup.ts`) — nunca pelo `.env` principal, e nunca é lido por
 `pnpm dev`. Há uma proteção que interrompe a suíte inteira, com um erro
 claro, caso `DATABASE_URL` não contenha a palavra "test" — isso existe
 especificamente para impedir que os testes rodem por engano contra
-`os_system` ou qualquer banco de produção.
+`os_system` ou qualquer banco de produção. Toda execução de teste imprime
+uma linha `[test-db] host=... port=... database=...` — confira essa
+linha (não assuma) para confirmar qual banco está realmente sendo usado.
 
 ### Rodando
 
@@ -197,6 +206,11 @@ Os testes de integração rodam com `fileParallelism` desabilitado
 real e cada um limpa as tabelas antes de rodar, arquivos de teste
 precisam executar em sequência, não em paralelo, para não apagar dados
 uns dos outros no meio da execução.
+
+`vitest.config.ts` também define `include` explicitamente
+(`tests/*.test.ts` e `tests/integration/*.test.ts`) em vez de depender
+do glob padrão do Vitest — se `pnpm test` reportar menos arquivos do que
+o esperado, esse é o primeiro lugar a conferir.
 
 O frontend ainda não tem suíte de testes automatizados — veja
 [Limitações conhecidas](#limitações-conhecidas).

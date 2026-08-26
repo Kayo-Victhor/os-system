@@ -2,10 +2,14 @@ import dotenv from "dotenv";
 
 // Loaded relative to CWD (apps/backend, where vitest runs from) — same
 // convention as prisma/seed.ts's `import "dotenv/config"` for the main
-// .env. dotenv does NOT override a variable that's already set in
-// process.env, so this never clobbers the JWT_* secrets vitest.config.ts
-// sets directly.
-dotenv.config({ path: ".env.test" });
+// .env. override: true is deliberate here (unlike dotenv's default):
+// .env.test must always win over anything already in the environment
+// when tests run, or an ambient DATABASE_URL (e.g. exported in a shell
+// profile) could silently take precedence over the test config the
+// person just set up. The safety guard below is the real backstop
+// either way — this is about making .env.test's value predictable, not
+// about safety.
+dotenv.config({ path: ".env.test", override: true });
 
 // ---------------------------------------------------------------------
 // Safety guard: refuse to run ANY test if DATABASE_URL doesn't look like
@@ -39,4 +43,22 @@ if (!looksLikeTestDatabase) {
       "e configure um banco dedicado, ex: " +
       "postgresql://usuario:senha@localhost:5432/os_system_test",
   );
+}
+
+// ---------------------------------------------------------------------
+// Verifiable confirmation, printed to stdout on every test file (not
+// just asserted in a comment): exactly which host/database the suite is
+// about to use. Credentials are redacted; host/port/database name are
+// not secrets and are the whole point of printing this. Check this
+// output directly rather than assuming the guard above did its job —
+// e.g. `pnpm test 2>&1 | grep "\[test-db\]" | sort -u` should show
+// exactly one line, and it should name your test database, not
+// os_system.
+// ---------------------------------------------------------------------
+try {
+  const parsed = new URL(databaseUrl);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  console.log(`[test-db] host=${parsed.hostname} port=${parsed.port || "5432"} database=${dbName}`);
+} catch {
+  console.log(`[test-db] DATABASE_URL contains "test" but isn't a parseable URL: ${databaseUrl.replace(/:[^:@/]+@/, ":****@")}`);
 }

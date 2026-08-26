@@ -4,6 +4,14 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    // Explicit rather than relying on vitest's default glob — this is the
+    // single source of truth for which files are test files. If you run
+    // `pnpm test` and see fewer files than expected, this is the first
+    // place to check (and rule out) before suspecting anything else.
+    include: [
+      "tests/*.test.ts",
+      "tests/integration/*.test.ts",
+    ],
     setupFiles: ["./tests/setup.ts"],
     // Unit tests (tests/*.test.ts) mock Prisma per-file — see
     // tests/helpers/prisma-mock.ts — and don't touch a real database.
