@@ -53,7 +53,7 @@ describe("POST /service-orders", () => {
       .send({
         title: "Consertar impressora",
         description: "Impressora não liga",
-        customerId: "cust-1",
+        customerId: "11111111-1111-4111-8111-111111111111",
       });
 
     expect(res.status).toBe(201);
@@ -182,18 +182,18 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
 
     prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(makeOrder());
     prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "tech-1",
+      id: "22222222-2222-4222-8222-222222222222",
       role: "TECHNICIAN",
     });
     prismaMock.serviceOrder.update.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-1" }),
+      makeOrder({ technicianId: "22222222-2222-4222-8222-222222222222" }),
     );
 
     const res = await request(app)
       .patch("/service-orders/os-1/technician")
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
-      .send({ technicianId: "tech-1" });
+      .send({ technicianId: "22222222-2222-4222-8222-222222222222" });
 
     expect(res.status).toBe(200);
   });
@@ -203,7 +203,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
 
     prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(makeOrder());
     prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "staff-2",
+      id: "33333333-3333-4333-8333-333333333333",
       role: "USER",
     });
 
@@ -211,7 +211,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
       .patch("/service-orders/os-1/technician")
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
-      .send({ technicianId: "staff-2" });
+      .send({ technicianId: "33333333-3333-4333-8333-333333333333" });
 
     expect(res.status).toBe(400);
     expect(prismaMock.serviceOrder.update).not.toHaveBeenCalled();

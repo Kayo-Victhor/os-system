@@ -9,7 +9,6 @@ import customerRoutes from "./routes/customer.routes.js";
 import serviceOrderRoutes from "./routes/service-order.routes.js";
 import healthRoutes from "./routes/health.routes.js";
 
-import { csrfProtection } from "./middlewares/csrf.middleware.js";
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 
 const app = express();
@@ -49,8 +48,13 @@ app.use(apiRateLimiter);
 //    limited.
 app.use("/auth", authRoutes);
 
-app.use(csrfProtection);
-
+// csrfProtection is applied per-route within each resource router below
+// (authMiddleware, then csrfProtection, then requirePermission), NOT
+// globally here. CSRF only makes sense to check once we know there's an
+// authenticated session to protect — checking it globally, before auth,
+// meant a fully unauthenticated mutating request (no cookies at all) hit
+// the CSRF check first and got 403, never reaching the auth check that
+// should have returned 401.
 app.use("/users", userRoutes);
 app.use("/customers", customerRoutes);
 app.use("/service-orders", serviceOrderRoutes);

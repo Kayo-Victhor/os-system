@@ -12,12 +12,14 @@ import {
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requirePermission } from "../middlewares/permission.middleware.js";
+import { csrfProtection } from "../middlewares/csrf.middleware.js";
 
 const router = Router();
 
 router.post(
   "/",
   authMiddleware,
+  csrfProtection,
   requirePermission("OS_CREATE"),
   createServiceOrderController,
 );
@@ -39,6 +41,7 @@ router.get(
 router.patch(
   "/:id",
   authMiddleware,
+  csrfProtection,
   requirePermission("OS_UPDATE"),
   updateServiceOrderController,
 );
@@ -46,6 +49,7 @@ router.patch(
 router.delete(
   "/:id",
   authMiddleware,
+  csrfProtection,
   requirePermission("OS_DELETE"),
   deleteServiceOrderController,
 );
@@ -53,6 +57,7 @@ router.delete(
 router.patch(
   "/:id/technician",
   authMiddleware,
+  csrfProtection,
   requirePermission("OS_ASSIGN"),
   assignTechnicianController,
 );
@@ -60,6 +65,7 @@ router.patch(
 router.patch(
   "/:id/status",
   authMiddleware,
+  csrfProtection,
   requirePermission("OS_UPDATE_STATUS"),
   updateServiceOrderStatusController,
 );
