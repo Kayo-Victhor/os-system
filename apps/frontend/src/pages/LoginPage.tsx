@@ -26,6 +26,7 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
+      console.log("LOGIN CHAMADO", { email, password });
       await login(email, password);
       navigate("/", { replace: true });
     } catch (err) {
