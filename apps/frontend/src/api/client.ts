@@ -85,6 +85,11 @@ async function rawRequest(
   path: string,
   options: RequestOptions,
 ) {
+  console.log("RAW REQUEST ENTROU", {
+    path,
+    method: options.method ?? "GET",
+  });
+
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
 
@@ -95,6 +100,8 @@ async function rawRequest(
   if (method !== "GET") {
     const csrfToken = readCookie("csrf_token");
 
+    console.log("CSRF TOKEN EXISTE?", !!csrfToken);
+
     if (csrfToken) {
       headers["x-csrf-token"] = csrfToken;
     }
@@ -102,12 +109,12 @@ async function rawRequest(
 
   const url = buildUrl(path, options.query);
 
-  console.log("RAW REQUEST:", {
+  console.log("ANTES DO FETCH", {
     url,
     method,
   });
 
-  return fetch(url, {
+  const response = await fetch(url, {
     method,
     credentials: "include",
     headers,
@@ -116,6 +123,13 @@ async function rawRequest(
         ? JSON.stringify(options.body)
         : undefined,
   });
+
+  console.log("FETCH TERMINOU", {
+    status: response.status,
+    ok: response.ok,
+  });
+
+  return response;
 }
 
 /**
@@ -173,12 +187,27 @@ export async function apiRequest<T>(
     method: options.method ?? "GET",
   });
 
+  console.log("ANTES DO RAW REQUEST");
+
   let res = await rawRequest(path, options);
 
-  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
+  console.log("DEPOIS DO RAW REQUEST", {
+    status: res.status,
+  });
+
+  if (
+    res.status === 401 &&
+    path !== "/auth/login" &&
+    path !== "/auth/refresh"
+  ) {
+    console.log("401 RECEBIDO, TENTANDO REFRESH");
+
     const refreshed = await attemptRefresh();
 
+    console.log("RESULTADO DO REFRESH", refreshed);
+
     if (refreshed) {
+      console.log("REPETINDO REQUEST APÓS REFRESH");
       res = await rawRequest(path, options);
     }
   }
@@ -189,8 +218,13 @@ export async function apiRequest<T>(
     try {
       body = await res.json();
     } catch {
-      // Ignora resposta que não seja JSON.
+      // Resposta não-JSON.
     }
+
+    console.log("API REQUEST FALHOU", {
+      status: res.status,
+      error: body.error,
+    });
 
     throw new ApiError(
       body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
@@ -200,8 +234,11 @@ export async function apiRequest<T>(
   }
 
   if (res.status === 204) {
+    console.log("API REQUEST → 204");
     return undefined as T;
   }
+
+  console.log("API REQUEST SUCESSO");
 
   return res.json() as Promise<T>;
 }

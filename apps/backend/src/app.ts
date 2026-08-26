@@ -23,9 +23,21 @@ if (!corsOrigin && process.env.NODE_ENV === "production") {
 
 app.use(helmet());
 
+const allowedOrigins = [
+  corsOrigin,
+  "http://localhost:5173",
+].filter((origin): origin is string => Boolean(origin));
+
 app.use(
   cors({
-    origin: corsOrigin ?? "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin não permitido pelo CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "x-csrf-token"],
