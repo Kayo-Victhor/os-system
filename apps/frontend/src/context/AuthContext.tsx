@@ -70,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const can = useCallback(
-    (permission: Permission) => (user ? roleHasPermission(user.role, permission) : false),
+    (permission: Permission) =>
+      user ? roleHasPermission(user.role, permission) : false,
     [user],
   );
 

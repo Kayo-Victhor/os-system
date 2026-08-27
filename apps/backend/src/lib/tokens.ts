@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { randomBytes, createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
 

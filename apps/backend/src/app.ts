@@ -12,6 +12,7 @@ import healthRoutes from "./routes/health.routes.js";
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
 const corsOrigin = process.env.CORS_ORIGIN;
 
@@ -21,9 +22,21 @@ if (!corsOrigin && process.env.NODE_ENV === "production") {
 
 app.use(helmet());
 
+const allowedOrigins = [
+  corsOrigin,
+  "http://localhost:5173",
+].filter((origin): origin is string => Boolean(origin));
+
 app.use(
   cors({
-    origin: corsOrigin ?? "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin não permitido pelo CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "x-csrf-token"],

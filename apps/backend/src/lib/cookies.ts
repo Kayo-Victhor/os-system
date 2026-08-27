@@ -13,12 +13,12 @@ const isProduction = process.env.NODE_ENV === "production";
 // Scope the refresh cookie to the one endpoint that needs it, so it's never
 // sent on ordinary API calls (reduces exposure if any endpoint were ever
 // vulnerable to token leakage via logs, proxies, etc).
-const REFRESH_COOKIE_PATH = "/auth/refresh";
+const REFRESH_COOKIE_PATH = "/api/auth/refresh";
 
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: "lax",
+  sameSite: isProduction ? "none" : "lax",
   path: "/",
 };
 
@@ -45,7 +45,7 @@ export function csrfCookieOptions(): CookieOptions {
   return {
     httpOnly: false,
     secure: isProduction,
-    sameSite: "lax",
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
   };

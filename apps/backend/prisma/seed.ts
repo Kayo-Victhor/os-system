@@ -5,40 +5,41 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { hashPassword } from "../src/lib/password.js";
 
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
 });
 
 const prisma = new PrismaClient({
-  adapter
+  adapter,
 });
 
 async function main() {
-  const seedPassword = process.env.SEED_ADMIN_PASSWORD ?? "admin123456";
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!seedPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD precisa estar configurado para executar o seed.",
+    );
+  }
+
   const passwordHash = await hashPassword(seedPassword);
 
   const admin = await prisma.user.upsert({
     where: {
-      email: "admin@os-system.local"
+      email: "admin@os-system.local",
     },
     update: {
-      role: "ADMIN"
+      role: "ADMIN",
+      password: passwordHash,
     },
     create: {
       name: "Administrador",
       email: "admin@os-system.local",
       password: passwordHash,
-      role: "ADMIN"
-    }
+      role: "ADMIN",
+    },
   });
 
   console.log("Admin criado:", admin.email);
-
-  if (!process.env.SEED_ADMIN_PASSWORD) {
-    console.warn(
-      "Aviso: SEED_ADMIN_PASSWORD não definido, usando senha padrão de desenvolvimento. " +
-        "Defina SEED_ADMIN_PASSWORD no .env antes de rodar o seed em qualquer ambiente compartilhado.",
-    );
-  }
 }
 
 main()

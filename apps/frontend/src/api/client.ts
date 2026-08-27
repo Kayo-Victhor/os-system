@@ -1,5 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
-
+const API_URL = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_URL ?? "http://localhost:3333")
+  : "/api";
 export class ApiError extends Error {
   status: number;
   details?: unknown;
@@ -44,8 +45,11 @@ async function attemptRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
-function buildUrl(path: string, query?: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}${path}`);
+function buildUrl(
+  path: string,
+  query?: Record<string, string | undefined>,
+) {
+  const url = new URL(`${API_URL}${path}`, window.location.origin);
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -95,7 +99,11 @@ export async function apiRequest<T>(
 ): Promise<T> {
   let res = await rawRequest(path, options);
 
-  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
+  if (
+    res.status === 401 &&
+    path !== "/auth/login" &&
+    path !== "/auth/refresh"
+  ) {
     const refreshed = await attemptRefresh();
 
     if (refreshed) {
