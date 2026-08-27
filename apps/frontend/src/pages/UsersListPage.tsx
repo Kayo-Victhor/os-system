@@ -5,7 +5,13 @@ import * as usersApi from "../api/users.ts";
 import type { UserRecord, UserRole } from "../api/types.ts";
 import { ROLE_LABELS } from "../api/types.ts";
 import { useAuth } from "../context/AuthContext.tsx";
-import { PageLoading, ErrorState, EmptyState, ErrorBanner, ConfirmDialog } from "../components/States.tsx";
+import {
+  PageLoading,
+  ErrorState,
+  EmptyState,
+  ErrorBanner,
+  ConfirmDialog,
+} from "../components/States.tsx";
 import { RoleBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconPlus } from "../components/icons.tsx";
@@ -39,7 +45,9 @@ export function UsersListPage() {
     load();
   }, []);
 
-  async function handleRoleChange(id: string, role: UserRole) {
+  type EditableUserRole = "ADMIN" | "USER" | "TECHNICIAN";
+
+  async function handleRoleChange(id: string, role: EditableUserRole) {
     setActionError(null);
     setSavingId(id);
 
@@ -47,7 +55,11 @@ export function UsersListPage() {
       const updated = await usersApi.updateUser(id, { role });
       setUsers((prev) => prev?.map((u) => (u.id === id ? updated : u)) ?? null);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Não foi possível atualizar o papel do usuário.");
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : "Não foi possível atualizar o papel do usuário.",
+      );
     } finally {
       setSavingId(null);
     }
@@ -63,7 +75,11 @@ export function UsersListPage() {
       setUsers((prev) => prev?.filter((u) => u.id !== deleteTarget.id) ?? null);
       setDeleteTarget(null);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Não foi possível excluir o usuário.");
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : "Não foi possível excluir o usuário.",
+      );
     } finally {
       setSavingId(null);
     }
@@ -77,7 +93,9 @@ export function UsersListPage() {
       <div className="page-header">
         <div>
           <h1>Usuários</h1>
-          <p className="page-subtitle">Gerencie contas de atendentes, técnicos e administradores.</p>
+          <p className="page-subtitle">
+            Gerencie contas de atendentes, técnicos e administradores.
+          </p>
         </div>
         <Link to="/users/new" className="btn btn-primary">
           <IconPlus width={16} height={16} />
@@ -87,7 +105,9 @@ export function UsersListPage() {
 
       {actionError && <ErrorBanner message={actionError} />}
 
-      {users && users.length === 0 && <EmptyState title="Nenhum usuário cadastrado." />}
+      {users && users.length === 0 && (
+        <EmptyState title="Nenhum usuário cadastrado." />
+      )}
 
       {users && users.length > 0 && (
         <div className="card table-wrap">
@@ -114,10 +134,19 @@ export function UsersListPage() {
                       ) : (
                         <select
                           className="input"
-                          style={{ width: "auto", padding: "4px 8px", fontSize: 12.5 }}
+                          style={{
+                            width: "auto",
+                            padding: "4px 8px",
+                            fontSize: 12.5,
+                          }}
                           value={u.role}
                           disabled={savingId === u.id}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                          onChange={(e) =>
+                            handleRoleChange(
+                              u.id,
+                              e.target.value as EditableUserRole,
+                            )
+                          }
                           aria-label={`Alterar papel de ${u.name}`}
                         >
                           {EDITABLE_ROLES.map((role) => (
