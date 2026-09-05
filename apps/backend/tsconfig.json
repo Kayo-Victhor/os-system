@@ -5,7 +5,6 @@
     "moduleResolution": "NodeNext",
     "rootDir": "src",
     "outDir": "dist",
-
     "types": ["node"],
 
     "strict": true,
@@ -14,6 +13,7 @@
 
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
     "sourceMap": true
   },
   "include": [

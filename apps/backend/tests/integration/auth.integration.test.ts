@@ -27,6 +27,14 @@ describe("POST /auth/login — real database", () => {
     expect(cookies.some((c) => c.startsWith("access_token="))).toBe(true);
     expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(true);
 
+    // API_BASE_PATH is unset in the test environment (same as local dev,
+    // since there's no Vercel rewrite in front of tests either) — the
+    // refresh cookie's actual Path attribute should reflect that, not a
+    // hardcoded production value.
+    const refreshCookie = cookies.find((c) => c.startsWith("refresh_token="))!;
+    expect(refreshCookie).toContain("Path=/auth/refresh");
+    expect(refreshCookie).not.toContain("Path=/api/auth/refresh");
+
     // The refresh token really was persisted (hashed) in the database.
     const storedTokens = await testPrisma.refreshToken.findMany({
       where: { userId: user.id },

@@ -16,6 +16,7 @@ import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
   CSRF_COOKIE,
+  REFRESH_COOKIE_PATH,
   accessTokenCookieOptions,
   refreshTokenCookieOptions,
   csrfCookieOptions,
@@ -121,7 +122,7 @@ export async function refreshController(
 
     if (!session) {
       res.clearCookie(ACCESS_TOKEN_COOKIE, clearCookieOptions("/"));
-      res.clearCookie(REFRESH_TOKEN_COOKIE, clearCookieOptions("/api/auth/refresh"));
+      res.clearCookie(REFRESH_TOKEN_COOKIE, clearCookieOptions(REFRESH_COOKIE_PATH));
       res.clearCookie(CSRF_COOKIE, clearCookieOptions("/"));
 
       res.status(401).json({ error: "Sessão inválida ou expirada" });
@@ -155,7 +156,7 @@ export async function logoutController(
   }
 
   res.clearCookie(ACCESS_TOKEN_COOKIE, clearCookieOptions("/"));
-  res.clearCookie(REFRESH_TOKEN_COOKIE, clearCookieOptions("/api/auth/refresh"));
+  res.clearCookie(REFRESH_TOKEN_COOKIE, clearCookieOptions(REFRESH_COOKIE_PATH));
   res.clearCookie(CSRF_COOKIE, clearCookieOptions("/"));
 
   res.status(204).send();

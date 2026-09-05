@@ -14,17 +14,26 @@ import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 const app = express();
 app.set("trust proxy", 1);
 
+const isProduction = process.env.NODE_ENV === "production";
 const corsOrigin = process.env.CORS_ORIGIN;
 
-if (!corsOrigin && process.env.NODE_ENV === "production") {
+if (!corsOrigin && isProduction) {
   throw new Error("CORS_ORIGIN precisa estar configurado em produção");
 }
 
 app.use(helmet());
 
+// localhost:5173 (the Vite dev server) is only ever a valid CORS origin in
+// development. In production, the browser talks to the Vercel origin,
+// which proxies /api/* to this backend (see apps/frontend/vercel.json) —
+// that path is same-origin from the browser's perspective and never goes
+// through this CORS check at all. CORS here only matters for direct,
+// non-proxied access to this backend (e.g. hitting the Render URL
+// directly), so the only origin that should ever be allowed in
+// production is CORS_ORIGIN itself — never an unconditional dev URL.
 const allowedOrigins = [
   corsOrigin,
-  "http://localhost:5173",
+  ...(isProduction ? [] : ["http://localhost:5173"]),
 ].filter((origin): origin is string => Boolean(origin));
 
 app.use(

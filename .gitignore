@@ -1,6 +1,15 @@
 # Dependencies
 node_modules/
 
+# This project uses pnpm exclusively (see packageManager in package.json
+# and pnpm-workspace.yaml) — never commit another package manager's
+# lockfile. If package-lock.json or yarn.lock reappears locally, it means
+# npm/yarn was run by mistake in this directory; delete it and reinstall
+# with `pnpm install`.
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+
 # Build
 dist/
 build/
