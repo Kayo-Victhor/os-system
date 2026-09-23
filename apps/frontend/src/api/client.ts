@@ -111,6 +111,14 @@ export async function apiRequest<T>(
     }
   }
 
+  // The refresh attempt above is the last chance to recover an expired
+  // cookie session. Tell the UI once it has definitively failed so guards
+  // can return the person to the login screen instead of leaving an
+  // authenticated-looking page with a generic request error.
+  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
+    window.dispatchEvent(new Event("os-system:session-expired"));
+  }
+
   if (!res.ok) {
     let body: { error?: string; details?: unknown } = {};
 

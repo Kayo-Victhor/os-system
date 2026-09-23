@@ -16,6 +16,7 @@ export function ServiceOrdersListPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ServiceOrderStatus | "">("");
   const [priority, setPriority] = useState<ServiceOrderPriority | "">("");
+  const [sort, setSort] = useState<"updated" | "created" | "priority">("updated");
   const [onlyMine, setOnlyMine] = useState(user?.role === "TECHNICIAN");
 
   const load = useCallback(async () => {
@@ -39,6 +40,24 @@ export function ServiceOrdersListPage() {
     const timeout = setTimeout(load, search ? 300 : 0);
     return () => clearTimeout(timeout);
   }, [load, search]);
+
+  const sortedOrders = orders ? [...orders].sort((first, second) => {
+    if (sort === "priority") {
+      const weights = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
+      return weights[second.priority] - weights[first.priority];
+    }
+    const field = sort === "created" ? "createdAt" : "updatedAt";
+    return new Date(second[field]).getTime() - new Date(first[field]).getTime();
+  }) : null;
+
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setPriority("");
+    setOnlyMine(user?.role === "TECHNICIAN");
+  }
+
+  const filtersActive = Boolean(search || status || priority || (user?.role === "TECHNICIAN" && !onlyMine));
 
   return (
     <div>
@@ -87,6 +106,12 @@ export function ServiceOrdersListPage() {
           ))}
         </select>
 
+        <select className="input" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Ordenar ordens">
+          <option value="updated">Atualização mais recente</option>
+          <option value="created">Criação mais recente</option>
+          <option value="priority">Maior prioridade</option>
+        </select>
+
         <select
           className="input"
           value={priority}
@@ -107,12 +132,13 @@ export function ServiceOrdersListPage() {
             Apenas minhas ordens
           </label>
         )}
+        {filtersActive && <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>Limpar filtros</button>}
       </div>
 
       {orders === null && !error && <PageLoading />}
       {error && <ErrorState message={error} onRetry={load} />}
 
-      {orders && orders.length === 0 && (
+      {sortedOrders && sortedOrders.length === 0 && (
         <EmptyState
           title="Não há ordens de serviço cadastradas."
           description={
@@ -123,7 +149,7 @@ export function ServiceOrdersListPage() {
         />
       )}
 
-      {orders && orders.length > 0 && (
+      {sortedOrders && sortedOrders.length > 0 && (
         <div className="card table-wrap">
           <table className="data-table">
             <thead>
@@ -137,11 +163,12 @@ export function ServiceOrdersListPage() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {sortedOrders.map((order) => (
                 <tr key={order.id}>
                   <td className="wrap">
                     <Link to={`/service-orders/${order.id}`} className="row-link">
-                      {order.title}
+                      <span className="order-title">{order.title}</span>
+                      <span className="order-reference">#{order.id.slice(-6).toUpperCase()}</span>
                     </Link>
                   </td>
                   <td>{order.customer.name}</td>
