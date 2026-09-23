@@ -19,17 +19,24 @@ interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  group?: "operations" | "people" | "system";
   end?: boolean;
   permission?: Permission;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Painel", icon: IconDashboard, end: true },
-  { to: "/service-orders", label: "Ordens de serviço", icon: IconOrders, permission: "OS_READ" },
-  { to: "/customers", label: "Clientes", icon: IconCustomers, permission: "CUSTOMER_READ" },
-  { to: "/technicians", label: "Técnicos", icon: IconTechnician, permission: "USER_READ" },
-  { to: "/users", label: "Usuários", icon: IconUsersAdmin, permission: "USER_READ" },
+  { to: "/service-orders", label: "Ordens de serviço", icon: IconOrders, group: "operations", permission: "OS_READ" },
+  { to: "/customers", label: "Clientes", icon: IconCustomers, group: "people", permission: "CUSTOMER_READ" },
+  { to: "/technicians", label: "Técnicos", icon: IconTechnician, group: "people", permission: "USER_READ" },
+  { to: "/users", label: "Usuários", icon: IconUsersAdmin, group: "system", permission: "USER_READ" },
 ];
+
+const NAV_GROUPS = [
+  { id: "operations", label: "Operações" },
+  { id: "people", label: "Pessoas" },
+  { id: "system", label: "Sistema" },
+] as const;
 
 function initials(name: string) {
   return name
@@ -62,9 +69,12 @@ export function AppLayout() {
       />
 
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label="Navegação principal">
-        <div className="sidebar-brand">OS System</div>
+        <div className="sidebar-brand">
+          <span className="brand-mark" aria-hidden="true">OS</span>
+          <span><strong>OS System</strong><small>Central de serviços</small></span>
+        </div>
         <nav className="sidebar-nav">
-          {visibleItems.map(({ to, label, icon: ItemIcon, end }) => (
+          {visibleItems.filter((item) => !item.group).map(({ to, label, icon: ItemIcon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -76,12 +86,31 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
+          {NAV_GROUPS.map(({ id, label }) => {
+            const items = visibleItems.filter((item) => item.group === id);
+            if (items.length === 0) return null;
+            return (
+              <div className="sidebar-group" key={id}>
+                <p className="sidebar-group-label">{label}</p>
+                {items.map(({ to, label: itemLabel, icon: ItemIcon, end }) => (
+                  <NavLink key={to} to={to} end={end} className="sidebar-link" onClick={() => setMobileOpen(false)}>
+                    <ItemIcon className="sidebar-icon" />
+                    {itemLabel}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
+        <div className="sidebar-user" aria-label="Usuário conectado">
+          <div className="user-avatar" aria-hidden="true">{initials(user.name)}</div>
+          <div className="sidebar-user-copy"><strong>{user.name}</strong><span>{ROLE_LABELS[user.role]}</span></div>
+        </div>
       </aside>
 
       <div className="main-area">
         <header className="topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="topbar-context">
             <button
               type="button"
               className="topbar-menu-btn"
@@ -93,13 +122,7 @@ export function AppLayout() {
           </div>
 
           <div className="user-menu">
-            <div style={{ textAlign: "right" }}>
-              <div className="user-name">{user.name}</div>
-              <div className="user-role">{ROLE_LABELS[user.role]}</div>
-            </div>
-            <div className="user-avatar" aria-hidden="true">
-              {initials(user.name)}
-            </div>
+            <span className="topbar-status">Ambiente operacional</span>
             <button
               type="button"
               className="btn btn-ghost btn-sm"

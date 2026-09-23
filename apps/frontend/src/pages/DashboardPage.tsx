@@ -69,6 +69,7 @@ export function DashboardPage() {
 
   const openOrders = data.orders.filter((o) => o.status === "OPEN").length;
   const inProgressOrders = data.orders.filter((o) => o.status === "IN_PROGRESS").length;
+  const waitingOrders = data.orders.filter((o) => o.status === "WAITING").length;
   const completedOrders = data.orders.filter((o) => o.status === "COMPLETED").length;
 
   const myOrders = user
@@ -84,20 +85,24 @@ export function DashboardPage() {
       <div className="page-header">
         <div>
           <h1>Olá, {user?.name.split(" ")[0]}</h1>
-          <p className="page-subtitle">Aqui está um resumo do que está acontecendo agora.</p>
+          <p className="page-subtitle">Acompanhe a fila de atendimento e as prioridades do dia.</p>
         </div>
       </div>
 
       <div className="stat-grid">
-        <div className="card stat-card">
+        <div className="card stat-card stat-card-open">
           <div className="stat-value">{openOrders}</div>
           <div className="stat-label">Ordens abertas</div>
         </div>
-        <div className="card stat-card">
+        <div className="card stat-card stat-card-progress">
           <div className="stat-value">{inProgressOrders}</div>
           <div className="stat-label">Em andamento</div>
         </div>
-        <div className="card stat-card">
+        <div className="card stat-card stat-card-waiting">
+          <div className="stat-value">{waitingOrders}</div>
+          <div className="stat-label">Aguardando</div>
+        </div>
+        <div className="card stat-card stat-card-completed">
           <div className="stat-value">{completedOrders}</div>
           <div className="stat-label">Concluídas</div>
         </div>
@@ -115,13 +120,13 @@ export function DashboardPage() {
 
       {user?.role === "TECHNICIAN" && myOrders.length > 0 && (
         <div className="card detail-section" style={{ marginBottom: 16 }}>
-          <h2>Suas ordens em aberto ({myOrders.length})</h2>
+          <div className="section-heading"><div><h2>Minha fila</h2><p>Ordens atribuídas que ainda precisam de acompanhamento.</p></div><span className="section-count">{myOrders.length}</span></div>
           <OrdersMiniTable orders={myOrders} />
         </div>
       )}
 
       <div className="card detail-section">
-        <h2>Atividade recente</h2>
+        <div className="section-heading"><div><h2>Ordens recentes</h2><p>Atualizações mais recentes na central de serviços.</p></div><Link className="btn btn-secondary btn-sm" to="/service-orders">Ver todas</Link></div>
         {recentOrders.length === 0 ? (
           <p className="page-subtitle">Nenhuma ordem de serviço registrada ainda.</p>
         ) : (
@@ -149,7 +154,8 @@ function OrdersMiniTable({ orders }: { orders: ServiceOrder[] }) {
             <tr key={order.id}>
               <td>
                 <Link to={`/service-orders/${order.id}`} className="row-link">
-                  {order.title}
+                  <span className="order-title">{order.title}</span>
+                  <span className="order-reference">#{order.id.slice(-6).toUpperCase()}</span>
                 </Link>
               </td>
               <td>{order.customer.name}</td>
