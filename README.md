@@ -1,392 +1,759 @@
-# OS System
+# OS System — Sistema de Gerenciamento de Ordens de Serviço
 
-Sistema de gerenciamento de ordens de serviço: clientes, técnicos, ordens de
-serviço e controle de acesso por papel (ADMIN / USER / TECHNICIAN / CUSTOMER).
+Sistema full-stack para gestão operacional de Ordens de Serviço (OS), cadastro e acompanhamento de clientes, atribuição de técnicos e controle da fila de atendimento.
 
-## Sumário
+## 🛠️ Arquitetura e Tecnologia
 
-- [Arquitetura](#arquitetura)
-- [Tecnologias](#tecnologias)
-- [Requisitos](#requisitos)
-- [Instalação](#instalação)
-- [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Banco de dados e migrations](#banco-de-dados-e-migrations)
-- [Executando em desenvolvimento](#executando-em-desenvolvimento)
-- [Testes](#testes)
-- [Build](#build)
-- [Papéis e permissões](#papéis-e-permissões)
-- [Registro público de clientes](#registro-público-de-clientes)
-- [Segurança](#segurança)
-- [Estrutura do projeto](#estrutura-do-projeto)
-- [Limitações conhecidas](#limitações-conhecidas)
+O projeto adota uma arquitetura em monorepo gerenciada via **pnpm workspaces** e **Turborepo**.
 
-## Arquitetura
+```text
+[ Frontend (React + Vite) ]
+             │
+             │ HTTP / JSON / Cookies HttpOnly
+             ▼
+[ Backend (Express + TypeScript) ]
+             │
+             │ Prisma ORM
+             ▼
+[ PostgreSQL ]
+     │                 │
+     │ Local           │ Produção
+     ▼                 ▼
+[ Docker ]       [ Supabase PostgreSQL ]
+```
 
-Monorepo (pnpm workspaces + Turborepo) com duas aplicações:
+### Tecnologias
 
-- **`apps/backend`** — API REST em Express + TypeScript, Prisma como ORM
-  sobre PostgreSQL.
-- **`apps/frontend`** — SPA em React 19 + Vite, consumindo a API do backend.
+### Frontend
+- React 19
+- React DOM 19
+- React Router DOM 7
+- Vite 8
+- TypeScript 6
+- ESLint 10
 
-O frontend não tem lógica de autorização própria além de esconder/mostrar
-controles de UI; toda decisão de segurança real é feita no backend.
+### Backend
+- Node.js
+- Express 5
+- TypeScript 6
+- Prisma 7
+- PostgreSQL
+- Argon2
+- JWT
+- Zod
+- Helmet
+- CORS
+- Cookie Parser
+- Express Rate Limit
+- Vitest
+- Supertest
+- tsx
 
-## Tecnologias
+### Infraestrutura
+- pnpm 11
+- Turborepo
+- Docker para desenvolvimento local
+- Supabase PostgreSQL / Supavisor em produção
+- Vercel para o frontend
+- Render para o backend
 
-**Backend:** Express 5, Prisma 7, PostgreSQL, Zod (validação), Argon2id
-(hash de senha), JWT (access token), express-rate-limit, helmet,
-cookie-parser, Vitest + Supertest (testes).
+### Supabase
 
-**Frontend:** React 19, React Router 7, Vite, TypeScript, CSS puro (sem
-framework de UI).
+O Supabase é utilizado como provedor de hospedagem do PostgreSQL em produção, através do **Supavisor / Session Pooler**.
 
-## Requisitos
+O projeto **não utiliza Supabase Auth** como mecanismo principal de autenticação.
 
-- Node.js 22+
-- pnpm 11+
-- PostgreSQL 16+ (ou Docker, veja abaixo)
+A autenticação da aplicação é gerenciada pelo próprio backend Express, incluindo emissão e validação dos tokens JWT e gerenciamento de refresh tokens.
 
-## Instalação
+---
+
+# 🔑 Roles e Permissões de Acesso
+
+## 1. ADMIN
+
+**Perfil:** dono ou gestor principal da empresa.
+
+Possui acesso administrativo amplo para gerenciamento de:
+
+- usuários;
+- permissões;
+- clientes;
+- ordens de serviço;
+- intervenções administrativas;
+- atribuição e reatribuição de técnicos;
+- correções operacionais.
+
+O ADMIN não precisa aprovar individualmente cada ordem de serviço criada por um USER.
+
+---
+
+## 2. USER
+
+**Perfil:** atendente ou funcionário responsável pela operação diária do sistema.
+
+De acordo com as regras atuais da aplicação, pode:
+
+- cadastrar clientes;
+- criar ordens de serviço;
+- editar ordens de serviço;
+- definir prioridades;
+- acompanhar a fila de atendimento;
+- atribuir técnicos;
+- reatribuir técnicos;
+- acompanhar a operação das OS.
+
+A atribuição de uma OS a um técnico pelo USER não depende de aprovação do ADMIN.
+
+---
+
+## 3. TECHNICIAN
+
+**Perfil:** técnico responsável pela execução das ordens de serviço.
+
+Pode, conforme as regras de autorização implementadas:
+
+- consultar ordens atribuídas a si;
+- visualizar os detalhes necessários para execução;
+- atualizar andamento/status;
+- concluir atendimentos.
+
+O acesso do técnico deve permanecer limitado às operações permitidas pelo backend.
+
+---
+
+## 4. CUSTOMER
+
+**Perfil:** cliente final da empresa.
+
+### Intenção funcional
+
+O CUSTOMER deve poder:
+
+- realizar login;
+- consultar suas próprias ordens de serviço;
+- visualizar detalhes das suas OS;
+- acompanhar status;
+- consultar histórico relacionado às suas ordens.
+
+### Estado atual
+
+A funcionalidade de CUSTOMER encontra-se **parcialmente implementada**.
+
+A principal pendência está relacionada à associação entre a conta `User` e o registro correspondente em `Customer`, além da implementação completa do isolamento das consultas para garantir que um CUSTOMER só consiga acessar as próprias ordens.
+
+A autorização deve ser realizada no backend e não apenas por ocultação de elementos da interface.
+
+---
+
+# 🔒 Segurança e Autenticação
+
+## Autenticação
+
+A aplicação utiliza autenticação própria baseada em JWT.
+
+As senhas dos usuários são armazenadas utilizando hash com `Argon2`.
+
+O fluxo de autenticação possui:
+
+- access token;
+- refresh token;
+- rotação de refresh tokens;
+- cookies HttpOnly;
+- controle de sessão;
+- logout/revogação conforme a implementação do backend.
+
+Dados sensíveis não devem ser retornados desnecessariamente pela API.
+
+Em particular:
+
+- `User.password` não deve ser exposto;
+- `RefreshToken.tokenHash` não deve ser exposto.
+
+## Autorização
+
+A autorização é realizada no backend através das roles e das regras de acesso implementadas nos middlewares, controllers e services.
+
+A aplicação não depende do frontend para garantir segurança.
+
+O frontend pode ocultar botões e funcionalidades para melhorar a experiência do usuário, mas isso **não substitui a autorização do backend**.
+
+Quando necessário, as regras de acesso também devem verificar ownership, por exemplo, garantindo que um CUSTOMER só consiga acessar recursos pertencentes a ele.
+
+---
+
+# 🛡️ Supabase e Row Level Security
+
+A conexão utilizada pelo Prisma em produção utiliza atualmente a role `postgres`.
+
+Foi confirmado no ambiente de produção:
+
+```text
+current_user = postgres
+current_role = postgres
+rolbypassrls = true
+```
+
+Isso significa que as consultas realizadas pelo Prisma através dessa conexão não são restringidas por políticas RLS.
+
+Portanto, a camada principal de autenticação e autorização da aplicação continua sendo o backend Express.
+
+RLS deve ser tratado como uma camada adicional de proteção para acessos que estejam sujeitos às políticas do PostgreSQL/Supabase, especialmente possíveis acessos externos através da Data API/PostgREST.
+
+A arquitetura atual **não utiliza `auth.uid()` como mecanismo de autorização do backend**, pois a aplicação utiliza JWT próprio e não Supabase Auth.
+
+---
+
+# 🗄️ Banco de Dados, Prisma e Migrations
+
+## Configuração local
+
+O ambiente local utiliza PostgreSQL através de Docker.
+
+```text
+Container: os-system-db
+Porta: 5432
+Banco de desenvolvimento: os_system
+Banco de testes: os_system_test
+```
+
+O banco de desenvolvimento e o banco de testes são separados para evitar que a execução de testes afete os dados utilizados durante o desenvolvimento.
+
+**Nunca execute testes apontando para o banco de produção.**
+
+As credenciais devem ser configuradas através das variáveis de ambiente do projeto.
+
+---
+
+## Prisma
+
+Schema:
+
+```text
+apps/backend/prisma/schema.prisma
+```
+
+Migrations:
+
+```text
+apps/backend/prisma/migrations/
+```
+
+### Gerar o Prisma Client
+
+```bash
+pnpm --filter backend prisma generate
+```
+
+### Aplicar migrations em desenvolvimento
+
+```bash
+pnpm --filter backend prisma migrate dev
+```
+
+### Verificar o estado das migrations
+
+```bash
+pnpm --filter backend prisma migrate status
+```
+
+Migrations que já foram aplicadas não devem ser editadas diretamente.
+
+Alterações estruturais futuras devem ser realizadas através de uma nova migration.
+
+Não utilize comandos destrutivos ou reset do banco como procedimento normal de desenvolvimento.
+
+---
+
+# 🚀 Como Executar o Projeto Localmente
+
+## Pré-requisitos
+
+- Node.js;
+- pnpm 11.21.0 ou versão compatível;
+- Docker;
+- Docker Compose.
+
+O projeto utiliza **pnpm como gerenciador de pacotes oficial**.
+
+O arquivo de lock utilizado pelo monorepo é:
+
+```text
+pnpm-lock.yaml
+```
+
+O workspace é definido por:
+
+```text
+pnpm-workspace.yaml
+```
+
+Não utilize `npm install` ou `yarn` para instalar as dependências do monorepo.
+
+Se existir um `package-lock.json` na raiz do projeto, ele não faz parte do fluxo oficial do monorepo e deve ser removido para evitar conflitos de detecção do gerenciador de pacotes.
+
+---
+
+# 📦 Instalação
+
+Na raiz do projeto:
 
 ```bash
 pnpm install
 ```
 
-## Variáveis de ambiente
+---
 
-Cada app tem seu próprio `.env.example`. Copie e preencha antes de rodar:
+# 🐘 Banco de Dados Local
 
-```bash
-cp apps/backend/.env.example apps/backend/.env
-cp apps/frontend/.env.example apps/frontend/.env
-cp .env.example .env   # apenas se for usar o docker-compose incluso
-```
-
-### `apps/backend/.env`
-
-| Variável              | Descrição                                                                 |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `DATABASE_URL`         | Connection string do PostgreSQL usada pelo Prisma                          |
-| `JWT_ACCESS_SECRET`     | Assina o access token (JWT, 15 min de validade)                            |
-| `JWT_REFRESH_SECRET`   | Usado para HMAC dos refresh tokens antes de persistir no banco             |
-| `CORS_ORIGIN`          | Origem do frontend autorizada a fazer requisições com cookies. **Obrigatório em produção** |
-| `NODE_ENV`             | `development` \| `production`                                              |
-| `SEED_ADMIN_PASSWORD`  | Sobrescreve a senha do admin criado pelo seed (veja abaixo)                 |
-
-Gere segredos fortes com:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
-```
-
-### `apps/frontend/.env`
-
-| Variável       | Descrição                          |
-| -------------- | ------------------------------------ |
-| `VITE_API_URL` | URL base da API backend             |
-
-## Banco de dados e migrations
-
-Subindo um PostgreSQL local via Docker (opcional):
+Inicie o PostgreSQL através do Docker:
 
 ```bash
 docker compose up -d
 ```
 
-Aplicando as migrations:
+O banco local deve estar disponível na porta:
 
-```bash
-cd apps/backend
-pnpm prisma migrate dev
+```text
+5432
 ```
 
-> Duas migrations foram escritas manualmente, pois nenhuma sessão de
-> trabalho neste projeto teve um banco de dados disponível para gerá-las
-> via `prisma migrate dev`:
-> - `20260813200000_add_refresh_token` (tabela `RefreshToken`, necessária
->   para o fluxo de sessão)
-> - `20260821193500_add_customer_role` (adiciona `CUSTOMER` ao enum
->   `UserRole`, para o registro público de clientes)
->
-> Ambas **precisam ser validadas** rodando o comando acima contra um banco
-> descartável antes de aplicar em qualquer ambiente real.
+---
 
-Populando um usuário administrador inicial:
+# ⚙️ Variáveis de Ambiente
 
-```bash
-pnpm seed
+Crie:
+
+```text
+apps/backend/.env
 ```
 
-Isso cria `admin@os-system.local` com a senha definida em
-`SEED_ADMIN_PASSWORD` (ou `admin123456` como padrão de desenvolvimento, se a
-variável não estiver definida — **defina-a** em qualquer ambiente
-compartilhado).
+a partir do arquivo:
 
-## Executando em desenvolvimento
+```text
+apps/backend/.env.example
+```
 
-Da raiz do monorepo, um único comando inicia backend e frontend juntos:
+Exemplo conceitual:
+
+```env
+PORT=3333
+DATABASE_URL="postgresql://postgres:<senha>@localhost:5432/os_system?schema=public"
+JWT_SECRET="seu_jwt_secret_dev"
+JWT_REFRESH_SECRET="seu_jwt_refresh_secret_dev"
+API_BASE_PATH="/api"
+```
+
+Não versione credenciais reais.
+
+Para o frontend, a URL da API é configurada através de:
+
+```env
+VITE_API_URL="http://localhost:3333"
+```
+
+Os valores exatos devem seguir os arquivos `.env.example` e a configuração atual do projeto.
+
+---
+
+# ▶️ Executando o Ambiente Completo
+
+Depois de instalar as dependências e configurar o banco e as variáveis de ambiente:
 
 ```bash
 pnpm dev
 ```
 
-Isso roda algumas verificações rápidas antes de iniciar (dependências
-instaladas, `apps/backend/.env` configurado, PostgreSQL respondendo na
-porta configurada — sem nunca iniciar/parar/reiniciar o banco) e então
-inicia os dois serviços via Turborepo, com cada linha de saída prefixada
-pelo nome do pacote (`backend:` / `frontend:`) para ficar claro qual
-serviço está produzindo qual log.
+O fluxo é:
 
-Backend em `http://localhost:3333`, frontend em `http://localhost:5173`.
+```text
+pnpm dev
+   ↓
+scripts/dev-check.mjs
+   ↓
+turbo dev
+   ├── backend
+   └── frontend
+```
 
-Comandos individuais continuam funcionando normalmente, sem passar pelas
-verificações acima:
+O `scripts/dev-check.mjs` realiza verificações antes da inicialização, incluindo:
+
+- dependências instaladas;
+- existência de `apps/backend/.env`;
+- conectividade TCP com o PostgreSQL.
+
+O script **não inicia, para ou reinicia o PostgreSQL**.
+
+### Serviços locais
+
+Backend:
+
+```text
+http://localhost:3333
+```
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+O funcionamento do `pnpm dev` pela raiz foi validado no ambiente Linux, incluindo a inicialização simultânea do backend e frontend e o encerramento dos processos após `Ctrl+C`.
+
+---
+
+# 📦 Execução Individual
+
+Caso seja necessário executar apenas um dos serviços:
+
+### Backend
 
 ```bash
-pnpm --filter backend dev    # API em http://localhost:3333
-pnpm --filter frontend dev   # SPA em http://localhost:5173
+pnpm --filter backend dev
 ```
 
-## Testes
-
-O backend tem dois níveis de teste:
-
-- **Testes unitários** (`apps/backend/tests/*.test.ts`) — Prisma mockado
-  por arquivo (`tests/helpers/prisma-mock.ts`), não tocam em banco de
-  dados nenhum. Rápidos, cobrem lógica de controller/validação/permissão
-  isoladamente.
-- **Testes de integração** (`apps/backend/tests/integration/*.test.ts`) —
-  Prisma real, contra um banco de dados **dedicado exclusivamente a
-  testes**. Cobrem os fluxos reais de ponta a ponta: login de verdade
-  (não um token forjado), criação de registros reais, verificação de
-  relacionamentos no banco, rotação de refresh token, etc.
-
-### Configurando o banco de testes
-
-**Nunca use o banco de desenvolvimento (`os_system`) para os testes** — a
-suíte de integração apaga todos os dados de todas as tabelas antes de
-cada teste.
+### Frontend
 
 ```bash
-# Crie um banco dedicado, ex.: os_system_test
-createdb os_system_test   # ou via psql/ferramenta gráfica de sua preferência
-
-cd apps/backend
-cp .env.test.example .env.test
-# edite .env.test com a DATABASE_URL do banco de testes
-
-pnpm test:migrate   # aplica as migrations no banco de testes
+pnpm --filter frontend dev
 ```
 
-> **Não rode `pnpm prisma migrate deploy` diretamente aqui** —
-> `prisma.config.ts` carrega `.env` (o banco de desenvolvimento)
-> incondicionalmente, então isso aplicaria as migrations no lugar
-> errado. `pnpm test:migrate` (`scripts/test-db-migrate.mjs`) força a
-> `DATABASE_URL` de `.env.test`, confirma que ela contém "test" antes de
-> fazer qualquer coisa, e só então roda `prisma migrate deploy`.
+---
 
-O `.env.test` é carregado **apenas** pela suíte de testes
-(`tests/setup.ts`) — nunca pelo `.env` principal, e nunca é lido por
-`pnpm dev`. Há uma proteção que interrompe a suíte inteira, com um erro
-claro, caso `DATABASE_URL` não contenha a palavra "test" — isso existe
-especificamente para impedir que os testes rodem por engano contra
-`os_system` ou qualquer banco de produção. Toda execução de teste imprime
-uma linha `[test-db] host=... port=... database=...` — confira essa
-linha (não assuma) para confirmar qual banco está realmente sendo usado.
+# 🧪 Testes
 
-### Rodando
+O projeto possui uma suíte de testes automatizados no backend.
+
+### Preparar o banco de testes e executar os testes
 
 ```bash
-pnpm test                      # roda tudo (unitários + integração) via Turborepo
-pnpm --filter backend test     # equivalente, direto no backend
+pnpm test:migrate
 ```
 
-Os testes de integração rodam com `fileParallelism` desabilitado
-(configurado em `vitest.config.ts`) — como compartilham um único banco
-real e cada um limpa as tabelas antes de rodar, arquivos de teste
-precisam executar em sequência, não em paralelo, para não apagar dados
-uns dos outros no meio da execução.
-
-`vitest.config.ts` também define `include` explicitamente
-(`tests/*.test.ts` e `tests/integration/*.test.ts`) em vez de depender
-do glob padrão do Vitest — se `pnpm test` reportar menos arquivos do que
-o esperado, esse é o primeiro lugar a conferir.
-
-O frontend ainda não tem suíte de testes automatizados — veja
-[Limitações conhecidas](#limitações-conhecidas).
-
-## Build
+### Executar os testes
 
 ```bash
-pnpm build
+pnpm test
 ```
 
-Roda `tsc` + `vite build` no frontend e `tsc` no backend via Turborepo.
+Os testes devem utilizar o banco:
 
-## Papéis e permissões
-
-| Recurso                  | ADMIN | USER (atendente) | TECHNICIAN | CUSTOMER |
-| ------------------------- | :---: | :---------------: | :---------: | :------: |
-| Usuários — criar/editar/excluir | ✅ | ❌ | ❌ | ❌ |
-| Usuários — visualizar     | ✅    | ❌                 | ❌          | ❌       |
-| Clientes — criar/editar   | ✅    | ✅                 | ❌          | ❌       |
-| Clientes — excluir        | ✅    | ❌                 | ❌          | ❌       |
-| Clientes — visualizar     | ✅    | ✅                 | ✅          | ❌       |
-| Ordens de serviço — criar | ✅    | ✅                 | ❌          | ❌       |
-| Ordens de serviço — editar (título/descrição/prioridade) | ✅ | ❌ | ❌ | ❌ |
-| Ordens de serviço — excluir | ✅  | ❌                 | ❌          | ❌       |
-| Ordens de serviço — visualizar | ✅ | ✅              | ✅          | ❌       |
-| Ordens de serviço — atribuir técnico | ✅ | ❌         | ❌          | ❌       |
-| Ordens de serviço — alterar status | ✅ | ❌           | ✅ (apenas as suas) | ❌ |
-
-> A página "Técnicos" é uma visão sobre a lista de usuários (filtrada por
-> `role=TECHNICIAN`), então ela segue a mesma permissão de "Usuários —
-> visualizar" (apenas ADMIN) — não é uma permissão separada.
-
-### Sobre o papel CUSTOMER
-
-`CUSTOMER` é um papel de login real (ver
-[Registro público de clientes](#registro-público-de-clientes) abaixo),
-diferente do registro de negócio `Customer` (nome/telefone/documento de
-um cliente, gerenciado pela equipe via ADMIN/USER — isso não mudou).
-
-O papel CUSTOMER recebe **propositalmente nenhuma permissão** além do que
-qualquer usuário autenticado já tem (`GET /auth/me`, `POST /auth/logout`,
-`POST /auth/refresh` — nenhum desses passa por checagem de permissão).
-Não existe hoje um vínculo definido entre uma conta CUSTOMER e um
-registro `Customer` (por e-mail? por um campo explícito preenchido no
-registro? outra abordagem?) — decidir e implementar isso é um trabalho
-futuro, não inventado aqui sem confirmação. Na prática, uma conta
-CUSTOMER consegue se registrar e fazer login, mas ainda não tem nenhuma
-funcionalidade própria além disso — ela recebe 403 em qualquer
-funcionalidade administrativa, exatamente como esperado.
-
-
-## Registro público de clientes
-
-`POST /auth/register` (público, sem autenticação, mesmo rate limit de
-`/auth/login`) permite que qualquer pessoa crie sua própria conta:
-
-```json
-{
-  "name": "João",
-  "email": "joao@example.com",
-  "password": "senha123456"
-}
+```text
+os_system_test
 ```
 
-A conta criada é **sempre** `CUSTOMER` — o endpoint não aceita um campo
-`role` no corpo da requisição (não é apenas validado e rejeitado: o campo
-simplesmente não existe no schema, então um `role: "ADMIN"` enviado pelo
-cliente é descartado antes de chegar na camada de serviço). Não há
-nenhum caminho de código pelo qual o cliente influencie o papel da conta
-criada.
+e nunca o banco de produção.
 
-O endpoint não faz login automático — a conta é criada e a pessoa
-autentica separadamente via `POST /auth/login`, do mesmo jeito que uma
-conta criada por um admin via `POST /users`.
+Resultados específicos de testes devem ser considerados válidos somente quando executados no ambiente correspondente.
 
-## Segurança
+---
 
-Resumo do que está implementado (detalhes no código, especialmente
-`apps/backend/src/lib/` e `apps/backend/src/middlewares/`):
+# 🌐 API e Variáveis de Ambiente
 
-- **Senhas:** Argon2id (`memoryCost: 19456`, `timeCost: 2`), nunca texto puro.
-- **Sessão:** access token JWT (15 min) em cookie `httpOnly`; refresh token
-  opaco (não-JWT), com hash HMAC persistido no banco, rotacionado a cada uso,
-  com detecção de reuso (revoga toda a família de tokens do usuário se um
-  token já rotacionado for reapresentado).
-- **CSRF:** double-submit cookie (`csrf_token` legível por JS + header
-  `x-csrf-token`), aplicado a toda requisição mutável autenticada por cookie.
-- **Rate limiting:** limite estrito em `/auth/login` e `/auth/refresh`
-  (10 req/15 min), limite geral no restante da API (120 req/min). Usa
-  armazenamento em memória — **não é adequado para múltiplas instâncias**
-  sem um backend compartilhado (ex. Redis).
-- **CORS:** origem explícita via `CORS_ORIGIN`, obrigatória em produção;
-  `credentials: true`.
-- **Headers:** `helmet()` com a configuração padrão.
-- **Autorização:** verificada no backend em toda rota, nunca apenas no
-  frontend. Inclui verificação de propriedade de recurso (ex. um TECHNICIAN
-  só altera status de ordens atribuídas a ele mesmo).
-- **Erros:** mensagens genéricas em falhas de login (não revela se o e-mail
-  existe); stack traces nunca retornam ao cliente.
+## Backend
 
-## Estrutura do projeto
+O backend utiliza:
 
-```
-scripts/
-  dev-check.mjs      pré-checagens antes de `pnpm dev` (deps, .env, Postgres)
-apps/
-  backend/
-    prisma/            schema, migrations, seed
-    src/
-      config/          permissões por papel
-      controllers/      handlers HTTP
-      services/         regras de negócio / acesso ao Prisma
-      schemas/           validação (zod)
-      middlewares/       auth, CSRF, rate limit, permissões
-      lib/               tokens, cookies, hash de senha, erros do Prisma
-      routes/
-    tests/
-      *.test.ts          testes unitários (Prisma mockado por arquivo)
-      integration/        testes de integração (Prisma real, banco de testes)
-      helpers/            mock do Prisma, fixtures reais, login real para testes
-  frontend/
-    src/
-      api/               cliente HTTP, funções por recurso, tipos
-      context/           AuthContext (sessão, permissões)
-      components/         layout, guards de rota, componentes compartilhados
-      pages/
+```text
+API_BASE_PATH
 ```
 
-## Limitações conhecidas
+para definir o prefixo das rotas da API.
 
-Documentadas aqui em vez de escondidas — para que o próximo passo seja
-óbvio, não uma surpresa:
+A configuração deve permanecer coerente entre backend, frontend e ambiente de deployment.
 
-- **Duas migrations ainda não validadas contra um banco real**:
-  `20260813200000_add_refresh_token` e `20260821193500_add_customer_role`
-  (veja [Banco de dados e migrations](#banco-de-dados-e-migrations)) —
-  escritas à mão porque nenhuma sessão de trabalho neste projeto teve
-  acesso a um PostgreSQL real ou a instalação de dependências. Rode
-  `pnpm prisma migrate dev` localmente antes de aplicar a qualquer
-  ambiente real.
-- **Testes de integração escritos mas nunca executados**, pelo mesmo
-  motivo — sem acesso à rede, não foi possível rodar `pnpm install` nem
-  conectar a um PostgreSQL real neste ambiente. Foram revisados
-  estaticamente com bastante cuidado (incluindo rastrear manualmente
-  qual código de status HTTP cada cenário deveria produzir antes de
-  escrever a asserção, o que revelou e corrigiu bugs reais no caminho —
-  veja o changelog no histórico do Git), mas **precisam ser rodados
-  localmente** para confirmar que realmente passam.
-- **Não existe portal do cliente** — o papel CUSTOMER pode se registrar e
-  fazer login, mas não há vínculo definido com o registro de negócio
-  `Customer` nem nenhuma funcionalidade própria além do login. Ver
-  [Sobre o papel CUSTOMER](#sobre-o-papel-customer).
-- **Sem paginação** nos endpoints de listagem (apenas filtros). Adequado
-  para o volume atual; deve ser revisitado antes de produção com dados em
-  escala.
-- **Rate limiting em memória**, não compartilhado entre instâncias — ver
-  nota em [Segurança](#segurança).
-- **`SETTINGS_READ`/`SETTINGS_UPDATE`** existem como permissões declaradas
-  em `config/permissions.ts` mas não têm rota, controller ou funcionalidade
-  associada — aparentemente um placeholder de uma feature de configurações
-  do sistema que nunca foi definida. Não implementado aqui por não haver
-  escopo claro do que essa funcionalidade deveria fazer.
-- **Frontend sem suíte de testes automatizados** — o app foi construído e
-  revisado manualmente (resolução de imports, uso de tipos sob
-  `verbatimModuleSyntax`, regras de hooks), mas não há testes de componente
-  ou end-to-end.
-- **Sem backend de lint configurado** (`apps/backend` não tem ESLint) — o
-  frontend tem; o backend depende apenas do `tsc` para checagem estática.
-- Nenhum comando que requer instalação de dependências ou acesso à rede
-  (`pnpm install`, `typecheck`, `test`, `build`, `prisma migrate`, iniciar
-  os servidores de desenvolvimento) pôde ser executado em nenhuma sessão
-  de trabalho neste projeto até agora. Todo o código foi revisado
-  estaticamente com o máximo de cuidado possível — incluindo, nesta
-  sessão, testar isoladamente partes que não dependiam de rede/Postgres
-  (sintaxe do script de pré-checagem, resolução de todos os imports do
-  frontend, checagem de chaves/parênteses balanceados nos arquivos
-  alterados) — mas o projeto como um todo **precisa ser validado
-  localmente** (`pnpm install && pnpm dev`, e a suíte de testes) antes de
-  ir para produção.
+## Frontend
+
+O frontend utiliza:
+
+```text
+VITE_API_URL
+```
+
+para definir o endereço utilizado para consumir a API.
+
+Exemplo local:
+
+```text
+http://localhost:3333
+```
+
+A configuração exata pode variar conforme o ambiente.
+
+---
+
+# 📡 Arquitetura da Comunicação
+
+Em desenvolvimento:
+
+```text
+Frontend
+http://localhost:5173
+        │
+        ▼
+Backend
+http://localhost:3333
+        │
+        ▼
+Prisma
+        │
+        ▼
+PostgreSQL
+localhost:5432
+```
+
+Em produção:
+
+```text
+Frontend
+      │
+      ▼
+Vercel
+      │
+      ▼
+Backend
+      │
+      ▼
+Render
+      │
+      ▼
+Prisma
+      │
+      ▼
+Supabase PostgreSQL
+via Supavisor / Session Pooler
+```
+
+---
+
+# 📦 Deploy
+
+| Componente | Hospedagem | Função |
+|---|---|---|
+| Frontend | Vercel | Aplicação React/Vite |
+| Backend | Render | API Express |
+| Database | Supabase | PostgreSQL |
+| Connection Pooling | Supavisor | Conexão do backend com PostgreSQL |
+
+O fluxo de deployment atual utiliza o repositório GitHub como origem para os deployments configurados na Vercel e no Render.
+
+Não armazene secrets ou credenciais de produção no repositório.
+
+---
+
+# 🚦 Estado Atual das Funcionalidades
+
+## Implementado
+
+- Autenticação própria baseada em JWT.
+- Refresh tokens com rotação.
+- Gerenciamento de sessão.
+- Proteção de dados sensíveis nas respostas da API.
+- Gerenciamento de usuários conforme permissões implementadas.
+- Gerenciamento de clientes conforme permissões implementadas.
+- Criação e edição de Ordens de Serviço.
+- Atribuição e reatribuição de técnicos.
+- Controle de prioridade das OS.
+- Alteração de status das OS.
+- Controle de acesso para ADMIN.
+- Controle de acesso para USER.
+- Controle de acesso para TECHNICIAN.
+- Painel operacional e visualização da fila de atendimento no frontend.
+
+---
+
+## Parcialmente Implementado
+
+### CUSTOMER
+
+A role CUSTOMER existe na arquitetura da aplicação, mas o fluxo completo do portal do cliente ainda não está concluído.
+
+As principais pendências envolvem:
+
+- associação entre `User` e `Customer`;
+- isolamento completo das consultas do CUSTOMER;
+- garantia de que uma conta CUSTOMER só consiga acessar suas próprias OS;
+- conclusão dos endpoints/serviços necessários para o fluxo completo.
+
+---
+
+# 📋 Pendências
+
+## Associação User ↔ Customer
+
+Finalizar e validar o relacionamento necessário entre contas de usuário e registros de clientes, sem permitir acesso cruzado entre clientes.
+
+A implementação deve garantir a autorização no backend.
+
+---
+
+## Auditoria da Data API / RLS do Supabase
+
+A migration:
+
+```text
+20260906000000_enable_rls_lockdown
+```
+
+encontra-se preparada na estrutura do projeto.
+
+Antes de qualquer aplicação em produção, é necessário confirmar:
+
+- exposição das tabelas através da Data API/PostgREST;
+- schemas expostos;
+- grants para `anon`;
+- grants para `authenticated`;
+- possibilidade de acesso direto às tabelas da aplicação;
+- risco real dessa exposição;
+- necessidade de RLS;
+- necessidade de restrição/revogação de grants;
+- ou eventual necessidade de nenhuma alteração.
+
+A migration não deve ser aplicada apenas para eliminar avisos do painel do Supabase.
+
+---
+
+## Role dedicada para Prisma
+
+A conexão de produção utiliza atualmente a role `postgres`.
+
+A possibilidade de utilizar uma role dedicada para o Prisma pode ser avaliada futuramente como melhoria de arquitetura e princípio de menor privilégio.
+
+Essa alteração exige análise de impacto sobre:
+
+- migrations;
+- permissões;
+- Prisma;
+- deployment;
+- manutenção;
+- operações administrativas.
+
+Nenhuma alteração de credencial de produção deve ser realizada sem essa avaliação.
+
+---
+
+## Testes em CI/CD
+
+Validar e garantir que o ambiente de integração contínua configure corretamente:
+
+```text
+os_system_test
+```
+
+antes da execução dos testes que dependem do banco.
+
+---
+
+# 🧭 Decisões Arquiteturais Importantes
+
+## Autenticação
+
+A aplicação utiliza autenticação própria baseada em JWT.
+
+Não utiliza Supabase Auth como mecanismo principal.
+
+## Autorização
+
+A autorização ocorre no backend.
+
+O frontend não é considerado uma camada de segurança.
+
+## Banco
+
+O desenvolvimento utiliza PostgreSQL local através de Docker.
+
+A produção utiliza PostgreSQL hospedado no Supabase.
+
+## RLS
+
+RLS não é utilizado como substituto da autorização implementada pelo backend.
+
+Como a conexão Prisma de produção utiliza atualmente `postgres` com:
+
+```text
+rolbypassrls = true
+```
+
+as consultas realizadas pelo Prisma não são restringidas por RLS.
+
+Qualquer adoção de RLS deve considerar separadamente os acessos realizados através da Data API/PostgREST e os acessos realizados pelo backend.
+
+---
+
+# 📌 Histórico Recente
+
+A branch principal já contém os commits recentes relacionados à evolução do frontend:
+
+```text
+927ccd1 feat(frontend): refine operations layout and dashboard
+6659c8b feat(frontend): improve service order queue controls
+```
+
+Essas alterações já foram incorporadas à `main` e enviadas ao repositório remoto.
+
+---
+
+# 📚 Estrutura Principal
+
+```text
+os-system/
+├── apps/
+│   ├── backend/
+│   │   ├── prisma/
+│   │   │   ├── migrations/
+│   │   │   └── schema.prisma
+│   │   └── src/
+│   │
+│   └── frontend/
+│       └── src/
+│
+├── scripts/
+│   └── dev-check.mjs
+│
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+└── turbo.json
+```
+
+---
+
+# ✅ Resumo do Estado Atual
+
+O OS System possui atualmente uma arquitetura full-stack baseada em:
+
+```text
+React + Vite
+      ↓
+Express + TypeScript
+      ↓
+JWT + Cookies HttpOnly
+      ↓
+Prisma
+      ↓
+PostgreSQL
+```
+
+O ambiente local utiliza PostgreSQL em Docker e o ambiente de produção utiliza PostgreSQL hospedado no Supabase através do Supavisor.
+
+A autenticação e autorização são controladas pelo backend.
+
+As roles principais são:
+
+```text
+ADMIN
+USER
+TECHNICIAN
+CUSTOMER
+```
+
+O fluxo de CUSTOMER ainda está parcialmente implementado e requer conclusão do vínculo entre usuário e cliente e validação completa do isolamento de acesso.
+
+A questão de RLS/Data API do Supabase permanece como uma decisão técnica que deve ser baseada na exposição e nos grants efetivamente encontrados, e não apenas nos alertas do painel.
+
+O comando principal para desenvolvimento local é:
+
+```bash
+pnpm dev
+```
+
+que executa as verificações do projeto e inicia backend e frontend através do Turborepo.
