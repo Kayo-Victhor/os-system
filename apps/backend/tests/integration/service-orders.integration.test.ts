@@ -172,6 +172,47 @@ describe("GET /service-orders/:id — nonexistent resource", () => {
   });
 });
 
+describe("TECHNICIAN ownership — service order reads", () => {
+  it("does not list orders assigned to another technician, even with their id in the query", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: tech1 } = await createFixtureUser("TECHNICIAN");
+    const { user: tech2 } = await createFixtureUser("TECHNICIAN");
+    const customer = await createFixtureCustomer();
+
+    await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id, technicianId: tech1.id });
+    await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id, technicianId: tech2.id });
+    const session = await loginAs(app, tech1.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .get("/service-orders")
+      .query({ technicianId: tech2.id })
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].technicianId).toBe(tech1.id);
+  });
+
+  it("does not disclose an order assigned to another technician by id", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: tech1 } = await createFixtureUser("TECHNICIAN");
+    const { user: tech2 } = await createFixtureUser("TECHNICIAN");
+    const customer = await createFixtureCustomer();
+    const order = await createFixtureServiceOrder({
+      customerId: customer.id,
+      createdById: admin.id,
+      technicianId: tech2.id,
+    });
+    const session = await loginAs(app, tech1.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .get(`/service-orders/${order.id}`)
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("PATCH /service-orders/:id/status — validation and authorization", () => {
   it("rejects an invalid status value", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");

@@ -75,7 +75,7 @@ export async function createServiceOrderController(
 // =====================================================
 
 export async function listServiceOrdersController(
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   const result = listServiceOrdersQuerySchema.safeParse(req.query);
@@ -90,7 +90,15 @@ export async function listServiceOrdersController(
   }
 
   try {
-    const serviceOrders = await listServiceOrders(result.data);
+    // A technician works only on their assigned queue. The client-side
+    // "minhas ordens" filter is convenience UI, not an authorization
+    // boundary: without this override a technician could remove or replace
+    // technicianId in the URL and enumerate another technician's orders.
+    const serviceOrders = await listServiceOrders({
+      ...result.data,
+      technicianId:
+        req.userRole === "TECHNICIAN" ? req.userId : result.data.technicianId,
+    });
 
     res.json(serviceOrders);
   } catch (error) {
@@ -107,7 +115,7 @@ export async function listServiceOrdersController(
 // =====================================================
 
 export async function getServiceOrderByIdController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
   try {
@@ -118,6 +126,18 @@ export async function getServiceOrderByIdController(
         error: "Ordem de serviço não encontrada",
       });
 
+      return;
+    }
+
+    // Do not reveal whether an order assigned to another technician exists.
+    // CUSTOMER currently receives no OS_READ permission, so it cannot reach
+    // this branch until a separate, explicitly designed customer ownership
+    // model exists.
+    if (
+      req.userRole === "TECHNICIAN" &&
+      serviceOrder.technicianId !== req.userId
+    ) {
+      res.status(404).json({ error: "Ordem de serviço não encontrada" });
       return;
     }
 
