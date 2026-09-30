@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import * as customersApi from "../api/customers.ts";
 import * as usersApi from "../api/users.ts";
@@ -24,16 +24,16 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const latestLoadRef = useRef(0);
-  const load = useCallback(async (isActive: () => boolean = () => true) => {
+  const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
     if (!isActive()) return;
     const requestId = ++latestLoadRef.current;
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoading(true);
     setError(null);
     const [ordersResult, customersResult, techniciansResult] = await Promise.allSettled([
-      can("OS_READ") ? serviceOrdersApi.listServiceOrders() : Promise.resolve([]),
-      can("CUSTOMER_READ") ? customersApi.listCustomers() : Promise.resolve([]),
-      can("OS_READ") ? usersApi.listUsers("TECHNICIAN") : Promise.resolve([]),
+      can("OS_READ") ? serviceOrdersApi.listServiceOrders({}, signal) : Promise.resolve([]),
+      can("CUSTOMER_READ") ? customersApi.listCustomers(undefined, signal) : Promise.resolve([]),
+      can("OS_READ") ? usersApi.listUsers("TECHNICIAN", signal) : Promise.resolve([]),
     ]);
     if (!canCommit()) return;
     const failures = [ordersResult, customersResult, techniciansResult].filter((result) => result.status === "rejected");

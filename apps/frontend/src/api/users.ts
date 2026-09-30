@@ -16,8 +16,8 @@ export interface UpdateUserInput {
   role?: "ADMIN" | "USER" | "TECHNICIAN";
 }
 
-export function listUsers(role?: UserRole) {
-  return apiRequest<UserRecord[]>("/users", { query: { role } });
+export function listUsers(role?: UserRole, signal?: AbortSignal) {
+  return apiRequest<UserRecord[]>("/users", { query: { role }, signal });
 }
 
 export function getUser(id: string) {

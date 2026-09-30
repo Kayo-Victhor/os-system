@@ -10,7 +10,7 @@ import {
   STATUS_LABELS,
   PRIORITY_LABELS,
 } from "../api/types.ts";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, ErrorBanner, SuccessBanner, ConfirmDialog } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
@@ -36,13 +36,13 @@ export function ServiceOrderDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const latestLoadRef = useRef(0);
-  const load = useCallback(async (isActive: () => boolean = () => true) => {
+  const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
     if (!id || !isActive()) return;
     const requestId = ++latestLoadRef.current;
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoadError(null);
     try {
-      const data = await serviceOrdersApi.getServiceOrder(id);
+      const data = await serviceOrdersApi.getServiceOrder(id, signal);
       if (!canCommit()) return;
       setOrder(data);
       setEditTitle(data.title);
@@ -57,11 +57,11 @@ export function ServiceOrderDetailPage() {
 
   useEffect(() => {
     if (!can("OS_ASSIGN")) return;
-    let cancelled = false;
-    void usersApi.listUsers("TECHNICIAN")
-      .then((items) => { if (!cancelled) setTechnicians(items); })
-      .catch(() => { if (!cancelled) setTechnicians([]); });
-    return () => { cancelled = true; };
+    const controller = new AbortController();
+    void usersApi.listUsers("TECHNICIAN", controller.signal)
+      .then((items) => { if (!controller.signal.aborted) setTechnicians(items); })
+      .catch(() => { if (!controller.signal.aborted) setTechnicians([]); });
+    return () => controller.abort();
   }, [can]);
 
   if (loadError) return <ErrorState message={loadError} onRetry={load} />;

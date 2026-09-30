@@ -15,14 +15,14 @@ export function TechniciansListPage() {
   const [error, setError] = useState<string | null>(null);
 
   const latestLoadRef = useRef(0);
-  const load = useCallback(async (isActive: () => boolean = () => true) => {
+  const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
     if (!isActive()) return;
     const requestId = ++latestLoadRef.current;
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setError(null);
     const [techResult, ordersResult] = await Promise.allSettled([
-      usersApi.listUsers("TECHNICIAN"),
-      serviceOrdersApi.listServiceOrders(),
+      usersApi.listUsers("TECHNICIAN", signal),
+      serviceOrdersApi.listServiceOrders({}, signal),
     ]);
     if (!canCommit()) return;
     if (techResult.status === "fulfilled") setTechnicians(techResult.value);

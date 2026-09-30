@@ -25,6 +25,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   query?: Record<string, string | undefined>;
+  signal?: AbortSignal;
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
@@ -84,6 +85,7 @@ async function rawRequest(path: string, options: RequestOptions) {
     credentials: "include",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   });
 }
 

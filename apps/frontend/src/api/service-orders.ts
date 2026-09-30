@@ -26,14 +26,15 @@ export interface UpdateServiceOrderInput {
   priority?: ServiceOrderPriority;
 }
 
-export function listServiceOrders(filters: ServiceOrderFilters = {}) {
+export function listServiceOrders(filters: ServiceOrderFilters = {}, signal?: AbortSignal) {
   return apiRequest<ServiceOrder[]>("/service-orders", {
     query: { ...filters },
+    signal,
   });
 }
 
-export function getServiceOrder(id: string) {
-  return apiRequest<ServiceOrder>(`/service-orders/${id}`);
+export function getServiceOrder(id: string, signal?: AbortSignal) {
+  return apiRequest<ServiceOrder>(`/service-orders/${id}`, { signal });
 }
 
 export function createServiceOrder(data: CreateServiceOrderInput) {

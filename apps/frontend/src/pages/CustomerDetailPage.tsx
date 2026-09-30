@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import * as customersApi from "../api/customers.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import type { Customer, ServiceOrder } from "../api/types.ts";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, ErrorBanner, SuccessBanner, ConfirmDialog, EmptyState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
@@ -33,28 +33,32 @@ export function CustomerDetailPage() {
   const [orderHistoryError, setOrderHistoryError] = useState<string | null>(null);
 
   const latestLoadRef = useRef(0);
-  const load = useCallback(async (isActive: () => boolean = () => true) => {
+  const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
     if (!id || !isActive()) return;
     const requestId = ++latestLoadRef.current;
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoadError(null);
     setOrderHistoryError(null);
 
-    try {
-      const customerData = await customersApi.getCustomer(id);
-      if (!canCommit()) return;
-      setCustomer(customerData);
-    } catch (err) {
-      if (canCommit()) setLoadError(err instanceof ApiError && err.status === 404 ? "Cliente não encontrado." : "Não foi possível carregar o cliente.");
+    const [customerResult, ordersResult] = await Promise.allSettled([
+      customersApi.getCustomer(id, signal),
+      can("OS_READ")
+        ? serviceOrdersApi.listServiceOrders({ customerId: id }, signal)
+        : Promise.resolve([] as ServiceOrder[]),
+    ]);
+
+    if (!canCommit()) return;
+    if (customerResult.status === "rejected") {
+      setLoadError(customerResult.reason instanceof ApiError && customerResult.reason.status === 404 ? "Cliente não encontrado." : "Não foi possível carregar o cliente.");
       return;
     }
 
-    if (!can("OS_READ") || !canCommit()) return;
-    try {
-      const serviceOrders = await serviceOrdersApi.listServiceOrders({ customerId: id });
-      if (canCommit()) setOrders(serviceOrders);
-    } catch (err) {
-      if (canCommit()) setOrderHistoryError(err instanceof ApiError ? err.message : "Não foi possível carregar o histórico de ordens.");
+    setCustomer(customerResult.value);
+    if (!can("OS_READ")) return;
+    if (ordersResult.status === "fulfilled") {
+      setOrders(ordersResult.value);
+    } else {
+      setOrderHistoryError(ordersResult.reason instanceof ApiError ? ordersResult.reason.message : "Não foi possível carregar o histórico de ordens.");
     }
   }, [id, can]);
 

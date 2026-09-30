@@ -137,3 +137,38 @@ export function ConfirmDialog({
     </div>
   );
 }
+
+export function SessionRestoringShell() {
+  return (
+    <div className="session-shell" aria-busy="true" aria-live="polite">
+      <aside className="session-sidebar" aria-hidden="true">
+        <div className="session-brand"><span>OS</span><div><i /><i /></div></div>
+        <div className="session-nav"><i /><i /><i /><i /></div>
+      </aside>
+      <main className="session-main">
+        <header className="session-topbar"><i /></header>
+        <div className="session-content">
+          <p className="sr-only">Restaurando sua sessão...</p>
+          <i className="session-title" />
+          <i className="session-subtitle" />
+          <div className="session-cards"><i /><i /><i /><i /></div>
+          <div className="session-table"><i /><i /><i /><i /></div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export function SessionRestoreError({ onRetry, loginAction }: { onRetry: () => void; loginAction: ReactNode }) {
+  return (
+    <div className="state-block" role="alert" aria-live="assertive">
+      <IconAlert width={32} height={32} style={{ color: "var(--color-danger)" }} />
+      <h3>Não foi possível verificar sua sessão</h3>
+      <p>A conexão demorou mais do que o esperado. Tente novamente sem sair da sua conta.</p>
+      <div className="session-error-actions">
+        <button type="button" className="btn btn-primary" onClick={onRetry}>Tentar novamente</button>
+        {loginAction}
+      </div>
+    </div>
+  );
+}

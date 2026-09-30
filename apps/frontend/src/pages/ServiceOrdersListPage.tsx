@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import type { ServiceOrder, ServiceOrderPriority, ServiceOrderStatus } from "../api/types.ts";
 import { SERVICE_ORDER_STATUSES, SERVICE_ORDER_PRIORITIES, STATUS_LABELS, PRIORITY_LABELS } from "../api/types.ts";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { IconPlus, IconSearch } from "../components/icons.tsx";
@@ -18,7 +18,7 @@ export function ServiceOrdersListPage() {
   const [priority, setPriority] = useState<ServiceOrderPriority | "">("");
   const [sort, setSort] = useState<"updated" | "created" | "priority">("updated");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
 
     try {
@@ -27,27 +27,29 @@ export function ServiceOrdersListPage() {
         priority: priority || undefined,
         search: search.trim() || undefined,
         technicianId: user?.role === "TECHNICIAN" ? user.id : undefined,
-      });
+      }, signal);
 
       setOrders(data);
     } catch {
+      if (signal?.aborted) return;
       setError("Não foi possível carregar as ordens de serviço.");
     }
   }, [status, priority, search, user]);
 
   useEffect(() => {
-    const timeout = setTimeout(load, search ? 300 : 0);
-    return () => clearTimeout(timeout);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => { void load(controller.signal); }, search ? 300 : 0);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [load, search]);
 
-  const sortedOrders = orders ? [...orders].sort((first, second) => {
+  const sortedOrders = useMemo(() => orders ? [...orders].sort((first, second) => {
     if (sort === "priority") {
       const weights = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
       return weights[second.priority] - weights[first.priority];
     }
     const field = sort === "created" ? "createdAt" : "updatedAt";
     return new Date(second[field]).getTime() - new Date(first[field]).getTime();
-  }) : null;
+  }) : null, [orders, sort]);
 
   function clearFilters() {
     setSearch("");

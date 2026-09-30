@@ -9,16 +9,16 @@ export interface CustomerInput {
   address?: string;
 }
 
-export function listCustomers(search?: string) {
-  return apiRequest<Customer[]>("/customers", { query: { search } });
+export function listCustomers(search?: string, signal?: AbortSignal) {
+  return apiRequest<Customer[]>("/customers", { query: { search }, signal });
 }
 
-export function getOwnCustomer() {
-  return apiRequest<Customer>("/customers/me");
+export function getOwnCustomer(signal?: AbortSignal) {
+  return apiRequest<Customer>("/customers/me", { signal });
 }
 
-export function getCustomer(id: string) {
-  return apiRequest<Customer>(`/customers/${id}`);
+export function getCustomer(id: string, signal?: AbortSignal) {
+  return apiRequest<Customer>(`/customers/${id}`, { signal });
 }
 
 export function createCustomer(data: CustomerInput) {

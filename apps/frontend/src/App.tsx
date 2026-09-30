@@ -1,38 +1,44 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
-import { useAuth } from "./context/AuthContext.tsx";
+import { useAuth } from "./hooks/useAuth.ts";
 import { AuthProvider } from "./context/AuthProvider.tsx";
 import { RequireAuth, RequirePermission } from "./components/Guards.tsx";
 import { AppLayout } from "./components/AppLayout.tsx";
 
-import { LoginPage } from "./pages/LoginPage.tsx";
-import { RegisterPage } from "./pages/RegisterPage.tsx";
-import { VerifyEmailPage } from "./pages/VerifyEmailPage.tsx";
-import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.tsx";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage.tsx";
-import { CustomerPortalPage } from "./pages/CustomerPortalPage.tsx";
-import { DashboardPage } from "./pages/DashboardPage.tsx";
-import { ServiceOrdersListPage } from "./pages/ServiceOrdersListPage.tsx";
-import { ServiceOrderNewPage } from "./pages/ServiceOrderNewPage.tsx";
-import { ServiceOrderDetailPage } from "./pages/ServiceOrderDetailPage.tsx";
-import { CustomersListPage } from "./pages/CustomersListPage.tsx";
-import { CustomerNewPage } from "./pages/CustomerNewPage.tsx";
-import { CustomerDetailPage } from "./pages/CustomerDetailPage.tsx";
-import { TechniciansListPage } from "./pages/TechniciansListPage.tsx";
-import { UsersListPage } from "./pages/UsersListPage.tsx";
-import { UserNewPage } from "./pages/UserNewPage.tsx";
-import { NotFoundPage } from "./pages/NotFoundPage.tsx";
+const LoginPage = lazy(() => import("./pages/LoginPage.tsx").then(({ LoginPage }) => ({ default: LoginPage })));
+const RegisterPage = lazy(() => import("./pages/RegisterPage.tsx").then(({ RegisterPage }) => ({ default: RegisterPage })));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage.tsx").then(({ VerifyEmailPage }) => ({ default: VerifyEmailPage })));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.tsx").then(({ ForgotPasswordPage }) => ({ default: ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.tsx").then(({ ResetPasswordPage }) => ({ default: ResetPasswordPage })));
+const CustomerPortalPage = lazy(() => import("./pages/CustomerPortalPage.tsx").then(({ CustomerPortalPage }) => ({ default: CustomerPortalPage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage.tsx").then(({ DashboardPage }) => ({ default: DashboardPage })));
+const ServiceOrdersListPage = lazy(() => import("./pages/ServiceOrdersListPage.tsx").then(({ ServiceOrdersListPage }) => ({ default: ServiceOrdersListPage })));
+const ServiceOrderNewPage = lazy(() => import("./pages/ServiceOrderNewPage.tsx").then(({ ServiceOrderNewPage }) => ({ default: ServiceOrderNewPage })));
+const ServiceOrderDetailPage = lazy(() => import("./pages/ServiceOrderDetailPage.tsx").then(({ ServiceOrderDetailPage }) => ({ default: ServiceOrderDetailPage })));
+const CustomersListPage = lazy(() => import("./pages/CustomersListPage.tsx").then(({ CustomersListPage }) => ({ default: CustomersListPage })));
+const CustomerNewPage = lazy(() => import("./pages/CustomerNewPage.tsx").then(({ CustomerNewPage }) => ({ default: CustomerNewPage })));
+const CustomerDetailPage = lazy(() => import("./pages/CustomerDetailPage.tsx").then(({ CustomerDetailPage }) => ({ default: CustomerDetailPage })));
+const TechniciansListPage = lazy(() => import("./pages/TechniciansListPage.tsx").then(({ TechniciansListPage }) => ({ default: TechniciansListPage })));
+const UsersListPage = lazy(() => import("./pages/UsersListPage.tsx").then(({ UsersListPage }) => ({ default: UsersListPage })));
+const UserNewPage = lazy(() => import("./pages/UserNewPage.tsx").then(({ UserNewPage }) => ({ default: UserNewPage })));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx").then(({ NotFoundPage }) => ({ default: NotFoundPage })));
 
 function RoleHome() {
   const { user } = useAuth();
   return user?.role === "CUSTOMER" ? <Navigate to="/minha-area" replace /> : <DashboardPage />;
 }
 
+function RouteLoading() {
+  return <div className="page-loading" role="status"><span className="spinner" />Carregando página...</div>;
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registrar" element={<RegisterPage />} />
           <Route path="/verificar-email" element={<VerifyEmailPage />} />
@@ -127,7 +133,8 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Route>
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

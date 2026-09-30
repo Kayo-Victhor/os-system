@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import * as usersApi from "../api/users.ts";
 import type { UserRecord, UserRole } from "../api/types.ts";
 import { ROLE_LABELS } from "../api/types.ts";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import {
   PageLoading,
   ErrorState,
@@ -33,13 +33,13 @@ export function UsersListPage() {
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
 
   const latestLoadRef = useRef(0);
-  const load = useCallback(async (isActive: () => boolean = () => true) => {
+  const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
     if (!isActive()) return;
     const requestId = ++latestLoadRef.current;
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setError(null);
     try {
-      const userList = await usersApi.listUsers();
+      const userList = await usersApi.listUsers(undefined, signal);
       if (canCommit()) setUsers(userList);
     } catch {
       if (canCommit()) setError("Não foi possível carregar os usuários.");

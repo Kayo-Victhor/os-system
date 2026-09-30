@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import * as customersApi from "../api/customers.ts";
 import type { Customer } from "../api/types.ts";
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { IconPlus, IconSearch } from "../components/icons.tsx";
 
@@ -13,20 +13,22 @@ export function CustomersListPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
 
     try {
-      const data = await customersApi.listCustomers(search.trim() || undefined);
+      const data = await customersApi.listCustomers(search.trim() || undefined, signal);
       setCustomers(data);
     } catch {
+      if (signal?.aborted) return;
       setError("Não foi possível carregar os clientes.");
     }
   }, [search]);
 
   useEffect(() => {
-    const timeout = setTimeout(load, search ? 300 : 0);
-    return () => clearTimeout(timeout);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => { void load(controller.signal); }, search ? 300 : 0);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [load, search]);
 
   return (

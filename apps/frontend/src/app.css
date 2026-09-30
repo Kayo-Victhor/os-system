@@ -650,3 +650,30 @@ textarea.input {
   flex-direction: column;
   gap: 16px;
 }
+
+/* ---------- Session restoration ---------- */
+
+.session-shell { display: flex; min-height: 100vh; background: var(--color-bg); }
+.session-sidebar { width: var(--sidebar-width); flex: 0 0 var(--sidebar-width); padding: 16px 12px; background: #18212f; }
+.session-main { flex: 1; min-width: 0; }
+.session-topbar { height: 56px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); display: flex; justify-content: flex-end; align-items: center; padding: 0 28px; }
+.session-content { max-width: 1600px; padding: 28px; }
+.session-brand { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.session-brand span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: #3452eb; color: #fff; font-size: 11px; font-weight: 800; }
+.session-brand div { display: grid; gap: 5px; }
+.session-brand i:first-child { width: 74px; }
+.session-brand i:last-child { width: 52px; }
+.session-nav { display: grid; gap: 12px; margin-top: 38px; }
+.session-nav i { width: 100%; height: 32px; }
+.session-topbar i { width: 116px; height: 12px; }
+.session-title { display: block; width: min(260px, 60%); height: 28px; }
+.session-subtitle { display: block; width: min(420px, 90%); height: 14px; margin-top: 12px; }
+.session-cards { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 14px; margin-top: 28px; }
+.session-cards i { height: 88px; }
+.session-table { display: grid; gap: 14px; margin-top: 24px; padding: 22px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.session-table i { height: 14px; width: 100%; }
+.session-shell i { display: block; border-radius: 5px; background: linear-gradient(90deg, var(--color-surface-muted) 25%, var(--color-surface) 50%, var(--color-surface-muted) 75%); background-size: 200% 100%; animation: session-shimmer 1.2s ease-in-out infinite; }
+@keyframes session-shimmer { to { background-position: -200% 0; } }
+.session-error-actions { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+@media (max-width: 760px) { .session-sidebar { display: none; } .session-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); } .session-content { padding: 20px; } }
+@media (prefers-reduced-motion: reduce) { .session-shell i { animation: none; } }

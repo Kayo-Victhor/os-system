@@ -1,17 +1,25 @@
 import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 
-import { useAuth } from "../context/AuthContext.tsx";
-import { PageLoading } from "./States.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
+import { EmptyState, SessionRestoreError, SessionRestoringShell } from "./States.tsx";
 import type { Permission } from "../api/permissions.ts";
-import { EmptyState } from "./States.tsx";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, retrySession } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
-    return <PageLoading label="Verificando sessão..." />;
+    return <SessionRestoringShell />;
+  }
+
+  if (status === "error") {
+    return (
+      <SessionRestoreError
+        onRetry={retrySession}
+        loginAction={<Link className="btn btn-secondary" to="/login">Ir para login</Link>}
+      />
+    );
   }
 
   if (status === "unauthenticated") {

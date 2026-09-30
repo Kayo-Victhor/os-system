@@ -1,7 +1,7 @@
 import { useState, type ComponentType, type SVGProps } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../context/AuthContext.tsx";
+import { useAuth } from "../hooks/useAuth.ts";
 import { ROLE_LABELS } from "../api/types.ts";
 import type { Permission } from "../api/permissions.ts";
 import {
