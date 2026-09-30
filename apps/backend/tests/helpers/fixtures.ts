@@ -23,6 +23,7 @@ export async function createFixtureUser(
       email: overrides.email ?? `${unique(role.toLowerCase())}@example.com`,
       password: passwordHash,
       role,
+      emailVerifiedAt: new Date(),
     },
   });
 
@@ -36,6 +37,7 @@ export async function createFixtureCustomer(
     phone: string;
     document: string;
     address: string;
+    userId: string;
   }> = {},
 ) {
   return testPrisma.customer.create({
@@ -45,6 +47,7 @@ export async function createFixtureCustomer(
       phone: overrides.phone ?? "11999998888",
       document: overrides.document ?? unique("doc"),
       address: overrides.address,
+      userId: overrides.userId,
     },
   });
 }

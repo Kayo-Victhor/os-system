@@ -86,6 +86,16 @@ describe("POST /auth/register — public self-registration", () => {
     expect(stored).toBeNull();
   });
 
+  it("rejects a password with fewer than eight characters", async () => {
+    const res = await request(app).post("/auth/register").send({
+      name: "Nome Valido",
+      email: "sete-caracteres@example.com",
+      password: "1234567",
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an invalid email format", async () => {
     const res = await request(app).post("/auth/register").send({
       name: "Nome Valido",
@@ -105,7 +115,7 @@ describe("POST /auth/register — public self-registration", () => {
     expect(res.status).toBe(400);
   });
 
-  it("allows logging in immediately after registering", async () => {
+  it("requires e-mail confirmation before a newly registered CUSTOMER can log in", async () => {
     await request(app).post("/auth/register").send({
       name: "Maria Cliente",
       email: "maria@example.com",
@@ -116,8 +126,8 @@ describe("POST /auth/register — public self-registration", () => {
       .post("/auth/login")
       .send({ email: "maria@example.com", password: "senha123456" });
 
-    expect(loginRes.status).toBe(200);
-    expect(loginRes.body.user.role).toBe("CUSTOMER");
+    expect(loginRes.status).toBe(403);
+    expect(loginRes.body.code).toBe("EMAIL_NOT_VERIFIED");
   });
 });
 

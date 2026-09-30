@@ -29,6 +29,7 @@ async function main() {
     },
     update: {
       role: "ADMIN",
+      emailVerifiedAt: new Date(),
       password: passwordHash,
     },
     create: {

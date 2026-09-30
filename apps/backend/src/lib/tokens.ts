@@ -56,6 +56,42 @@ export function generateRefreshToken(): {
   return { token, tokenHash: hashToken(token) };
 }
 
+export const EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+// A short lifetime limits the usefulness of a stolen password-reset link.
+export const PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
+
+export function generateEmailVerificationToken(): {
+  token: string;
+  tokenHash: string;
+} {
+  const token = randomBytes(48).toString("base64url");
+  return { token, tokenHash: hashEmailVerificationToken(token) };
+}
+
+export function hashEmailVerificationToken(token: string): string {
+  const secret = process.env.EMAIL_VERIFICATION_SECRET;
+  if (!secret) {
+    throw new Error("EMAIL_VERIFICATION_SECRET precisa estar configurado");
+  }
+  return createHmac("sha256", secret).update(token).digest("hex");
+}
+
+export function generatePasswordResetToken(): {
+  token: string;
+  tokenHash: string;
+} {
+  const token = randomBytes(48).toString("base64url");
+  return { token, tokenHash: hashPasswordResetToken(token) };
+}
+
+export function hashPasswordResetToken(token: string): string {
+  const secret = process.env.PASSWORD_RESET_SECRET;
+  if (!secret) {
+    throw new Error("PASSWORD_RESET_SECRET precisa estar configurado");
+  }
+  return createHmac("sha256", secret).update(token).digest("hex");
+}
+
 // HMAC (keyed by JWT_REFRESH_SECRET) rather than a bare hash, so a database
 // leak alone isn't enough to build a lookup/rainbow table against tokens —
 // the app secret is also required.

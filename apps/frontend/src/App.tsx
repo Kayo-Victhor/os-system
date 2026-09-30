@@ -1,10 +1,16 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
-import { AuthProvider } from "./context/AuthContext.tsx";
+import { useAuth } from "./context/AuthContext.tsx";
+import { AuthProvider } from "./context/AuthProvider.tsx";
 import { RequireAuth, RequirePermission } from "./components/Guards.tsx";
 import { AppLayout } from "./components/AppLayout.tsx";
 
 import { LoginPage } from "./pages/LoginPage.tsx";
+import { RegisterPage } from "./pages/RegisterPage.tsx";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage.tsx";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.tsx";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage.tsx";
+import { CustomerPortalPage } from "./pages/CustomerPortalPage.tsx";
 import { DashboardPage } from "./pages/DashboardPage.tsx";
 import { ServiceOrdersListPage } from "./pages/ServiceOrdersListPage.tsx";
 import { ServiceOrderNewPage } from "./pages/ServiceOrderNewPage.tsx";
@@ -17,12 +23,21 @@ import { UsersListPage } from "./pages/UsersListPage.tsx";
 import { UserNewPage } from "./pages/UserNewPage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 
+function RoleHome() {
+  const { user } = useAuth();
+  return user?.role === "CUSTOMER" ? <Navigate to="/minha-area" replace /> : <DashboardPage />;
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/registrar" element={<RegisterPage />} />
+          <Route path="/verificar-email" element={<VerifyEmailPage />} />
+          <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
+          <Route path="/resetar-senha" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -31,7 +46,8 @@ function App() {
               </RequireAuth>
             }
           >
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/" element={<RoleHome />} />
+            <Route path="/minha-area" element={<CustomerPortalPage />} />
 
             <Route
               path="/service-orders"

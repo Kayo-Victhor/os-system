@@ -94,10 +94,17 @@ export async function listServiceOrdersController(
     // "minhas ordens" filter is convenience UI, not an authorization
     // boundary: without this override a technician could remove or replace
     // technicianId in the URL and enumerate another technician's orders.
+    const ownCustomer = req.userRole === "CUSTOMER" && req.userId
+      ? await prisma.customer.findUnique({ where: { userId: req.userId } })
+      : null;
+    if (req.userRole === "CUSTOMER" && !ownCustomer) {
+      res.status(403).json({ error: "Sua conta não possui um cadastro de cliente associado" });
+      return;
+    }
     const serviceOrders = await listServiceOrders({
       ...result.data,
-      technicianId:
-        req.userRole === "TECHNICIAN" ? req.userId : result.data.technicianId,
+      technicianId: req.userRole === "TECHNICIAN" ? req.userId : result.data.technicianId,
+      customerId: req.userRole === "CUSTOMER" ? ownCustomer!.id : result.data.customerId,
     });
 
     res.json(serviceOrders);
@@ -137,6 +144,11 @@ export async function getServiceOrderByIdController(
       req.userRole === "TECHNICIAN" &&
       serviceOrder.technicianId !== req.userId
     ) {
+      res.status(404).json({ error: "Ordem de serviço não encontrada" });
+      return;
+    }
+
+    if (req.userRole === "CUSTOMER" && serviceOrder.customer.userId !== req.userId) {
       res.status(404).json({ error: "Ordem de serviço não encontrada" });
       return;
     }

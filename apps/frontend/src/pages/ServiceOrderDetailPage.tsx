@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as serviceOrdersApi from "../api/service-orders.ts";
@@ -15,6 +15,7 @@ import { PageLoading, ErrorState, ErrorBanner, SuccessBanner, ConfirmDialog } fr
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconArrowLeft } from "../components/icons.tsx";
+import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 export function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,36 +35,33 @@ export function ServiceOrderDetailPage() {
   const [editPriority, setEditPriority] = useState<ServiceOrderPriority>("MEDIUM");
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!id) return;
+  const latestLoadRef = useRef(0);
+  const load = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!id || !isActive()) return;
+    const requestId = ++latestLoadRef.current;
+    const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoadError(null);
-
     try {
       const data = await serviceOrdersApi.getServiceOrder(id);
+      if (!canCommit()) return;
       setOrder(data);
       setEditTitle(data.title);
       setEditDescription(data.description);
       setEditPriority(data.priority);
     } catch (err) {
-      setLoadError(
-        err instanceof ApiError && err.status === 404
-          ? "Ordem de serviço não encontrada."
-          : "Não foi possível carregar a ordem de serviço.",
-      );
+      if (canCommit()) setLoadError(err instanceof ApiError && err.status === 404 ? "Ordem de serviço não encontrada." : "Não foi possível carregar a ordem de serviço.");
     }
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useInitialAsyncLoad(load);
 
   useEffect(() => {
     if (!can("OS_ASSIGN")) return;
-
-    usersApi
-      .listUsers("TECHNICIAN")
-      .then(setTechnicians)
-      .catch(() => setTechnicians([]));
+    let cancelled = false;
+    void usersApi.listUsers("TECHNICIAN")
+      .then((items) => { if (!cancelled) setTechnicians(items); })
+      .catch(() => { if (!cancelled) setTechnicians([]); });
+    return () => { cancelled = true; };
   }, [can]);
 
   if (loadError) return <ErrorState message={loadError} onRetry={load} />;

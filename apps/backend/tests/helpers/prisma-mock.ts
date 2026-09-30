@@ -22,6 +22,7 @@ export const prismaMock = {
   },
   customer: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -33,6 +34,11 @@ export const prismaMock = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+  },
+  passwordResetToken: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+    updateMany: vi.fn(),
   },
   refreshToken: {
     findUnique: vi.fn(),

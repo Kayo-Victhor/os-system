@@ -137,7 +137,8 @@ describe("POST /auth/refresh — real rotation", () => {
 
     const refreshRes = await request(app)
       .post("/auth/refresh")
-      .set("Cookie", `refresh_token=${oldRefreshToken}`);
+      .set("Cookie", `refresh_token=${oldRefreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     expect(refreshRes.status).toBe(200);
 
@@ -150,7 +151,8 @@ describe("POST /auth/refresh — real rotation", () => {
     // The old token is now revoked and cannot be reused.
     const reuseRes = await request(app)
       .post("/auth/refresh")
-      .set("Cookie", `refresh_token=${oldRefreshToken}`);
+      .set("Cookie", `refresh_token=${oldRefreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     expect(reuseRes.status).toBe(401);
   });
@@ -171,20 +173,23 @@ describe("POST /auth/refresh — real rotation", () => {
     // Rotate once (valid use).
     const refreshRes = await request(app)
       .post("/auth/refresh")
-      .set("Cookie", `refresh_token=${firstRefreshToken}`);
+      .set("Cookie", `refresh_token=${firstRefreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
     const secondRefreshToken = (refreshRes.headers["set-cookie"] as unknown as string[])
       .find((c) => c.startsWith("refresh_token="))!
       .split(";")[0]
       .split("=")[1];
 
     // Reuse the original (now-rotated-out) token — theft signal.
-    await request(app).post("/auth/refresh").set("Cookie", `refresh_token=${firstRefreshToken}`);
+    await request(app).post("/auth/refresh").set("Cookie", `refresh_token=${firstRefreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     // The second token (legitimately issued) must now ALSO be revoked,
     // since reuse of a rotated-out token revokes the whole family.
     const finalAttempt = await request(app)
       .post("/auth/refresh")
-      .set("Cookie", `refresh_token=${secondRefreshToken}`);
+      .set("Cookie", `refresh_token=${secondRefreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     expect(finalAttempt.status).toBe(401);
   });
@@ -203,6 +208,24 @@ describe("POST /auth/refresh — real rotation", () => {
   });
 });
 
+describe("CSRF em operações de sessão", () => {
+  it("blocks refresh of a valid session without a matching CSRF header", async () => {
+    const { user } = await createFixtureUser("ADMIN");
+    const login = await request(app).post("/auth/login").send({ email: user.email, password: FIXTURE_PASSWORD });
+    const refresh = (login.headers["set-cookie"] as unknown as string[]).find((cookie) => cookie.startsWith("refresh_token="))!.split(";")[0];
+    const csrf = (login.headers["set-cookie"] as unknown as string[]).find((cookie) => cookie.startsWith("csrf_token="))!.split(";")[0];
+
+    const missingHeader = await request(app).post("/auth/refresh").set("Cookie", `${refresh}; ${csrf}`);
+    expect(missingHeader.status).toBe(403);
+
+    const logout = await request(app)
+      .post("/auth/logout")
+      .set("Cookie", `${refresh}; ${csrf}`)
+      .set("x-csrf-token", csrf.split("=")[1]);
+    expect(logout.status).toBe(204);
+  });
+});
+
 describe("POST /auth/logout — real revocation", () => {
   it("revokes the refresh token so it can no longer be used", async () => {
     const { user } = await createFixtureUser("ADMIN");
@@ -218,7 +241,8 @@ describe("POST /auth/logout — real revocation", () => {
 
     const logoutRes = await request(app)
       .post("/auth/logout")
-      .set("Cookie", `refresh_token=${refreshToken}`);
+      .set("Cookie", `refresh_token=${refreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     expect(logoutRes.status).toBe(204);
 

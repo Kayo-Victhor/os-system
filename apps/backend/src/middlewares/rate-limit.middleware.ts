@@ -32,3 +32,11 @@ export const writeRateLimiter = rateLimit({
     error: "Muitas requisições. Tente novamente em instantes.",
   },
 });
+export const passwordResetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: { error: "Muitas tentativas. Tente novamente mais tarde." },
+});

@@ -3,7 +3,10 @@ import type { Request, Response } from "express";
 import {
   createCustomer,
   listCustomers,
+  listCustomersForTechnician,
   getCustomerById,
+  getCustomerByIdForTechnician,
+  getCustomerByUserId,
   updateCustomer,
   deleteCustomer,
 } from "../services/customer.service.js";
@@ -14,6 +17,7 @@ import {
 } from "../schemas/customer.schema.js";
 
 import { mapPrismaError } from "../lib/prisma-errors.js";
+import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 
 export async function createCustomerController(req: Request, res: Response) {
   const result = createCustomerSchema.safeParse(req.body);
@@ -47,14 +51,22 @@ export async function createCustomerController(req: Request, res: Response) {
   }
 }
 
-export async function listCustomersController(req: Request, res: Response) {
+export async function listCustomersController(req: AuthenticatedRequest, res: Response) {
   try {
+    if (req.userRole === "CUSTOMER") {
+      const customer = req.userId ? await getCustomerByUserId(req.userId) : null;
+      if (!customer) { res.status(404).json({ error: "Cadastro de cliente não encontrado" }); return; }
+      res.json([customer]);
+      return;
+    }
     const search =
       typeof req.query.search === "string" && req.query.search.trim().length > 0
         ? req.query.search.trim()
         : undefined;
 
-    const customers = await listCustomers({ search });
+    const customers = req.userRole === "TECHNICIAN" && req.userId
+      ? await listCustomersForTechnician(req.userId, { search })
+      : await listCustomers({ search });
 
     res.json(customers);
   } catch (error) {
@@ -67,10 +79,22 @@ export async function listCustomersController(req: Request, res: Response) {
 }
 
 export async function getCustomerByIdController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response
 ) {
   try {
+    if (req.userRole === "TECHNICIAN") {
+      const customer = req.userId
+        ? await getCustomerByIdForTechnician(req.params.id, req.userId)
+        : null;
+      if (!customer) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
+      res.json(customer);
+      return;
+    }
+    if (req.userRole === "CUSTOMER") {
+      const own = req.userId ? await getCustomerByUserId(req.userId) : null;
+      if (!own || own.id !== req.params.id) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
+    }
     const customer = await getCustomerById(req.params.id);
 
     if (!customer) {
@@ -92,7 +116,7 @@ export async function getCustomerByIdController(
 }
 
 export async function updateCustomerController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response
 ) {
   const result = updateCustomerSchema.safeParse(req.body);
@@ -107,6 +131,10 @@ export async function updateCustomerController(
   }
 
   try {
+    if (req.userRole === "CUSTOMER") {
+      const own = req.userId ? await getCustomerByUserId(req.userId) : null;
+      if (!own || own.id !== req.params.id) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
+    }
     const customer = await getCustomerById(req.params.id);
 
     if (!customer) {
@@ -164,4 +192,11 @@ export async function deleteCustomerController(
       error: "Erro ao excluir cliente"
     });
   }
+}
+
+export async function getOwnCustomerController(req: AuthenticatedRequest, res: Response) {
+  if (!req.userId) { res.status(401).json({ error: "Não autenticado" }); return; }
+  const customer = await getCustomerByUserId(req.userId);
+  if (!customer) { res.status(404).json({ error: "Cadastro de cliente não encontrado" }); return; }
+  res.json(customer);
 }

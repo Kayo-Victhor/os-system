@@ -69,6 +69,7 @@ describe("CORS — environment-aware allowed origins", () => {
     // no Access-Control-Allow-Origin header is echoed back for a
     // rejected origin, so the browser won't expose the response to
     // script running on that origin regardless of the status code.
+    expect(res.status).toBe(403);
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 

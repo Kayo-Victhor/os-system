@@ -95,8 +95,9 @@ describe("POST /customers", () => {
     expect(res.status).toBe(409);
   });
 
-  it("a TECHNICIAN cannot create customers (lacks CUSTOMER_CREATE)", async () => {
+  it("allows a TECHNICIAN to create a Customer without creating a user account", async () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
+    prismaMock.customer.create.mockResolvedValueOnce({ id: "cust-1", ...validCustomer });
 
     const res = await request(app)
       .post("/customers")
@@ -104,8 +105,8 @@ describe("POST /customers", () => {
       .set("x-csrf-token", csrfHeader)
       .send(validCustomer);
 
-    expect(res.status).toBe(403);
-    expect(prismaMock.customer.create).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(prismaMock.customer.create).toHaveBeenCalledWith({ data: validCustomer });
   });
 });
 

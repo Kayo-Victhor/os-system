@@ -24,6 +24,7 @@ describe("Initial admin (seed equivalent)", () => {
         email: "admin@os-system.local",
         password: passwordHash,
         role: "ADMIN",
+        emailVerifiedAt: new Date(),
       },
     });
 

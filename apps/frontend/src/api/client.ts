@@ -31,9 +31,11 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 async function attemptRefresh(): Promise<boolean> {
   if (!refreshInFlight) {
+    const csrfToken = readCookie("csrf_token");
     refreshInFlight = fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
+      headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
     })
       .then((res) => res.ok)
       .catch(() => false)

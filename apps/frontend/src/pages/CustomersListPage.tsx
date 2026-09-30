@@ -8,7 +8,7 @@ import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { IconPlus, IconSearch } from "../components/icons.tsx";
 
 export function CustomersListPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const [customers, setCustomers] = useState<Customer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -34,7 +34,7 @@ export function CustomersListPage() {
       <div className="page-header">
         <div>
           <h1>Clientes</h1>
-          <p className="page-subtitle">Consulte e gerencie os clientes cadastrados.</p>
+          <p className="page-subtitle">{user?.role === "TECHNICIAN" ? "Consulte os clientes vinculados à sua fila e cadastre atendimentos presenciais." : "Consulte e gerencie os clientes cadastrados."}</p>
         </div>
         {can("CUSTOMER_CREATE") && (
           <Link to="/customers/new" className="btn btn-primary">

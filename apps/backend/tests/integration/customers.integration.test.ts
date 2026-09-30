@@ -28,7 +28,8 @@ describe("POST /customers — creation", () => {
     expect(stored.email).toBe("maria.souza@example.com");
   });
 
-  it.each(["TECHNICIAN", "CUSTOMER"] as const)("a %s cannot create a customer (403)", async (role) => {
+  it("a CUSTOMER cannot create a customer (403)", async () => {
+    const role = "CUSTOMER" as const;
     const { user } = await createFixtureUser(role);
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 

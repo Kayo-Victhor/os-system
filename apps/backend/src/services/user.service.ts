@@ -11,7 +11,10 @@ export async function createUser(data: CreateUserInput) {
       name: data.name,
       email: data.email,
       password: passwordHash,
-      role: data.role
+      role: data.role,
+      // Accounts provisioned by an administrator are trusted operational
+      // accounts; public registration is the only flow that starts unverified.
+      emailVerifiedAt: new Date(),
     },
     select: {
       id: true,

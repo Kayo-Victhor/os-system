@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -21,7 +21,7 @@ if (!corsOrigin && isProduction) {
   throw new Error("CORS_ORIGIN precisa estar configurado em produção");
 }
 
-app.use(helmet());
+app.use(helmet({ referrerPolicy: { policy: "no-referrer" } }));
 
 // localhost:5173 (the Vite dev server) is only ever a valid CORS origin in
 // development. In production, the browser talks to the Vercel origin,
@@ -80,5 +80,20 @@ app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/customers", customerRoutes);
 app.use("/service-orders", serviceOrderRoutes);
+
+// Never delegate errors to Express' development handler, which can render a
+// stack trace. CORS rejections receive a deliberate 403; all other failures
+// keep internal details server-side.
+const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+  if (error instanceof Error && error.message === "Origin não permitido pelo CORS") {
+    res.status(403).json({ error: "Origem não permitida" });
+    return;
+  }
+
+  console.error(error);
+  res.status(500).json({ error: "Ocorreu um erro interno" });
+};
+
+app.use(errorHandler);
 
 export default app;

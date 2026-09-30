@@ -1,8 +1,28 @@
 import { z } from "zod";
+import { passwordSchema } from "./user.schema.js";
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1).max(128),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(40).max(256),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
+});
+
+export const forgotPasswordSchema = z.object({ email: z.string().email() });
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(40).max(256),
+  password: passwordSchema,
+  passwordConfirmation: z.string(),
+}).refine((data) => data.password === data.passwordConfirmation, {
+  message: "As senhas não coincidem",
+  path: ["passwordConfirmation"],
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

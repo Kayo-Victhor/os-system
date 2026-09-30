@@ -22,10 +22,9 @@ export const PERMISSIONS = {
     "OS_UPDATE_STATUS",
   ]),
   USER: new Set(["CUSTOMER_CREATE", "CUSTOMER_READ", "CUSTOMER_UPDATE", "OS_CREATE", "OS_READ"]),
-  TECHNICIAN: new Set(["CUSTOMER_READ", "OS_READ", "OS_UPDATE_STATUS"]),
-  // See the matching comment in the backend's config/permissions.ts —
-  // deliberately empty until a CUSTOMER-facing portal is a real feature.
-  CUSTOMER: new Set([]),
+  TECHNICIAN: new Set(["CUSTOMER_CREATE", "CUSTOMER_READ", "OS_READ", "OS_UPDATE_STATUS"]),
+  // Ownership é imposto pelo backend para o cadastro e as ordens vinculadas.
+  CUSTOMER: new Set(["CUSTOMER_READ", "CUSTOMER_UPDATE", "OS_READ"]),
 } as const satisfies Record<UserRole, Set<string>>;
 
 export type Permission =

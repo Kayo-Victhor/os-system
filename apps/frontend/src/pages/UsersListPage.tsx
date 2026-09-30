@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import * as usersApi from "../api/users.ts";
@@ -15,6 +15,7 @@ import {
 import { RoleBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconPlus } from "../components/icons.tsx";
+import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 // Matches the backend's updateUserSchema role enum exactly — CUSTOMER is
 // deliberately excluded: converting a self-registered customer account to
@@ -31,19 +32,21 @@ export function UsersListPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
 
-  async function load() {
+  const latestLoadRef = useRef(0);
+  const load = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!isActive()) return;
+    const requestId = ++latestLoadRef.current;
+    const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setError(null);
-
     try {
-      setUsers(await usersApi.listUsers());
+      const userList = await usersApi.listUsers();
+      if (canCommit()) setUsers(userList);
     } catch {
-      setError("Não foi possível carregar os usuários.");
+      if (canCommit()) setError("Não foi possível carregar os usuários.");
     }
-  }
-
-  useEffect(() => {
-    load();
   }, []);
+
+  useInitialAsyncLoad(load);
 
   type EditableUserRole = "ADMIN" | "USER" | "TECHNICIAN";
 

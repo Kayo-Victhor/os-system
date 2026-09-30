@@ -17,7 +17,6 @@ export function ServiceOrdersListPage() {
   const [status, setStatus] = useState<ServiceOrderStatus | "">("");
   const [priority, setPriority] = useState<ServiceOrderPriority | "">("");
   const [sort, setSort] = useState<"updated" | "created" | "priority">("updated");
-  const [onlyMine, setOnlyMine] = useState(user?.role === "TECHNICIAN");
 
   const load = useCallback(async () => {
     setError(null);
@@ -27,14 +26,14 @@ export function ServiceOrdersListPage() {
         status: status || undefined,
         priority: priority || undefined,
         search: search.trim() || undefined,
-        technicianId: onlyMine && user ? user.id : undefined,
+        technicianId: user?.role === "TECHNICIAN" ? user.id : undefined,
       });
 
       setOrders(data);
     } catch {
       setError("Não foi possível carregar as ordens de serviço.");
     }
-  }, [status, priority, onlyMine, search, user]);
+  }, [status, priority, search, user]);
 
   useEffect(() => {
     const timeout = setTimeout(load, search ? 300 : 0);
@@ -54,10 +53,9 @@ export function ServiceOrdersListPage() {
     setSearch("");
     setStatus("");
     setPriority("");
-    setOnlyMine(user?.role === "TECHNICIAN");
   }
 
-  const filtersActive = Boolean(search || status || priority || (user?.role === "TECHNICIAN" && !onlyMine));
+  const filtersActive = Boolean(search || status || priority);
 
   return (
     <div>
@@ -127,10 +125,7 @@ export function ServiceOrdersListPage() {
         </select>
 
         {user?.role === "TECHNICIAN" && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-            <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
-            Apenas minhas ordens
-          </label>
+          <span className="page-subtitle">Sua fila atribuída</span>
         )}
         {filtersActive && <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>Limpar filtros</button>}
       </div>

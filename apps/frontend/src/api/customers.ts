@@ -13,6 +13,10 @@ export function listCustomers(search?: string) {
   return apiRequest<Customer[]>("/customers", { query: { search } });
 }
 
+export function getOwnCustomer() {
+  return apiRequest<Customer>("/customers/me");
+}
+
 export function getCustomer(id: string) {
   return apiRequest<Customer>(`/customers/${id}`);
 }

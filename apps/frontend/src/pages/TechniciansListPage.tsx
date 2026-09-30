@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import * as usersApi from "../api/users.ts";
@@ -7,48 +7,30 @@ import type { ServiceOrder, UserRecord } from "../api/types.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { StatusBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
+import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 export function TechniciansListPage() {
   const [technicians, setTechnicians] = useState<UserRecord[] | null>(null);
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const latestLoadRef = useRef(0);
+  const load = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!isActive()) return;
+    const requestId = ++latestLoadRef.current;
+    const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setError(null);
-
-    // Two independent requests, loaded separately: a failure fetching order
-    // workload shouldn't block the technician list from rendering (it's the
-    // more important half of this page), and vice versa. Each failure is
-    // reported with its actual message instead of a single generic one, so
-    // the real cause is visible instead of hidden behind "algo deu errado".
-    const results = await Promise.allSettled([
+    const [techResult, ordersResult] = await Promise.allSettled([
       usersApi.listUsers("TECHNICIAN"),
       serviceOrdersApi.listServiceOrders(),
     ]);
-
-    const [techResult, ordersResult] = results;
-
-    if (techResult.status === "fulfilled") {
-      setTechnicians(techResult.value);
-    } else {
-      setError(
-        techResult.reason instanceof ApiError
-          ? techResult.reason.message
-          : "Não foi possível carregar os técnicos.",
-      );
-      return;
-    }
-
-    if (ordersResult.status === "fulfilled") {
-      setOrders(ordersResult.value);
-    }
-    // If only the orders call failed, we still show the technician list —
-    // just without workload counts — rather than blocking the whole page.
-  }
-
-  useEffect(() => {
-    load();
+    if (!canCommit()) return;
+    if (techResult.status === "fulfilled") setTechnicians(techResult.value);
+    else { setError(techResult.reason instanceof ApiError ? techResult.reason.message : "Não foi possível carregar os técnicos."); return; }
+    if (ordersResult.status === "fulfilled") setOrders(ordersResult.value);
   }, []);
+
+  useInitialAsyncLoad(load);
 
   if (technicians === null && !error) return <PageLoading />;
   if (error) return <ErrorState message={error} onRetry={load} />;

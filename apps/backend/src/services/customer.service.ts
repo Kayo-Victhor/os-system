@@ -31,10 +31,44 @@ export async function listCustomers(filters: ListCustomersFilters = {}) {
   });
 }
 
-export async function getCustomerById(id: string) {
-  return prisma.customer.findUnique({
-    where: { id }
+export async function listCustomersForTechnician(
+  technicianId: string,
+  filters: ListCustomersFilters = {},
+) {
+  const searchWhere: Prisma.CustomerWhereInput = filters.search
+    ? {
+        OR: [
+          { name: { contains: filters.search, mode: "insensitive" } },
+          { email: { contains: filters.search, mode: "insensitive" } },
+          { document: { contains: filters.search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  return prisma.customer.findMany({
+    where: {
+      ...searchWhere,
+      serviceOrders: { some: { technicianId } },
+    },
+    orderBy: { createdAt: "desc" },
   });
+}
+
+export async function getCustomerById(id: string) {
+  return prisma.customer.findUnique({ where: { id } });
+}
+
+export async function getCustomerByIdForTechnician(id: string, technicianId: string) {
+  return prisma.customer.findFirst({
+    where: {
+      id,
+      serviceOrders: { some: { technicianId } },
+    },
+  });
+}
+
+export async function getCustomerByUserId(userId: string) {
+  return prisma.customer.findUnique({ where: { userId } });
 }
 
 export async function updateCustomer(

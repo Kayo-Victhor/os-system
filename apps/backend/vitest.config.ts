@@ -32,6 +32,8 @@ export default defineConfig({
     env: {
       JWT_ACCESS_SECRET: "test-access-secret-not-for-real-use",
       JWT_REFRESH_SECRET: "test-refresh-secret-not-for-real-use",
+      EMAIL_VERIFICATION_SECRET: "test-email-verification-secret-not-for-real-use",
+      PASSWORD_RESET_SECRET: "test-password-reset-secret-not-for-real-use",
       NODE_ENV: "test",
       CORS_ORIGIN: "http://localhost:5173"
     }

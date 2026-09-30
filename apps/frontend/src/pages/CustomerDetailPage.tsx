@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as customersApi from "../api/customers.ts";
@@ -11,6 +11,7 @@ import { ApiError } from "../api/client.ts";
 import { fieldErrorsFromDetails } from "../api/errors.ts";
 import { CustomerForm } from "./CustomerForm.tsx";
 import { IconArrowLeft } from "../components/icons.tsx";
+import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,39 +32,33 @@ export function CustomerDetailPage() {
 
   const [orderHistoryError, setOrderHistoryError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!id) return;
+  const latestLoadRef = useRef(0);
+  const load = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!id || !isActive()) return;
+    const requestId = ++latestLoadRef.current;
+    const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoadError(null);
     setOrderHistoryError(null);
 
     try {
       const customerData = await customersApi.getCustomer(id);
+      if (!canCommit()) return;
       setCustomer(customerData);
     } catch (err) {
-      setLoadError(
-        err instanceof ApiError && err.status === 404
-          ? "Cliente não encontrado."
-          : "Não foi possível carregar o cliente.",
-      );
+      if (canCommit()) setLoadError(err instanceof ApiError && err.status === 404 ? "Cliente não encontrado." : "Não foi possível carregar o cliente.");
       return;
     }
 
-    if (!can("OS_READ")) return;
-
+    if (!can("OS_READ") || !canCommit()) return;
     try {
-      setOrders(await serviceOrdersApi.listServiceOrders({ customerId: id }));
+      const serviceOrders = await serviceOrdersApi.listServiceOrders({ customerId: id });
+      if (canCommit()) setOrders(serviceOrders);
     } catch (err) {
-      // The customer loaded fine — don't blank the whole page over the
-      // order-history widget failing. Show it inline instead.
-      setOrderHistoryError(
-        err instanceof ApiError ? err.message : "Não foi possível carregar o histórico de ordens.",
-      );
+      if (canCommit()) setOrderHistoryError(err instanceof ApiError ? err.message : "Não foi possível carregar o histórico de ordens.");
     }
   }, [id, can]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useInitialAsyncLoad(load);
 
   if (loadError) return <ErrorState message={loadError} onRetry={load} />;
   if (!customer) return <PageLoading label="Carregando cliente..." />;

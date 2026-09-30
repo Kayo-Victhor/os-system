@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext.tsx";
@@ -9,6 +9,7 @@ import type { ServiceOrder } from "../api/types.ts";
 import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
+import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 interface DashboardData {
   orders: ServiceOrder[];
@@ -22,36 +23,26 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const latestLoadRef = useRef(0);
+  const load = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!isActive()) return;
+    const requestId = ++latestLoadRef.current;
+    const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoading(true);
     setError(null);
-
     const [ordersResult, customersResult, techniciansResult] = await Promise.allSettled([
       can("OS_READ") ? serviceOrdersApi.listServiceOrders() : Promise.resolve([]),
       can("CUSTOMER_READ") ? customersApi.listCustomers() : Promise.resolve([]),
       can("OS_READ") ? usersApi.listUsers("TECHNICIAN") : Promise.resolve([]),
     ]);
-
-    // Any one of these three widgets can fail independently (e.g. a
-    // transient error fetching orders shouldn't hide the customer count).
-    // We only show the full-page error state if every source failed —
-    // otherwise render with whatever succeeded and fall back to empty
-    // arrays for the rest, same as "no data yet".
-    const failures = [ordersResult, customersResult, techniciansResult].filter(
-      (r) => r.status === "rejected",
-    );
-
+    if (!canCommit()) return;
+    const failures = [ordersResult, customersResult, techniciansResult].filter((result) => result.status === "rejected");
     if (failures.length === 3) {
       const first = failures[0] as PromiseRejectedResult;
-      setError(
-        first.reason instanceof ApiError
-          ? first.reason.message
-          : "Não foi possível carregar o painel.",
-      );
+      setError(first.reason instanceof ApiError ? first.reason.message : "Não foi possível carregar o painel.");
       setLoading(false);
       return;
     }
-
     setData({
       orders: ordersResult.status === "fulfilled" ? ordersResult.value : [],
       customerCount: customersResult.status === "fulfilled" ? customersResult.value.length : 0,
@@ -60,9 +51,7 @@ export function DashboardPage() {
     setLoading(false);
   }, [can]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useInitialAsyncLoad(load);
 
   if (loading) return <PageLoading label="Carregando painel..." />;
   if (error || !data) return <ErrorState message={error ?? "Erro desconhecido"} onRetry={load} />;

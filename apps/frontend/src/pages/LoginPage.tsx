@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { useAuth, ApiError } from "../context/AuthContext.tsx";
+import { useAuth } from "../context/AuthContext.tsx";
+import { ApiError } from "../api/client.ts";
 import { Field } from "../components/Field.tsx";
 import { ErrorBanner } from "../components/States.tsx";
 
@@ -27,8 +28,8 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email, password);
-      navigate("/", { replace: true });
+      const user = await login(email, password);
+      navigate(user.role === "CUSTOMER" ? "/minha-area" : "/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setError(
@@ -87,6 +88,9 @@ export function LoginPage() {
             {submitting ? "Entrando..." : "Entrar"}
           </button>
         </form>
+        <p className="page-subtitle">Ainda não possui conta? <Link to="/registrar">Criar conta de cliente</Link></p>
+        <p className="page-subtitle"><Link to="/esqueci-senha">Esqueci minha senha</Link></p>
+        <p className="page-subtitle">Não recebeu a confirmação? <Link to="/verificar-email">Reenviar e-mail</Link></p>
       </div>
     </div>
   );

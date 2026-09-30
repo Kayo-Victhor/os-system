@@ -137,11 +137,7 @@ O CUSTOMER deve poder:
 
 ### Estado atual
 
-A funcionalidade de CUSTOMER encontra-se **parcialmente implementada**.
-
-A principal pendência está relacionada à associação entre a conta `User` e o registro correspondente em `Customer`, além da implementação completa do isolamento das consultas para garantir que um CUSTOMER só consiga acessar as próprias ordens.
-
-A autorização deve ser realizada no backend e não apenas por ocultação de elementos da interface.
+A funcionalidade CUSTOMER possui vínculo explícito entre conta e cadastro, isolamento por ownership no backend e área própria no frontend. A autorização permanece no backend; a interface não é fronteira de segurança.
 
 ---
 
@@ -757,3 +753,61 @@ pnpm dev
 ```
 
 que executa as verificações do projeto e inicia backend e frontend através do Turborepo.
+
+## Relação User ↔ Customer
+
+A conta autenticável e o cadastro operacional são entidades distintas. Um
+`Customer` pode existir sem conta para atender o cadastro administrativo, mas
+uma conta com role `CUSTOMER` criada pelo registro público sempre cria um
+`Customer` vinculado por `Customer.userId`. Esse campo é único: uma conta
+não pode possuir mais de um cadastro de cliente.
+
+O registro `POST /auth/register` cria `User` e `Customer` na mesma
+transação, força a role `CUSTOMER` e nunca retorna senha ou hashes. O cliente
+usa `GET /customers/me` e as rotas de ordens derivam o vínculo da sessão; IDs
+enviados pela URL ou filtro não ampliam o acesso. Clientes veem e atualizam
+somente o próprio cadastro e veem somente as próprias ordens de serviço.
+
+Clientes legados sem `Customer.userId` não foram associados automaticamente:
+a correção de dados deve ser revisada caso a caso para não vincular contas por
+coincidência de e-mail.
+
+## Operação de ordens por função
+
+- **ADMIN** cria, consulta, edita, exclui e atribui ordens; pode atribuir ou reatribuir somente usuários com a role `TECHNICIAN` e alterar qualquer status.
+- **TECHNICIAN** cria cadastros de clientes sem criar uma conta de acesso, vê apenas Customers associados a ordens atribuídas a ele e opera somente o status das próprias ordens atribuídas. Não pode editar Customer, alterar o cliente da ordem, reatribuir técnico ou excluir ordens.
+- **CUSTOMER** consulta somente o cadastro vinculado à própria sessão e suas ordens. Não pode criar ordens, alterar status, atribuir técnico ou acessar recursos administrativos.
+
+O backend impõe o escopo de `customerId` e `technicianId`; filtros e IDs enviados pelo navegador nunca concedem acesso adicional. As transições de status permanecem sem máquina de estados formal: ADMIN pode alterar qualquer status e TECHNICIAN pode alterar o status das ordens atribuídas a ele.
+
+## Segurança de autenticação e verificação de e-mail
+
+O backend usa JWT de acesso com validade de 15 minutos em cookie HttpOnly e
+refresh token opaco de sete dias, armazenado apenas como HMAC no banco. Todo
+refresh é rotacionado; a reutilização de um token revogado invalida as sessões
+ativas daquele usuário. Operações com sessão exigem o token CSRF double-submit,
+e o frontend o envia também durante o refresh automático.
+
+O cadastro público cria um CUSTOMER não verificado. Senhas novas exigem ao
+menos oito caracteres. A conta não pode fazer login, renovar sessão ou acessar
+a aplicação até confirmar o endereço de e-mail. O token de confirmação é aleatório, é persistido somente como HMAC,
+expira em 24 horas e possui uso único. Reenvios substituem o token anterior.
+Contas criadas por ADMIN e usuários existentes na migration são marcados como
+verificados para preservar o fluxo operacional já existente.
+
+Configure no backend, sem expor valores ao frontend:
+
+- `EMAIL_VERIFICATION_SECRET`: segredo exclusivo para HMAC dos links.
+- `PASSWORD_RESET_SECRET`: segredo exclusivo para HMAC dos links de redefinição de senha.
+- `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` e `EMAIL_FROM`: envio transacional pela API HTTP da Brevo. `EMAIL_FROM` deve ser um endereço autorizado na conta Brevo; para o teste inicial, domínio próprio não é obrigatório.
+- `APP_BASE_URL`: URL pública do frontend usada em `/verificar-email`; deve usar HTTPS em produção.
+
+Para ativar o envio, crie uma conta na Brevo, gere uma API key transacional com o menor privilégio disponível e autorize um remetente individual na própria Brevo. Configure as variáveis somente no ambiente do backend; em desenvolvimento, use um remetente autorizado e `APP_BASE_URL=http://localhost:5173`. Um domínio próprio é recomendado para produção, mas não é necessário para o primeiro teste com remetente autorizado.
+
+A API usa o endpoint `POST /auth/verify-email` e o reenvio genérico
+`POST /auth/resend-verification`. O segundo responde de forma uniforme para
+contas inexistentes ou já verificadas, reduzindo enumeração. Recuperação de senha usa `POST /auth/forgot-password` e `POST /auth/reset-password`. O link expira em 60 minutos, é de uso único e cada solicitação substitui o token anterior. Após a redefinição, todos os refresh tokens da conta são revogados; o usuário deve entrar novamente. Os endpoints são públicos, respondem de forma uniforme na solicitação e não exigem CSRF porque não dependem de uma sessão em cookie.
+
+Antes de produção, configure um domínio/remetente verificado no provider, uma
+chave de envio com privilégio mínimo e uma caixa de teste autorizada para
+validar o fluxo externo completo.

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+export const passwordSchema = z.string().min(8, "A senha deve ter pelo menos 8 caracteres").max(128);
+
 export const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
   role: z.enum(["USER", "TECHNICIAN"]).default("USER")
 });
 
@@ -23,7 +25,10 @@ export const updateUserSchema = z.object({
 export const registerSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
+  phone: z.string().min(8).max(30).optional(),
+  document: z.string().min(3).max(40).optional(),
+  address: z.string().min(3).max(255).optional(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
