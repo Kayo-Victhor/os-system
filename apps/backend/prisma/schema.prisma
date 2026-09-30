@@ -113,4 +113,7 @@ model ServiceOrder {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([technicianId, createdAt(sort: Desc)])
 }
