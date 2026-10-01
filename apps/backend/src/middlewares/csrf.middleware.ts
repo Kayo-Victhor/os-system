@@ -52,14 +52,17 @@ export function csrfProtection(
 }
 
 /** Applies double-submit CSRF only when a session cookie is present. This
- * preserves 401 responses for callers without a session while preventing
- * cross-site refresh/logout requests from acting on an existing session. */
+ * preserves 401 responses for callers without cookies while requiring a
+ * matching CSRF cookie and header whenever a browser sends a session cookie. */
 export function csrfProtectionForSession(req: Request, res: Response, next: NextFunction) {
-  const hasSession = Boolean(req.cookies?.[ACCESS_TOKEN_COOKIE] || req.cookies?.[REFRESH_TOKEN_COOKIE]);
-  const hasCsrfCookie = Boolean(req.cookies?.[CSRF_COOKIE]);
-  // An unknown refresh cookie alone is not a session and must reach the
-  // controller so it receives the normal 401 response. Real browser sessions
-  // always receive the CSRF cookie alongside login/refresh cookies.
-  if (!hasSession || !hasCsrfCookie) { next(); return; }
+  const hasSession = Boolean(
+    req.cookies?.[ACCESS_TOKEN_COOKIE] || req.cookies?.[REFRESH_TOKEN_COOKIE],
+  );
+
+  if (!hasSession) {
+    next();
+    return;
+  }
+
   csrfProtection(req, res, next);
 }

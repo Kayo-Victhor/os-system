@@ -151,14 +151,14 @@ describe("POST /auth/refresh", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 and clears cookies for an unknown/expired token", async () => {
+  it("returns 403 before looking up an unknown token when CSRF is absent", async () => {
     prismaMock.refreshToken.findUnique.mockResolvedValueOnce(null);
 
     const res = await request(app)
       .post("/auth/refresh")
       .set("Cookie", "refresh_token=some-old-token");
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 });
 

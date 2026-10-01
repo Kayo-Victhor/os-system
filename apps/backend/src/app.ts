@@ -10,6 +10,7 @@ import serviceOrderRoutes from "./routes/service-order.routes.js";
 import healthRoutes from "./routes/health.routes.js";
 
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
+import { csrfProtectionForSession } from "./middlewares/csrf.middleware.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -59,27 +60,19 @@ app.use("/health", healthRoutes);
 
 app.use(apiRateLimiter);
 
-// /auth is intentionally NOT behind csrfProtection:
-//  - /auth/register and /auth/login happen before any CSRF cookie exists,
-//    so there's nothing to double-submit yet (both are rate limited, and
-//    SameSite=Lax already blocks the cross-site form submissions that
-//    matter here).
-//  - /auth/refresh and /auth/logout only ever act on the caller's own
-//    session (rotate or end it) — a forged cross-site call can't exfiltrate
-//    anything, at worst it logs the legitimate user out, and both are rate
-//    limited.
+// Public authentication flows do not require an existing CSRF token. They
+// receive JSON only, are rate-limited, and CORS does not allow an arbitrary
+// origin to send the required JSON request. Session-mutating endpoints within
+// this router (/refresh and /logout) apply csrfProtectionForSession directly.
 app.use("/auth", authRoutes);
 
-// csrfProtection is applied per-route within each resource router below
-// (authMiddleware, then csrfProtection, then requirePermission), NOT
-// globally here. CSRF only makes sense to check once we know there's an
-// authenticated session to protect — checking it globally, before auth,
-// meant a fully unauthenticated mutating request (no cookies at all) hit
-// the CSRF check first and got 403, never reaching the auth check that
-// should have returned 401.
-app.use("/users", userRoutes);
-app.use("/customers", customerRoutes);
-app.use("/service-orders", serviceOrderRoutes);
+// Protect every mutable request under the authenticated resource mounts in
+// one place. Requests without access/refresh cookies pass through so their
+// route-level auth middleware still returns the expected 401; any request
+// carrying a session cookie must provide the double-submit CSRF pair.
+app.use("/users", csrfProtectionForSession, userRoutes);
+app.use("/customers", csrfProtectionForSession, customerRoutes);
+app.use("/service-orders", csrfProtectionForSession, serviceOrderRoutes);
 
 // Never delegate errors to Express' development handler, which can render a
 // stack trace. CORS rejections receive a deliberate 403; all other failures

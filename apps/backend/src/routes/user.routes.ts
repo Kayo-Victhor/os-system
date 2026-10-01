@@ -10,7 +10,6 @@ import {
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requirePermission } from "../middlewares/permission.middleware.js";
-import { csrfProtection } from "../middlewares/csrf.middleware.js";
 import { writeRateLimiter } from "../middlewares/rate-limit.middleware.js";
 
 const router = Router();
@@ -19,7 +18,6 @@ router.post(
   "/",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("USER_CREATE"),
   createUserController
 );
@@ -42,7 +40,6 @@ router.patch(
   "/:id",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("USER_UPDATE"),
   updateUserController
 );
@@ -51,7 +48,6 @@ router.delete(
   "/:id",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("USER_DELETE"),
   deleteUserController
 );

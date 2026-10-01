@@ -12,7 +12,6 @@ import {
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requirePermission } from "../middlewares/permission.middleware.js";
-import { csrfProtection } from "../middlewares/csrf.middleware.js";
 import { writeRateLimiter } from "../middlewares/rate-limit.middleware.js";
 
 const router = Router();
@@ -21,7 +20,6 @@ router.post(
   "/",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("OS_CREATE"),
   createServiceOrderController,
 );
@@ -44,7 +42,6 @@ router.patch(
   "/:id",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("OS_UPDATE"),
   updateServiceOrderController,
 );
@@ -53,7 +50,6 @@ router.delete(
   "/:id",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("OS_DELETE"),
   deleteServiceOrderController,
 );
@@ -62,7 +58,6 @@ router.patch(
   "/:id/technician",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("OS_ASSIGN"),
   assignTechnicianController,
 );
@@ -71,7 +66,6 @@ router.patch(
   "/:id/status",
   authMiddleware,
   writeRateLimiter,
-  csrfProtection,
   requirePermission("OS_UPDATE_STATUS"),
   updateServiceOrderStatusController,
 );

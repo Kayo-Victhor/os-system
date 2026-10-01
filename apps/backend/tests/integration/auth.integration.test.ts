@@ -199,12 +199,12 @@ describe("POST /auth/refresh — real rotation", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects a refresh with a garbage/unknown token", async () => {
+  it("rejects a refresh with a session cookie but no CSRF token", async () => {
     const res = await request(app)
       .post("/auth/refresh")
       .set("Cookie", "refresh_token=totally-made-up-token-value");
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 });
 
@@ -248,7 +248,8 @@ describe("POST /auth/logout — real revocation", () => {
 
     const afterLogout = await request(app)
       .post("/auth/refresh")
-      .set("Cookie", `refresh_token=${refreshToken}`);
+      .set("Cookie", `refresh_token=${refreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
 
     expect(afterLogout.status).toBe(401);
   });
