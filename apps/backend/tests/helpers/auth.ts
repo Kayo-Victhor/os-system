@@ -4,7 +4,7 @@ import type { UserRole } from "../../src/generated/prisma/client.js";
 /**
  * Builds a Cookie header + matching CSRF header for an authenticated
  * request, without going through the real /auth/login flow. This lets
- * controller/authorization tests set up "logged in as ADMIN/TECHNICIAN/USER"
+ * controller/authorization tests set up "logged in as ADMIN/TECHNICIAN/ATTENDANT"
  * scenarios directly, while auth.test.ts covers the login flow itself.
  */
 export function authAs(userId: string, role: UserRole) {

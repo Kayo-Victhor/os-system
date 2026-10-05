@@ -6,13 +6,13 @@ export const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
   password: passwordSchema,
-  role: z.enum(["USER", "TECHNICIAN"]).default("USER")
+  role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).default("ATTENDANT")
 });
 
 export const updateUserSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   email: z.string().email().optional(),
-  role: z.enum(["ADMIN", "USER", "TECHNICIAN"]).optional(),
+  role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).optional(),
 });
 
 // No `role` field, on purpose. Zod's default behavior strips keys that

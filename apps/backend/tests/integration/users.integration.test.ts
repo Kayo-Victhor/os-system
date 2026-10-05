@@ -24,7 +24,7 @@ describe("Initial admin (seed equivalent)", () => {
         email: "admin@os-system.local",
         password: passwordHash,
         role: "ADMIN",
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt: null,
       },
     });
 
@@ -35,6 +35,8 @@ describe("Initial admin (seed equivalent)", () => {
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.user.id).toBe(admin.id);
     expect(loginRes.body.user.role).toBe("ADMIN");
+    expect((await testPrisma.user.findUniqueOrThrow({ where: { id: admin.id } })).emailVerifiedAt).toBeNull();
+    expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: admin.id } })).toBeNull();
   });
 });
 
@@ -61,10 +63,12 @@ describe("POST /users — creation (admin only)", () => {
       where: { email: "tecnico-novo@example.com" },
     });
     expect(stored.role).toBe("TECHNICIAN");
+    expect(stored.emailVerifiedAt).toBeNull();
+    expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: stored.id } })).toBeNull();
     expect(await verifyPassword(stored.password, "senha123456")).toBe(true);
   });
 
-  it.each(["USER", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
     "a %s cannot create users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);
@@ -82,7 +86,7 @@ describe("POST /users — creation (admin only)", () => {
 
   it("rejects a duplicate email with 409", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
-    await createFixtureUser("USER", { email: "dup@example.com" });
+    await createFixtureUser("ATTENDANT", { email: "dup@example.com" });
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -107,7 +111,7 @@ describe("POST /users — creation (admin only)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("cannot be used to create an ADMIN account", async () => {
+  it("an ADMIN can create another ADMIN account", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
@@ -115,17 +119,55 @@ describe("POST /users — creation (admin only)", () => {
       .post("/users")
       .set("Cookie", session.cookie)
       .set("x-csrf-token", session.csrfHeader)
-      .send({ name: "X", email: "quer-ser-admin@example.com", password: "senha123456", role: "ADMIN" });
+      .send({ name: "Admin Novo", email: "quer-ser-admin@example.com", password: "senha123456", role: "ADMIN" });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe("ADMIN");
+    expect(res.body.isPrimaryAdmin).toBe(false);
   });
+
+  it("ignores an isPrimaryAdmin payload when creating an ADMIN", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .post("/users")
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({
+        name: "Admin Comum",
+        email: "admin-comum@example.com",
+        password: "senha123456",
+        role: "ADMIN",
+        isPrimaryAdmin: true,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.isPrimaryAdmin).toBe(false);
+  });
+
+  it.each(["USER", "CUSTOMER", "INVALID"])(
+    "rejects %s as an internal role",
+    async (role) => {
+      const { user: admin } = await createFixtureUser("ADMIN");
+      const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+      const res = await request(app)
+        .post("/users")
+        .set("Cookie", session.cookie)
+        .set("x-csrf-token", session.csrfHeader)
+        .send({ name: "Papel inválido", email: `${role.toLowerCase()}@example.com`, password: "senha123456", role });
+
+      expect(res.status).toBe(400);
+    },
+  );
 });
 
 describe("GET /users — query (admin only)", () => {
   it("an ADMIN can list all users", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
     await createFixtureUser("TECHNICIAN");
-    await createFixtureUser("USER");
+    await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
     const res = await request(app).get("/users").set("Cookie", session.cookie);
@@ -138,7 +180,7 @@ describe("GET /users — query (admin only)", () => {
     const { user: admin } = await createFixtureUser("ADMIN");
     await createFixtureUser("TECHNICIAN");
     await createFixtureUser("TECHNICIAN");
-    await createFixtureUser("USER");
+    await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -151,7 +193,33 @@ describe("GET /users — query (admin only)", () => {
     expect(res.body.every((u: { role: string }) => u.role === "TECHNICIAN")).toBe(true);
   });
 
-  it.each(["USER", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["USER", "CUSTOMER", "INVALID"])(
+    "rejects %s as a team filter",
+    async (role) => {
+      const { user: admin } = await createFixtureUser("ADMIN");
+      const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+      const res = await request(app)
+        .get("/users")
+        .query({ role })
+        .set("Cookie", session.cookie);
+
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it("does not expose legacy CUSTOMER accounts in team administration", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    await createFixtureUser("CUSTOMER");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app).get("/users").set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.every((user: { role: string }) => user.role !== "CUSTOMER")).toBe(true);
+  });
+
+  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
     "a %s cannot list users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);
@@ -165,9 +233,41 @@ describe("GET /users — query (admin only)", () => {
 });
 
 describe("PATCH /users/:id — update", () => {
+  it("blocks a regular ADMIN from editing the primary administrator", async () => {
+    const { user: primary } = await createFixtureUser("ADMIN", { isPrimaryAdmin: true });
+    const { user: regularAdmin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, regularAdmin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .patch(`/users/${primary.id}`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ name: "Tentativa bloqueada", role: "ATTENDANT", isPrimaryAdmin: false });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("allows the primary administrator to edit normal own data but not demote itself", async () => {
+    const { user: primary } = await createFixtureUser("ADMIN", { isPrimaryAdmin: true });
+    const session = await loginAs(app, primary.email, FIXTURE_PASSWORD);
+
+    const profile = await request(app)
+      .patch(`/users/${primary.id}`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ name: "Administrador Principal" });
+    expect(profile.status).toBe(200);
+
+    const demotion = await request(app)
+      .patch(`/users/${primary.id}`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ role: "ATTENDANT" });
+    expect(demotion.status).toBe(403);
+  });
   it("an ADMIN can update a user's name and email", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
-    const { user: target } = await createFixtureUser("USER");
+    const { user: target } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -188,7 +288,7 @@ describe("PATCH /users/:id — update", () => {
       .patch(`/users/${admin.id}`)
       .set("Cookie", session.cookie)
       .set("x-csrf-token", session.csrfHeader)
-      .send({ role: "USER" });
+      .send({ role: "ATTENDANT" });
 
     expect(res.status).toBe(409);
 
@@ -205,17 +305,46 @@ describe("PATCH /users/:id — update", () => {
       .patch(`/users/${admin2.id}`)
       .set("Cookie", session.cookie)
       .set("x-csrf-token", session.csrfHeader)
-      .send({ role: "USER" });
+      .send({ role: "ATTENDANT" });
 
     expect(res.status).toBe(200);
-    expect(res.body.role).toBe("USER");
+    expect(res.body.role).toBe("ATTENDANT");
   });
+
+  it.each(["USER", "CUSTOMER", "INVALID"])(
+    "rejects %s as an updated internal role",
+    async (role) => {
+      const { user: admin } = await createFixtureUser("ADMIN");
+      const { user: target } = await createFixtureUser("ATTENDANT");
+      const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+      const res = await request(app)
+        .patch(`/users/${target.id}`)
+        .set("Cookie", session.cookie)
+        .set("x-csrf-token", session.csrfHeader)
+        .send({ role });
+
+      expect(res.status).toBe(400);
+    },
+  );
 });
 
 describe("DELETE /users/:id", () => {
+  it("blocks a regular ADMIN from deleting the primary administrator", async () => {
+    const { user: primary } = await createFixtureUser("ADMIN", { isPrimaryAdmin: true });
+    const { user: regularAdmin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, regularAdmin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .delete(`/users/${primary.id}`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader);
+
+    expect(res.status).toBe(403);
+  });
   it("an ADMIN can delete a non-admin user", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
-    const { user: target } = await createFixtureUser("USER");
+    const { user: target } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -265,11 +394,11 @@ describe("DELETE /users/:id", () => {
   // depth for if that ever changes (e.g. a future role gains
   // USER_DELETE), not because it fires today.
 
-  it.each(["USER", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
     "a %s cannot delete users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);
-      const { user: target } = await createFixtureUser("USER");
+      const { user: target } = await createFixtureUser("ATTENDANT");
       const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
       const res = await request(app)

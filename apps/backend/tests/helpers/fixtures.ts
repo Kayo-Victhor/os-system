@@ -12,7 +12,13 @@ function unique(prefix: string) {
 
 export async function createFixtureUser(
   role: UserRole,
-  overrides: { name?: string; email?: string; password?: string } = {},
+  overrides: {
+    name?: string;
+    email?: string;
+    password?: string;
+    emailVerifiedAt?: Date | null;
+    isPrimaryAdmin?: boolean;
+  } = {},
 ) {
   const password = overrides.password ?? FIXTURE_PASSWORD;
   const passwordHash = await hashPassword(password);
@@ -23,7 +29,10 @@ export async function createFixtureUser(
       email: overrides.email ?? `${unique(role.toLowerCase())}@example.com`,
       password: passwordHash,
       role,
-      emailVerifiedAt: new Date(),
+      isPrimaryAdmin: overrides.isPrimaryAdmin ?? false,
+      emailVerifiedAt: "emailVerifiedAt" in overrides
+        ? overrides.emailVerifiedAt
+        : role === "CUSTOMER" ? new Date() : null,
     },
   });
 

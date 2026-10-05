@@ -11,7 +11,7 @@ beforeEach(async () => {
 });
 
 describe("POST /customers — creation", () => {
-  it.each(["ADMIN", "USER"] as const)("a %s can create a customer", async (role) => {
+  it.each(["ADMIN", "ATTENDANT"] as const)("a %s can create a customer", async (role) => {
     const { user } = await createFixtureUser(role);
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
@@ -43,7 +43,7 @@ describe("POST /customers — creation", () => {
   });
 
   it("rejects a name that's too short", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -56,7 +56,7 @@ describe("POST /customers — creation", () => {
   });
 
   it("rejects a duplicate document with 409", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     await createFixtureCustomer({ document: "99988877766" });
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
@@ -72,7 +72,7 @@ describe("POST /customers — creation", () => {
 
 describe("GET /customers — query and search", () => {
   it("lists customers", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     await createFixtureCustomer({ name: "Alice" });
     await createFixtureCustomer({ name: "Bob" });
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
@@ -84,7 +84,7 @@ describe("GET /customers — query and search", () => {
   });
 
   it("searches by name (case-insensitive)", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     await createFixtureCustomer({ name: "Alice Wonderland" });
     await createFixtureCustomer({ name: "Bob Builder" });
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
@@ -110,7 +110,7 @@ describe("GET /customers — query and search", () => {
   });
 
   it("returns 404 for a nonexistent customer", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -122,7 +122,7 @@ describe("GET /customers — query and search", () => {
 });
 
 describe("PATCH /customers/:id — update", () => {
-  it.each(["ADMIN", "USER"] as const)("a %s can update a customer", async (role) => {
+  it.each(["ADMIN", "ATTENDANT"] as const)("a %s can update a customer", async (role) => {
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer({ name: "Nome Antigo" });
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
@@ -181,7 +181,7 @@ describe("DELETE /customers/:id", () => {
     expect(await testPrisma.customer.findUnique({ where: { id: customer.id } })).toBeNull();
   });
 
-  it.each(["USER", "TECHNICIAN"] as const)("a %s cannot delete a customer (403)", async (role) => {
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)("a %s cannot delete a customer (403)", async (role) => {
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);

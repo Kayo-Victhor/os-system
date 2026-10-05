@@ -18,6 +18,32 @@ function latestResetToken() {
 }
 
 describe("recuperação segura de senha", () => {
+  it("permite recuperação para usuário interno sem confirmação de e-mail", async () => {
+    const { user } = await createFixtureUser("ATTENDANT", {
+      email: "atendente-reset@example.com",
+      emailVerifiedAt: null,
+    });
+
+    const response = await request(app).post("/auth/forgot-password").send({ email: user.email });
+
+    expect(response.status).toBe(202);
+    expect(getTestEmailOutbox()).toHaveLength(1);
+    expect(await testPrisma.passwordResetToken.findUnique({ where: { userId: user.id } })).not.toBeNull();
+  });
+
+  it("preserva o bloqueio de recuperação para CUSTOMER legado não verificado", async () => {
+    const { user } = await createFixtureUser("CUSTOMER", {
+      email: "cliente-pendente-reset@example.com",
+      emailVerifiedAt: null,
+    });
+
+    const response = await request(app).post("/auth/forgot-password").send({ email: user.email });
+
+    expect(response.status).toBe(202);
+    expect(getTestEmailOutbox()).toHaveLength(0);
+    expect(await testPrisma.passwordResetToken.findUnique({ where: { userId: user.id } })).toBeNull();
+  });
+
   it("mantém a resposta uniforme, persiste somente HMAC e substitui o link anterior", async () => {
     const { user } = await createFixtureUser("CUSTOMER", { email: "reset@example.com" });
 

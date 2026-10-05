@@ -8,6 +8,9 @@ import {
   updateUser,
   deleteUser,
   countAdmins,
+  INTERNAL_USER_ROLES,
+  primaryAdminDeleteError,
+  primaryAdminUpdateError,
 } from "../services/user.service.js";
 
 import { createUserSchema, updateUserSchema } from "../schemas/user.schema.js";
@@ -55,9 +58,16 @@ export async function listUsersController(
 ) {
   try {
     const role = req.query.role;
-    const validRoles = ["ADMIN", "USER", "TECHNICIAN", "CUSTOMER"] as const;
-    const roleFilter = validRoles.includes(role as (typeof validRoles)[number])
-      ? (role as (typeof validRoles)[number])
+    if (
+      role !== undefined &&
+      (typeof role !== "string" || !INTERNAL_USER_ROLES.includes(role as (typeof INTERNAL_USER_ROLES)[number]))
+    ) {
+      res.status(400).json({ error: "Papel de usuário interno inválido" });
+      return;
+    }
+
+    const roleFilter = INTERNAL_USER_ROLES.includes(role as (typeof INTERNAL_USER_ROLES)[number])
+      ? (role as (typeof INTERNAL_USER_ROLES)[number])
       : undefined;
 
     const users = await listUsers({ role: roleFilter });
@@ -92,7 +102,7 @@ export async function getUserByIdController(
 }
 
 export async function updateUserController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response
 ) {
   const result = updateUserSchema.safeParse(req.body);
@@ -111,6 +121,12 @@ export async function updateUserController(
 
     if (!existing) {
       res.status(404).json({ error: "Usuário não encontrado" });
+      return;
+    }
+
+    const primaryAdminError = primaryAdminUpdateError(req.userId, existing, result.data.role);
+    if (primaryAdminError) {
+      res.status(403).json({ error: primaryAdminError });
       return;
     }
 
@@ -166,6 +182,12 @@ export async function deleteUserController(
 
     if (!existing) {
       res.status(404).json({ error: "Usuário não encontrado" });
+      return;
+    }
+
+    const primaryAdminError = primaryAdminDeleteError(existing);
+    if (primaryAdminError) {
+      res.status(403).json({ error: primaryAdminError });
       return;
     }
 

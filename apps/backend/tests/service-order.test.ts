@@ -42,7 +42,7 @@ describe("POST /service-orders", () => {
   });
 
   it("creates an order with a valid session", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     prismaMock.serviceOrder.create.mockResolvedValueOnce(makeOrder());
 
@@ -61,7 +61,7 @@ describe("POST /service-orders", () => {
   });
 
   it("rejects an invalid customerId format", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     const res = await request(app)
       .post("/service-orders")
@@ -204,7 +204,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(makeOrder());
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: "33333333-3333-4333-8333-333333333333",
-      role: "USER",
+      role: "ATTENDANT",
     });
 
     const res = await request(app)

@@ -4,6 +4,7 @@ import request from "supertest";
 import app from "../../src/app.js";
 import { clearTestEmailOutbox, getTestEmailOutbox } from "../../src/services/email.service.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
+import { createFixtureUser } from "../helpers/fixtures.js";
 
 beforeEach(async () => {
   await resetDatabase();
@@ -25,6 +26,19 @@ async function register(email = "cliente-verificacao@example.com") {
 }
 
 describe("Verificação real de posse de e-mail", () => {
+  it("não emite nem reenvia token para usuário interno", async () => {
+    const { user } = await createFixtureUser("ADMIN", {
+      email: "admin-sem-verificacao@example.com",
+      emailVerifiedAt: null,
+    });
+
+    const resend = await request(app).post("/auth/resend-verification").send({ email: user.email });
+
+    expect(resend.status).toBe(202);
+    expect(getTestEmailOutbox()).toHaveLength(0);
+    expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: user.id } })).toBeNull();
+  });
+
   it("cria um token somente em hash, bloqueia login e confirma com link de uso único", async () => {
     const registration = await register();
     expect(registration.status).toBe(201);

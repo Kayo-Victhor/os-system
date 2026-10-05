@@ -23,7 +23,7 @@ export const permissions = {
     "SETTINGS_UPDATE"
   ],
 
-  USER: [
+  ATTENDANT: [
     "CUSTOMER_CREATE",
     "CUSTOMER_READ",
     "CUSTOMER_UPDATE",
@@ -39,7 +39,8 @@ export const permissions = {
     "OS_UPDATE_STATUS"
   ],
 
-  // A self-registered CUSTOMER is bound to exactly one Customer record.
+  // Legacy/migration-only: a self-registered CUSTOMER is bound to exactly
+  // one Customer record until CustomerAccount replaces this flow.
   // Controller-level ownership checks restrict these permissions to that
   // linked record and its service orders.
   CUSTOMER: [

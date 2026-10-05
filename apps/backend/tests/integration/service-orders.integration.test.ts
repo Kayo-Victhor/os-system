@@ -109,7 +109,7 @@ describe("End-to-end service order flow", () => {
 
 describe("POST /service-orders — invalid input", () => {
   it("rejects a nonexistent customerId", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -132,7 +132,7 @@ describe("POST /service-orders — invalid input", () => {
   });
 
   it("rejects missing required fields", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -161,7 +161,7 @@ describe("POST /service-orders — invalid input", () => {
 
 describe("GET /service-orders/:id — nonexistent resource", () => {
   it("returns 404", async () => {
-    const { user } = await createFixtureUser("USER");
+    const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
     const res = await request(app)
@@ -284,7 +284,7 @@ describe("PATCH /service-orders/:id/status — validation and authorization", ()
     expect(res.status).toBe(403);
   });
 
-  it.each(["USER", "CUSTOMER"] as const)("a %s cannot update order status at all (403)", async (role) => {
+  it.each(["ATTENDANT", "CUSTOMER"] as const)("a %s cannot update order status at all (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();
@@ -319,7 +319,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
 
   it("rejects assigning a user who is not a TECHNICIAN", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
-    const { user: staff } = await createFixtureUser("USER");
+    const { user: staff } = await createFixtureUser("ATTENDANT");
     const customer = await createFixtureCustomer();
     const order = await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id });
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
@@ -336,7 +336,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     expect(unchanged.technicianId).toBeNull();
   });
 
-  it.each(["USER", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot assign technicians (403)", async (role) => {
+  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot assign technicians (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const { user: tech } = await createFixtureUser("TECHNICIAN");
@@ -423,7 +423,7 @@ describe("DELETE /service-orders/:id", () => {
     expect(await testPrisma.serviceOrder.findUnique({ where: { id: order.id } })).toBeNull();
   });
 
-  it.each(["USER", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot delete a service order (403)", async (role) => {
+  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot delete a service order (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();

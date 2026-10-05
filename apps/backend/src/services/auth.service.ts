@@ -25,11 +25,20 @@ export interface SessionResult {
     name: string;
     email: string;
     role: UserRole;
+    isPrimaryAdmin: boolean;
   };
 }
 
 export type LoginResult = SessionResult | "UNVERIFIED" | null;
 export type EmailVerificationResult = "VERIFIED" | "INVALID" | "EXPIRED" | "USED";
+
+/**
+ * CUSTOMER remains a legacy User identity until CustomerAccount replaces it.
+ * Internal accounts never require the legacy User e-mail verification flow.
+ */
+export function requiresEmailVerification(role: UserRole): boolean {
+  return role === "CUSTOMER";
+}
 
 async function issueSession(userId: string): Promise<{
   accessToken: string;
@@ -51,8 +60,14 @@ async function issueSession(userId: string): Promise<{
   return { accessToken, refreshToken };
 }
 
-function sessionUser(user: { id: string; name: string; email: string; role: UserRole }) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+function sessionUser(user: { id: string; name: string; email: string; role: UserRole; isPrimaryAdmin: boolean }) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isPrimaryAdmin: user.isPrimaryAdmin,
+  };
 }
 
 async function replaceEmailVerificationToken(userId: string) {
@@ -79,7 +94,7 @@ export async function loginUser(data: LoginInput): Promise<LoginResult> {
   const passwordValid = await verifyPassword(passwordHash, data.password);
 
   if (!user || !passwordValid) return null;
-  if (!user.emailVerifiedAt) return "UNVERIFIED";
+  if (requiresEmailVerification(user.role) && !user.emailVerifiedAt) return "UNVERIFIED";
 
   const { accessToken, refreshToken } = await issueSession(user.id);
   return { accessToken, refreshToken, user: sessionUser(user) };
@@ -99,7 +114,11 @@ export async function refreshSession(presentedToken: string): Promise<SessionRes
   if (!stored) return null;
 
   const isExpired = stored.expiresAt.getTime() < Date.now();
-  if (stored.revokedAt || isExpired || !stored.user.emailVerifiedAt) {
+  if (
+    stored.revokedAt ||
+    isExpired ||
+    (requiresEmailVerification(stored.user.role) && !stored.user.emailVerifiedAt)
+  ) {
     await prisma.refreshToken.updateMany({
       where: { userId: stored.userId, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -170,9 +189,13 @@ export async function registerCustomer(data: RegisterInput) {
 export async function verifyEmail(token: string): Promise<EmailVerificationResult> {
   const tokenHash = hashEmailVerificationToken(token);
   const now = new Date();
-  const stored = await prisma.emailVerificationToken.findUnique({ where: { tokenHash } });
+  const stored = await prisma.emailVerificationToken.findUnique({
+    where: { tokenHash },
+    include: { user: { select: { role: true } } },
+  });
 
   if (!stored) return "INVALID";
+  if (!requiresEmailVerification(stored.user.role)) return "INVALID";
   if (stored.usedAt) return "USED";
   if (stored.expiresAt <= now) return "EXPIRED";
 
@@ -197,10 +220,10 @@ export async function verifyEmail(token: string): Promise<EmailVerificationResul
 export async function resendEmailVerification(email: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, emailVerifiedAt: true },
+    select: { id: true, email: true, emailVerifiedAt: true, role: true },
   });
 
-  if (!user || user.emailVerifiedAt) return false;
+  if (!user || !requiresEmailVerification(user.role) || user.emailVerifiedAt) return false;
 
   const token = await replaceEmailVerificationToken(user.id);
   await sendVerificationEmail({ to: user.email, token });
@@ -222,8 +245,11 @@ async function replacePasswordResetToken(userId: string) {
 /** Returns false for absent or unverified accounts. The controller always gives
  * the same accepted response, so this result can never enumerate users. */
 export async function requestPasswordReset(email: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, emailVerifiedAt: true } });
-  if (!user || !user.emailVerifiedAt) return false;
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, emailVerifiedAt: true, role: true },
+  });
+  if (!user || (requiresEmailVerification(user.role) && !user.emailVerifiedAt)) return false;
   const token = await replacePasswordResetToken(user.id);
   await sendPasswordResetEmail({ to: user.email, token });
   return true;

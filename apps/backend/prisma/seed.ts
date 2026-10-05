@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
-import { hashPassword } from "../src/lib/password.js";
+import { bootstrapPrimaryAdmin } from "../src/services/admin-bootstrap.service.js";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -13,34 +13,16 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
+  const adminEmail = process.env.ADMIN_EMAIL;
   const seedPassword = process.env.SEED_ADMIN_PASSWORD;
 
-  if (!seedPassword) {
-    throw new Error(
-      "SEED_ADMIN_PASSWORD precisa estar configurado para executar o seed.",
-    );
+  if (!adminEmail || !seedPassword) {
+    throw new Error("ADMIN_EMAIL e SEED_ADMIN_PASSWORD precisam estar configurados para executar o seed.");
   }
 
-  const passwordHash = await hashPassword(seedPassword);
+  await bootstrapPrimaryAdmin(prisma.user, { email: adminEmail, password: seedPassword });
 
-  const admin = await prisma.user.upsert({
-    where: {
-      email: "admin@os-system.local",
-    },
-    update: {
-      role: "ADMIN",
-      emailVerifiedAt: new Date(),
-      password: passwordHash,
-    },
-    create: {
-      name: "Administrador",
-      email: "admin@os-system.local",
-      password: passwordHash,
-      role: "ADMIN",
-    },
-  });
-
-  console.log("Admin criado:", admin.email);
+  console.log("Administrador inicial configurado.");
 }
 
 main()

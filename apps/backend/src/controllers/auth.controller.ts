@@ -11,6 +11,7 @@ import {
   verifyEmail,
   requestPasswordReset,
   resetPassword,
+  requiresEmailVerification,
 } from "../services/auth.service.js";
 import { EmailDeliveryError } from "../services/email.service.js";
 import { mapPrismaError } from "../lib/prisma-errors.js";
@@ -123,10 +124,13 @@ export async function meController(req: AuthenticatedRequest, res: Response) {
   if (!req.userId) { res.status(401).json({ error: "Não autenticado" }); return; }
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true },
+    select: { id: true, name: true, email: true, role: true, isPrimaryAdmin: true, emailVerifiedAt: true },
   });
-  if (!user || !user.emailVerifiedAt) { res.status(401).json({ error: "Sessão inválida ou expirada" }); return; }
-  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  if (!user || (requiresEmailVerification(user.role) && !user.emailVerifiedAt)) {
+    res.status(401).json({ error: "Sessão inválida ou expirada" });
+    return;
+  }
+  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, isPrimaryAdmin: user.isPrimaryAdmin } });
 }
 
 export async function verifyEmailController(req: AuthenticatedRequest, res: Response) {

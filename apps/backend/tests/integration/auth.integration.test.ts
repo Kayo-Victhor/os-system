@@ -11,6 +11,22 @@ beforeEach(async () => {
 });
 
 describe("POST /auth/login — real database", () => {
+  it.each(["ADMIN", "ATTENDANT", "TECHNICIAN"] as const)(
+    "allows an unverified internal %s to log in immediately",
+    async (role) => {
+      const { user } = await createFixtureUser(role);
+      expect(user.emailVerifiedAt).toBeNull();
+
+      const res = await request(app)
+        .post("/auth/login")
+        .send({ email: user.email, password: FIXTURE_PASSWORD });
+
+      expect(res.status).toBe(200);
+      expect(res.body.user.role).toBe(role);
+      expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: user.id } })).toBeNull();
+    },
+  );
+
   it("logs in with valid credentials and issues real session cookies", async () => {
     const { user } = await createFixtureUser("ADMIN", { email: "admin@example.com" });
 
@@ -109,7 +125,7 @@ describe("Protected route access", () => {
 });
 
 describe("Role verification is enforced by the backend, not client-supplied", () => {
-  it.each(["ADMIN", "USER", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ADMIN", "ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
     "the session role for a %s account always matches the database, never the client",
     async (role) => {
       const { user } = await createFixtureUser(role);

@@ -28,7 +28,7 @@ describe("Authentication and CSRF are required for mutations", () => {
   });
 
   it("rejects an authenticated request missing the CSRF header", async () => {
-    const { cookie } = authAs("staff-1", "USER");
+    const { cookie } = authAs("staff-1", "ATTENDANT");
 
     const res = await request(app)
       .post("/customers")
@@ -41,7 +41,7 @@ describe("Authentication and CSRF are required for mutations", () => {
 
 describe("POST /customers", () => {
   it("creates a customer with a valid session + CSRF token", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     prismaMock.customer.create.mockResolvedValueOnce({
       id: "cust-1",
@@ -62,7 +62,7 @@ describe("POST /customers", () => {
   });
 
   it("rejects invalid input", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     const res = await request(app)
       .post("/customers")
@@ -75,7 +75,7 @@ describe("POST /customers", () => {
   });
 
   it("returns 409 on a duplicate document instead of a raw 500", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     prismaMock.customer.create.mockRejectedValueOnce(
       Object.assign(new Error("Unique constraint failed"), {
@@ -112,7 +112,7 @@ describe("POST /customers", () => {
 
 describe("GET /customers/:id", () => {
   it("returns 404 for a non-existent customer", async () => {
-    const { cookie } = authAs("staff-1", "USER");
+    const { cookie } = authAs("staff-1", "ATTENDANT");
     prismaMock.customer.findUnique.mockResolvedValueOnce(null);
 
     const res = await request(app)
@@ -124,8 +124,8 @@ describe("GET /customers/:id", () => {
 });
 
 describe("DELETE /customers/:id", () => {
-  it("a USER cannot delete customers (lacks CUSTOMER_DELETE)", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+  it("a ATTENDANT cannot delete customers (lacks CUSTOMER_DELETE)", async () => {
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     const res = await request(app)
       .delete("/customers/cust-1")

@@ -19,7 +19,7 @@ function makeUser(overrides: Record<string, unknown> = {}) {
     id: "user-1",
     name: "Carlos",
     email: "carlos@example.com",
-    role: "USER",
+    role: "ATTENDANT",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -28,7 +28,7 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 
 describe("POST /users", () => {
   it("a non-ADMIN cannot create users", async () => {
-    const { cookie, csrfHeader } = authAs("staff-1", "USER");
+    const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
     const res = await request(app)
       .post("/users")
@@ -57,14 +57,14 @@ describe("POST /users", () => {
         name: "Carlos",
         email: "carlos@example.com",
         password: "senha123",
-        role: "USER",
+        role: "ATTENDANT",
       });
 
     expect(res.status).toBe(201);
     expect(res.body.password).toBeUndefined();
   });
 
-  it("rejects creating a user with role=ADMIN through this endpoint", async () => {
+  it("allows an ADMIN to create another ADMIN through this endpoint", async () => {
     const { cookie, csrfHeader } = authAs("admin-1", "ADMIN");
 
     const res = await request(app)
@@ -78,8 +78,10 @@ describe("POST /users", () => {
         role: "ADMIN",
       });
 
-    expect(res.status).toBe(400);
-    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ role: "ADMIN" }),
+    }));
   });
 });
 
@@ -141,7 +143,7 @@ describe("PATCH /users/:id", () => {
       .patch("/users/admin-2")
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
-      .send({ role: "USER" });
+      .send({ role: "ATTENDANT" });
 
     expect(res.status).toBe(409);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
