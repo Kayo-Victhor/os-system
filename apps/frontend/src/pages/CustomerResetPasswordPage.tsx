@@ -92,7 +92,7 @@ export function CustomerResetPasswordPage() {
         )}
 
         <p className="page-subtitle">
-          <Link to="/login">Voltar para entrar</Link>
+          <Link to="/customer/login">Voltar para entrar</Link>
         </p>
       </div>
     </div>

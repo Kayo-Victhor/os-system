@@ -15,17 +15,30 @@ import {
   resetPasswordController,
   resetCustomerAccountPasswordController,
 } from "../controllers/auth.controller.js";
+import {
+  customerLoginController,
+  customerLogoutController,
+  customerMeController,
+  customerRefreshController,
+  customerServiceOrderController,
+  customerServiceOrdersController,
+} from "../controllers/customer-auth.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import {
   authRateLimiter,
+  customerAuthRateLimiter,
   customerRegistrationConfirmationRateLimiter,
   customerPasswordResetRateLimiter,
   customerRegistrationRateLimiter,
   customerRegistrationResendRateLimiter,
   passwordResetRateLimiter,
 } from "../middlewares/rate-limit.middleware.js";
-import { csrfProtectionForSession } from "../middlewares/csrf.middleware.js";
+import {
+  csrfProtectionForCustomerSession,
+  csrfProtectionForSession,
+} from "../middlewares/csrf.middleware.js";
+import { customerAuthMiddleware } from "../middlewares/customer-auth.middleware.js";
 
 const router = Router();
 
@@ -46,12 +59,43 @@ router.post(
 router.post(
   "/customer/forgot-password",
   customerPasswordResetRateLimiter,
+  csrfProtectionForCustomerSession,
   forgotCustomerAccountPasswordController,
 );
 router.post(
   "/customer/reset-password",
   customerPasswordResetRateLimiter,
+  csrfProtectionForCustomerSession,
   resetCustomerAccountPasswordController,
+);
+router.post(
+  "/customer/login",
+  customerAuthRateLimiter,
+  csrfProtectionForCustomerSession,
+  customerLoginController,
+);
+router.post(
+  "/customer/refresh",
+  customerAuthRateLimiter,
+  csrfProtectionForCustomerSession,
+  customerRefreshController,
+);
+router.post(
+  "/customer/logout",
+  customerAuthRateLimiter,
+  csrfProtectionForCustomerSession,
+  customerLogoutController,
+);
+router.get("/customer/me", customerAuthMiddleware, customerMeController);
+router.get(
+  "/customer/service-orders",
+  customerAuthMiddleware,
+  customerServiceOrdersController,
+);
+router.get(
+  "/customer/service-orders/:id",
+  customerAuthMiddleware,
+  customerServiceOrderController,
 );
 router.post("/login", authRateLimiter, loginController);
 router.post("/verify-email", authRateLimiter, verifyEmailController);

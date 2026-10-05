@@ -23,6 +23,12 @@ export interface AccessTokenPayload {
   role: UserRole;
 }
 
+export interface CustomerAccessTokenPayload {
+  sub: string;
+  sid: string;
+  principalType: "CUSTOMER_ACCOUNT";
+}
+
 export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, JWT_ACCESS_SECRET, {
     algorithm: "HS256",
@@ -35,11 +41,52 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
     algorithms: ["HS256"],
   });
 
-  if (typeof decoded === "string" || !decoded.sub || !decoded.role) {
+  if (
+    typeof decoded === "string" ||
+    !decoded.sub ||
+    !decoded.role ||
+    decoded.principalType
+  ) {
     throw new Error("Token de acesso inválido");
   }
 
   return { sub: decoded.sub, role: decoded.role as UserRole };
+}
+
+export const CUSTOMER_ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+export const CUSTOMER_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+export function signCustomerAccessToken(
+  payload: CustomerAccessTokenPayload,
+): string {
+  return jwt.sign(payload, JWT_ACCESS_SECRET, {
+    algorithm: "HS256",
+    expiresIn: CUSTOMER_ACCESS_TOKEN_TTL_SECONDS,
+  });
+}
+
+export function verifyCustomerAccessToken(
+  token: string,
+): CustomerAccessTokenPayload {
+  const decoded = jwt.verify(token, JWT_ACCESS_SECRET, {
+    algorithms: ["HS256"],
+  });
+
+  if (
+    typeof decoded === "string" ||
+    !decoded.sub ||
+    !decoded.sid ||
+    decoded.principalType !== "CUSTOMER_ACCOUNT" ||
+    decoded.role
+  ) {
+    throw new Error("Token de acesso de cliente inválido");
+  }
+
+  return {
+    sub: decoded.sub,
+    sid: decoded.sid as string,
+    principalType: "CUSTOMER_ACCOUNT",
+  };
 }
 
 /**
@@ -54,6 +101,20 @@ export function generateRefreshToken(): {
 } {
   const token = randomBytes(48).toString("base64url");
   return { token, tokenHash: hashToken(token) };
+}
+
+export function generateCustomerSessionRefreshToken(): {
+  token: string;
+  tokenHash: string;
+} {
+  const token = randomBytes(48).toString("base64url");
+  return { token, tokenHash: hashCustomerSessionRefreshToken(token) };
+}
+
+export function hashCustomerSessionRefreshToken(token: string): string {
+  return createHmac("sha256", JWT_REFRESH_SECRET)
+    .update(`customer-session-refresh:${token}`)
+    .digest("hex");
 }
 
 export const EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;

@@ -7,6 +7,11 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const customerLoginSchema = z.object({
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
+  password: z.string().min(1).max(128),
+});
+
 export const verifyEmailSchema = z.object({
   token: z.string().min(40).max(256),
 });
@@ -44,3 +49,4 @@ export const resetPasswordSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+export type CustomerLoginInput = z.infer<typeof customerLoginSchema>;

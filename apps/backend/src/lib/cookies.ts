@@ -1,12 +1,17 @@
 import type { CookieOptions } from "express";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
+  CUSTOMER_ACCESS_TOKEN_TTL_SECONDS,
+  CUSTOMER_SESSION_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
 } from "./tokens.js";
 
 export const ACCESS_TOKEN_COOKIE = "access_token";
 export const REFRESH_TOKEN_COOKIE = "refresh_token";
 export const CSRF_COOKIE = "csrf_token";
+export const CUSTOMER_ACCESS_TOKEN_COOKIE = "customer_access_token";
+export const CUSTOMER_REFRESH_TOKEN_COOKIE = "customer_refresh_token";
+export const CUSTOMER_CSRF_COOKIE = "customer_csrf_token";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -37,6 +42,7 @@ const apiBasePath = (process.env.API_BASE_PATH ?? "").replace(/\/+$/, "");
 // auth.controller.ts's clearCookie calls use this exact same value
 // instead of a second hardcoded copy.
 export const REFRESH_COOKIE_PATH = `${apiBasePath}/auth/refresh`;
+export const CUSTOMER_REFRESH_COOKIE_PATH = `${apiBasePath}/auth/customer`;
 
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
@@ -71,6 +77,31 @@ export function csrfCookieOptions(): CookieOptions {
     sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
+  };
+}
+
+export function customerAccessTokenCookieOptions(): CookieOptions {
+  return {
+    ...baseCookieOptions,
+    maxAge: CUSTOMER_ACCESS_TOKEN_TTL_SECONDS * 1000,
+  };
+}
+
+export function customerRefreshTokenCookieOptions(): CookieOptions {
+  return {
+    ...baseCookieOptions,
+    path: CUSTOMER_REFRESH_COOKIE_PATH,
+    maxAge: CUSTOMER_SESSION_TTL_SECONDS * 1000,
+  };
+}
+
+export function customerCsrfCookieOptions(): CookieOptions {
+  return {
+    httpOnly: false,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+    maxAge: CUSTOMER_SESSION_TTL_SECONDS * 1000,
   };
 }
 

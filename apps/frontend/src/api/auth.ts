@@ -1,4 +1,4 @@
-import { apiRequest } from "./client.ts";
+import { apiRequest, customerApiRequest } from "./client.ts";
 import type { AuthUser } from "./types.ts";
 
 export interface RegisterCustomerInput { name: string; email: string; password: string; phone?: string; document?: string; address?: string; }
@@ -50,14 +50,14 @@ export function resetPassword(token: string, password: string, passwordConfirmat
 }
 
 export function requestCustomerAccountPasswordReset(email: string) {
-  return apiRequest<{ message: string }>("/auth/customer/forgot-password", {
+  return customerApiRequest<{ message: string }>("/auth/customer/forgot-password", {
     method: "POST",
     body: { email },
   });
 }
 
 export function resetCustomerAccountPassword(token: string, password: string) {
-  return apiRequest<{ message: string }>("/auth/customer/reset-password", {
+  return customerApiRequest<{ message: string }>("/auth/customer/reset-password", {
     method: "POST",
     body: { token, password },
   });

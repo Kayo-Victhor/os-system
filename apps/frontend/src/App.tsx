@@ -1,9 +1,10 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Routes, Route } from "react-router-dom";
 
 import { useAuth } from "./hooks/useAuth.ts";
 import { AuthProvider } from "./context/AuthProvider.tsx";
-import { RequireAuth, RequirePermission } from "./components/Guards.tsx";
+import { CustomerAuthProvider } from "./context/CustomerAuthProvider.tsx";
+import { RequireAuth, RequireCustomerAuth, RequirePermission } from "./components/Guards.tsx";
 import { AppLayout } from "./components/AppLayout.tsx";
 
 const LoginPage = lazy(() => import("./pages/LoginPage.tsx").then(({ LoginPage }) => ({ default: LoginPage })));
@@ -14,6 +15,9 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.tsx").t
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.tsx").then(({ ResetPasswordPage }) => ({ default: ResetPasswordPage })));
 const CustomerForgotPasswordPage = lazy(() => import("./pages/CustomerForgotPasswordPage.tsx").then(({ CustomerForgotPasswordPage }) => ({ default: CustomerForgotPasswordPage })));
 const CustomerResetPasswordPage = lazy(() => import("./pages/CustomerResetPasswordPage.tsx").then(({ CustomerResetPasswordPage }) => ({ default: CustomerResetPasswordPage })));
+const CustomerLoginPage = lazy(() => import("./pages/CustomerLoginPage.tsx").then(({ CustomerLoginPage }) => ({ default: CustomerLoginPage })));
+const CustomerAccountPortalPage = lazy(() => import("./pages/CustomerAccountPortalPage.tsx").then(({ CustomerAccountPortalPage }) => ({ default: CustomerAccountPortalPage })));
+const CustomerServiceOrderDetailPage = lazy(() => import("./pages/CustomerServiceOrderDetailPage.tsx").then(({ CustomerServiceOrderDetailPage }) => ({ default: CustomerServiceOrderDetailPage })));
 const CustomerPortalPage = lazy(() => import("./pages/CustomerPortalPage.tsx").then(({ CustomerPortalPage }) => ({ default: CustomerPortalPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage.tsx").then(({ DashboardPage }) => ({ default: DashboardPage })));
 const ServiceOrdersListPage = lazy(() => import("./pages/ServiceOrdersListPage.tsx").then(({ ServiceOrdersListPage }) => ({ default: ServiceOrdersListPage })));
@@ -36,20 +40,37 @@ function RouteLoading() {
   return <div className="page-loading" role="status"><span className="spinner" />Carregando página...</div>;
 }
 
+function InternalAuthScope() {
+  return <AuthProvider><Outlet /></AuthProvider>;
+}
+
+function CustomerAuthScope() {
+  return <CustomerAuthProvider><Outlet /></CustomerAuthProvider>;
+}
+
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
         <Suspense fallback={<RouteLoading />}>
           <Routes>
-          <Route path="/login" element={<LoginPage />} />
           <Route path="/registrar" element={<RegisterPage />} />
           <Route path="/confirmar-cadastro" element={<ConfirmCustomerRegistrationPage />} />
           <Route path="/verificar-email" element={<VerifyEmailPage />} />
-          <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
-          <Route path="/resetar-senha" element={<ResetPasswordPage />} />
           <Route path="/customer/forgot-password" element={<CustomerForgotPasswordPage />} />
           <Route path="/customer/reset-password" element={<CustomerResetPasswordPage />} />
+
+          <Route path="/customer" element={<CustomerAuthScope />}>
+            <Route path="login" element={<CustomerLoginPage />} />
+            <Route element={<RequireCustomerAuth><Outlet /></RequireCustomerAuth>}>
+              <Route path="area" element={<CustomerAccountPortalPage />} />
+              <Route path="service-orders/:id" element={<CustomerServiceOrderDetailPage />} />
+            </Route>
+          </Route>
+
+          <Route element={<InternalAuthScope />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
+          <Route path="/resetar-senha" element={<ResetPasswordPage />} />
 
           <Route
             element={
@@ -139,10 +160,10 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Route>
+          </Route>
           </Routes>
         </Suspense>
       </BrowserRouter>
-    </AuthProvider>
   );
 }
 

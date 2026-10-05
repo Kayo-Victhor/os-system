@@ -97,4 +97,16 @@ describe("Rate limit de autenticação", () => {
       .send({ email: "cliente-reset@example.com" });
     expect(blocked.status).toBe(429);
   });
+
+  it("blocks the eleventh customer login attempt in the 15-minute window", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/customer/login")
+        .send({});
+      expect(response.status).not.toBe(429);
+    }
+    const blocked = await request(app).post("/auth/customer/login").send({});
+    expect(blocked.status).toBe(429);
+  });
 });

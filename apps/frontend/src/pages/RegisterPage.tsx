@@ -30,7 +30,7 @@ export function RegisterPage() {
     } catch (err) { setError(err instanceof ApiError ? err.message : "Não foi possível reenviar a confirmação."); }
     finally { setSubmitting(false); }
   }
-  if (pendingEmail) return <div className="auth-screen"><div className="auth-card card"><h1>Verifique seu e-mail</h1><p className="page-subtitle">Seu cadastro está pendente. A conta e o cadastro de cliente somente serão criados após a confirmação.</p>{message && <SuccessBanner message={message} />}{error && <ErrorBanner message={error} />}<button className="btn btn-primary" type="button" disabled={submitting} onClick={resend}>{submitting ? "Enviando..." : "Reenviar confirmação"}</button><p className="page-subtitle"><Link to="/login">Voltar para entrar</Link></p></div></div>;
+  if (pendingEmail) return <div className="auth-screen"><div className="auth-card card"><h1>Verifique seu e-mail</h1><p className="page-subtitle">Seu cadastro está pendente. A conta e o cadastro de cliente somente serão criados após a confirmação.</p>{message && <SuccessBanner message={message} />}{error && <ErrorBanner message={error} />}<button className="btn btn-primary" type="button" disabled={submitting} onClick={resend}>{submitting ? "Enviando..." : "Reenviar confirmação"}</button><p className="page-subtitle"><Link to="/customer/login">Voltar para entrar</Link></p></div></div>;
   return <div className="auth-screen"><div className="auth-card card"><h1>Criar conta</h1><p className="page-subtitle">Cadastre-se para acompanhar seus atendimentos.</p>{error && <ErrorBanner message={error} />}<form onSubmit={submit} noValidate>
     <Field label="Nome completo" required>{(props) => <input {...props} className="input" value={form.name} onChange={update("name")} autoComplete="name" />}</Field>
     <Field label="E-mail" required>{(props) => <input {...props} type="email" className="input" value={form.email} onChange={update("email")} autoComplete="email" />}</Field>
@@ -39,5 +39,5 @@ export function RegisterPage() {
     <Field label="Documento">{(props) => <input {...props} className="input" value={form.document} onChange={update("document")} />}</Field>
     <Field label="Endereço">{(props) => <input {...props} className="input" value={form.address} onChange={update("address")} autoComplete="street-address" />}</Field>
     <button className="btn btn-primary" disabled={submitting} type="submit">{submitting ? "Enviando solicitação..." : "Solicitar cadastro"}</button>
-  </form><p className="page-subtitle">Já possui conta? <Link to="/login">Entrar</Link></p></div></div>;
+  </form><p className="page-subtitle">Já possui conta? <Link to="/customer/login">Entrar</Link></p></div></div>;
 }

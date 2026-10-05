@@ -39,6 +39,12 @@ export interface Customer {
   updatedAt: string;
 }
 
+export interface CustomerAccountProfile {
+  id: string;
+  email: string;
+  customer: Customer;
+}
+
 export interface ServiceOrder {
   id: string;
   title: string;
@@ -51,6 +57,17 @@ export interface ServiceOrder {
   customer: Customer;
   technician: Pick<UserRecord, "id" | "name" | "email" | "role"> | null;
   createdBy: Pick<UserRecord, "id" | "name" | "email" | "role">;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerServiceOrder {
+  id: string;
+  title: string;
+  description: string;
+  status: ServiceOrderStatus;
+  priority: ServiceOrderPriority;
+  technician: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }

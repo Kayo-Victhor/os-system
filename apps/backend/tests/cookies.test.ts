@@ -72,4 +72,17 @@ describe("REFRESH_COOKIE_PATH — environment-aware cookie Path", () => {
     expect(accessTokenCookieOptions().path).toBe("/");
     expect(csrfCookieOptions().path).toBe("/");
   });
+
+  it("scopes the customer refresh cookie to every customer session endpoint", async () => {
+    process.env.API_BASE_PATH = "/api/";
+    const {
+      CUSTOMER_REFRESH_COOKIE_PATH,
+      customerRefreshTokenCookieOptions,
+    } = await import("../src/lib/cookies.js");
+
+    expect(CUSTOMER_REFRESH_COOKIE_PATH).toBe("/api/auth/customer");
+    expect(customerRefreshTokenCookieOptions().path).toBe(
+      CUSTOMER_REFRESH_COOKIE_PATH,
+    );
+  });
 });

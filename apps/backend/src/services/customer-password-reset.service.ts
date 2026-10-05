@@ -17,6 +17,10 @@ interface LockedCustomerPasswordReset {
   emailVerifiedAt: Date | null;
 }
 
+interface CustomerPasswordResetCandidate {
+  customerAccountId: string;
+}
+
 export async function requestCustomerAccountPasswordReset(
   emailInput: string,
 ): Promise<boolean> {
@@ -66,6 +70,20 @@ export async function resetCustomerAccountPassword(
   const passwordHash = await hashPassword(password);
 
   return prisma.$transaction(async (tx) => {
+    const [candidate] = await tx.$queryRaw<CustomerPasswordResetCandidate[]>`
+      SELECT "customerAccountId"
+      FROM "CustomerAccountPasswordResetToken"
+      WHERE "tokenHash" = ${tokenHash}
+    `;
+    if (!candidate) return false;
+
+    await tx.$queryRaw`
+      SELECT "id"
+      FROM "CustomerAccount"
+      WHERE "id" = ${candidate.customerAccountId}
+      FOR UPDATE
+    `;
+
     const [stored] = await tx.$queryRaw<LockedCustomerPasswordReset[]>`
       SELECT
         reset_token."id",
@@ -78,7 +96,7 @@ export async function resetCustomerAccountPassword(
       INNER JOIN "CustomerAccount" AS account
         ON account."id" = reset_token."customerAccountId"
       WHERE reset_token."tokenHash" = ${tokenHash}
-      FOR UPDATE OF reset_token, account
+      FOR UPDATE OF reset_token
     `;
 
     const now = new Date();
@@ -100,10 +118,13 @@ export async function resetCustomerAccountPassword(
       where: { id: stored.id },
       data: { usedAt: now },
     });
+    await tx.customerSession.updateMany({
+      where: { customerAccountId: stored.customerAccountId, revokedAt: null },
+      data: { revokedAt: now },
+    });
 
-    // CustomerSession does not exist yet. Its active sessions must be revoked
-    // here when that model is introduced; legacy User RefreshToken is kept
-    // deliberately untouched because it belongs to another identity domain.
+    // Legacy User RefreshToken remains deliberately untouched because it
+    // belongs to an independent identity domain.
     return true;
   });
 }

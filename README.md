@@ -137,7 +137,13 @@ O CUSTOMER deve poder:
 
 ### Estado atual
 
-A funcionalidade CUSTOMER possui vínculo explícito entre conta e cadastro, isolamento por ownership no backend e área própria no frontend. A autorização permanece no backend; a interface não é fronteira de segurança.
+Novos clientes usam uma identidade `CustomerAccount`, vinculada individualmente
+ao cadastro `Customer`. O login independente está em `/customer/login` e o
+portal autenticado em `/customer/area`. O backend deriva o `Customer` da sessão,
+portanto IDs enviados pelo navegador não definem ownership.
+
+`User(role=CUSTOMER)` continua existindo somente como compatibilidade legada e
+usa o fluxo antigo. Não há fallback entre as duas identidades.
 
 ---
 
@@ -158,6 +164,35 @@ O fluxo de autenticação possui:
 - controle de sessão;
 - logout/revogação conforme a implementação do backend.
 
+### Sessão de cliente
+
+`CustomerAccount` usa cookies próprios (`customer_access_token`,
+`customer_refresh_token` e `customer_csrf_token`) e tabelas independentes:
+
+```text
+CustomerAccount
+└── CustomerSession
+    └── CustomerSessionRefreshToken
+```
+
+O access token expira em 15 minutos e declara explicitamente o principal
+`CUSTOMER_ACCOUNT`. A sessão/refresh expira em 7 dias. Cada renovação consome o
+refresh token anterior; os hashes de toda a família são preservados para que a
+reutilização de qualquer token antigo revogue a sessão inteira. A redefinição
+de senha revoga todas as sessões de cliente ativas sem afetar `RefreshToken` de
+usuários internos ou legados.
+
+Endpoints principais:
+
+```text
+POST /auth/customer/login
+POST /auth/customer/refresh
+POST /auth/customer/logout
+GET  /auth/customer/me
+GET  /auth/customer/service-orders
+GET  /auth/customer/service-orders/:id
+```
+
 Dados sensíveis não devem ser retornados desnecessariamente pela API.
 
 Em particular:
@@ -169,7 +204,10 @@ Em particular:
 
 Usuários internos (`ADMIN`, `ATTENDANT` e `TECHNICIAN`) não exigem confirmação de e-mail para autenticação. O administrador inicial é criado exclusivamente pelo seed, que exige `ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` configurados no ambiente e nunca registra a senha. O seed mantém uma única conta marcada como administrador principal: ela preserva o mesmo identificador quando atualizada, não pode ser excluída nem rebaixada de papel e só pode ter seus dados próprios normais alterados pela própria conta.
 
-Enquanto a separação de `CustomerAccount` não é implementada, `CUSTOMER` permanece uma role legada em `User` e continua exigindo confirmação de e-mail antes do login e da recuperação de senha.
+`CUSTOMER` permanece em `User` somente para compatibilidade legada e continua
+exigindo confirmação de e-mail no fluxo antigo. Novos cadastros confirmados
+criam `CustomerAccount` e usam exclusivamente a autenticação independente de
+cliente.
 
 ## Autorização
 
@@ -560,31 +598,28 @@ Não armazene secrets ou credenciais de produção no repositório.
 - Controle de acesso para ATTENDANT.
 - Controle de acesso para TECHNICIAN.
 - Painel operacional e visualização da fila de atendimento no frontend.
+- Cadastro confirmado, login, refresh, logout, recuperação de senha e portal
+  próprios de `CustomerAccount`.
+- Ownership de ordens do cliente derivado da sessão no backend.
 
 ---
 
-## Parcialmente Implementado
+## Compatibilidade temporária
 
-### CUSTOMER
+### CUSTOMER legado
 
-A role CUSTOMER existe na arquitetura da aplicação, mas o fluxo completo do portal do cliente ainda não está concluído.
-
-As principais pendências envolvem:
-
-- associação entre `User` e `Customer`;
-- isolamento completo das consultas do CUSTOMER;
-- garantia de que uma conta CUSTOMER só consiga acessar suas próprias OS;
-- conclusão dos endpoints/serviços necessários para o fluxo completo.
+`User(role=CUSTOMER)`, `Customer.userId`, `RefreshToken` e as rotas antigas
+permanecem operacionais até uma migração de dados dedicada. Eles não são usados
+como fallback pelo novo login de `CustomerAccount`.
 
 ---
 
 # 📋 Pendências
 
-## Associação User ↔ Customer
+## Migração do CUSTOMER legado
 
-Finalizar e validar o relacionamento necessário entre contas de usuário e registros de clientes, sem permitir acesso cruzado entre clientes.
-
-A implementação deve garantir a autorização no backend.
+Reconciliar futuramente os registros antigos de `User(role=CUSTOMER)` com a
+nova identidade sem associar automaticamente contas por coincidência de e-mail.
 
 ---
 
@@ -748,7 +783,9 @@ TECHNICIAN
 CUSTOMER
 ```
 
-O fluxo de CUSTOMER ainda está parcialmente implementado e requer conclusão do vínculo entre usuário e cliente e validação completa do isolamento de acesso.
+O fluxo novo de cliente usa `CustomerAccount` e `CustomerSession`, separado da
+autenticação interna. A role `CUSTOMER` em `User` existe apenas durante a
+transição dos dados legados.
 
 A questão de RLS/Data API do Supabase permanece como uma decisão técnica que deve ser baseada na exposição e nos grants efetivamente encontrados, e não apenas nos alertas do painel.
 
@@ -760,23 +797,17 @@ pnpm dev
 
 que executa as verificações do projeto e inicia backend e frontend através do Turborepo.
 
-## Relação User ↔ Customer
+## Relação Customer ↔ CustomerAccount
 
-A conta autenticável e o cadastro operacional são entidades distintas. Um
-`Customer` pode existir sem conta para atender o cadastro administrativo, mas
-uma conta com role `CUSTOMER` criada pelo registro público sempre cria um
-`Customer` vinculado por `Customer.userId`. Esse campo é único: uma conta
-não pode possuir mais de um cadastro de cliente.
+O cadastro operacional e a identidade autenticável são entidades distintas. Um
+`Customer` pode existir sem acesso ao portal; uma `CustomerAccount` pertence a
+exatamente um `Customer`. O cadastro público permanece pendente até a
+confirmação do e-mail e só então cria ambos de modo transacional.
 
-O registro `POST /auth/register` cria `User` e `Customer` na mesma
-transação, força a role `CUSTOMER` e nunca retorna senha ou hashes. O cliente
-usa `GET /customers/me` e as rotas de ordens derivam o vínculo da sessão; IDs
-enviados pela URL ou filtro não ampliam o acesso. Clientes veem e atualizam
-somente o próprio cadastro e veem somente as próprias ordens de serviço.
-
-Clientes legados sem `Customer.userId` não foram associados automaticamente:
-a correção de dados deve ser revisada caso a caso para não vincular contas por
-coincidência de e-mail.
+As consultas do portal derivam o `Customer` de `CustomerAccount.id` presente na
+sessão validada. O backend não aceita `customerId` do navegador como prova de
+ownership. Registros legados continuam em `Customer.userId` até reconciliação
+explícita futura.
 
 ## Operação de ordens por função
 
@@ -794,12 +825,11 @@ refresh é rotacionado; a reutilização de um token revogado invalida as sessõ
 ativas daquele usuário. Operações com sessão exigem o token CSRF double-submit,
 e o frontend o envia também durante o refresh automático.
 
-O cadastro público cria um CUSTOMER não verificado. Senhas novas exigem ao
-menos oito caracteres. A conta não pode fazer login, renovar sessão ou acessar
-a aplicação até confirmar o endereço de e-mail. O token de confirmação é aleatório, é persistido somente como HMAC,
+O cadastro público cria primeiro uma solicitação pendente. Após a confirmação,
+cria um `Customer` e uma `CustomerAccount` já verificada. Senhas novas exigem
+ao menos oito caracteres. O token de confirmação é aleatório, é persistido somente como HMAC,
 expira em 24 horas e possui uso único. Reenvios substituem o token anterior.
-Contas criadas por ADMIN e usuários existentes na migration são marcados como
-verificados para preservar o fluxo operacional já existente.
+O fluxo legado de `User(CUSTOMER)` continua separado até a migração definitiva.
 
 Configure no backend, sem expor valores ao frontend:
 

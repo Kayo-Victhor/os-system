@@ -121,6 +121,40 @@ model CustomerAccount {
 
   customer           Customer                           @relation(fields: [customerId], references: [id], onDelete: Cascade)
   passwordResetToken CustomerAccountPasswordResetToken?
+  sessions            CustomerSession[]
+}
+
+// A customer authentication session is independent from the legacy User
+// refresh-token domain. Every rotated token remains as a hash in the family
+// so reuse of any ancestor can revoke the whole session.
+model CustomerSession {
+  id                String          @id @default(uuid())
+  customerAccountId String
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  lastUsedAt        DateTime?
+  userAgent         String?
+  ipAddress         String?
+  customerAccount   CustomerAccount @relation(fields: [customerAccountId], references: [id], onDelete: Cascade)
+  refreshTokens     CustomerSessionRefreshToken[]
+
+  @@index([customerAccountId])
+  @@index([expiresAt])
+  @@index([customerAccountId, revokedAt])
+}
+
+model CustomerSessionRefreshToken {
+  id                String          @id @default(uuid())
+  customerSessionId String
+  tokenHash         String          @unique
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  customerSession   CustomerSession @relation(fields: [customerSessionId], references: [id], onDelete: Cascade)
+
+  @@index([customerSessionId])
+  @@index([expiresAt])
 }
 
 // Password recovery for CustomerAccount is intentionally independent from

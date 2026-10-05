@@ -86,6 +86,8 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
       WHERE n.nspname = 'public'
         AND c.relname IN (
           'CustomerAccountPasswordResetToken',
+          'CustomerSession',
+          'CustomerSessionRefreshToken',
           'PendingCustomerRegistration',
           'PendingCustomerRegistrationToken'
         )
@@ -93,6 +95,8 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
     `;
     expect(pendingRowSecurity).toEqual([
       { relname: "CustomerAccountPasswordResetToken", rowSecurity: true },
+      { relname: "CustomerSession", rowSecurity: true },
+      { relname: "CustomerSessionRefreshToken", rowSecurity: true },
       { relname: "PendingCustomerRegistration", rowSecurity: true },
       { relname: "PendingCustomerRegistrationToken", rowSecurity: true },
     ]);
@@ -108,6 +112,8 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
 
       for (const table of [
         "CustomerAccountPasswordResetToken",
+        "CustomerSession",
+        "CustomerSessionRefreshToken",
         "PendingCustomerRegistration",
         "PendingCustomerRegistrationToken",
       ]) {

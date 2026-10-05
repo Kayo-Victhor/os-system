@@ -76,7 +76,7 @@ export function ConfirmCustomerRegistrationPage() {
         )}
 
         {state === "confirmed" && (
-          <Link className="btn btn-primary" to="/login">
+          <Link className="btn btn-primary" to="/customer/login">
             Ir para o login
           </Link>
         )}

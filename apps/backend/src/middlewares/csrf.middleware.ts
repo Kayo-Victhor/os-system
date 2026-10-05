@@ -1,6 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import { timingSafeEqual } from "node:crypto";
-import { ACCESS_TOKEN_COOKIE, CSRF_COOKIE, REFRESH_TOKEN_COOKIE } from "../lib/cookies.js";
+import {
+  ACCESS_TOKEN_COOKIE,
+  CSRF_COOKIE,
+  CUSTOMER_ACCESS_TOKEN_COOKIE,
+  CUSTOMER_CSRF_COOKIE,
+  CUSTOMER_REFRESH_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+} from "../lib/cookies.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CSRF_HEADER = "x-csrf-token";
@@ -27,17 +34,18 @@ function safeCompare(a: string, b: string): boolean {
  * (e.g. simple cross-site GETs that trigger side effects, or older
  * browsers that don't enforce SameSite).
  */
-export function csrfProtection(
+function validateDoubleSubmit(
   req: Request,
   res: Response,
   next: NextFunction,
+  cookieName: string,
 ) {
   if (SAFE_METHODS.has(req.method)) {
     next();
     return;
   }
 
-  const cookieToken = req.cookies?.[CSRF_COOKIE] as string | undefined;
+  const cookieToken = req.cookies?.[cookieName] as string | undefined;
   const headerToken = req.header(CSRF_HEADER);
 
   if (!cookieToken || !headerToken || !safeCompare(cookieToken, headerToken)) {
@@ -49,6 +57,10 @@ export function csrfProtection(
   }
 
   next();
+}
+
+export function csrfProtection(req: Request, res: Response, next: NextFunction) {
+  validateDoubleSubmit(req, res, next, CSRF_COOKIE);
 }
 
 /** Applies double-submit CSRF only when a session cookie is present. This
@@ -65,4 +77,22 @@ export function csrfProtectionForSession(req: Request, res: Response, next: Next
   }
 
   csrfProtection(req, res, next);
+}
+
+export function csrfProtectionForCustomerSession(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const hasSession = Boolean(
+    req.cookies?.[CUSTOMER_ACCESS_TOKEN_COOKIE] ||
+      req.cookies?.[CUSTOMER_REFRESH_TOKEN_COOKIE],
+  );
+
+  if (!hasSession) {
+    next();
+    return;
+  }
+
+  validateDoubleSubmit(req, res, next, CUSTOMER_CSRF_COOKIE);
 }

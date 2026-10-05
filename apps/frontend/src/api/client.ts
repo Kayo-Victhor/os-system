@@ -29,6 +29,7 @@ interface RequestOptions {
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
+let customerRefreshInFlight: Promise<boolean> | null = null;
 
 async function attemptRefresh(): Promise<boolean> {
   if (!refreshInFlight) {
@@ -48,6 +49,24 @@ async function attemptRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+async function attemptCustomerRefresh(): Promise<boolean> {
+  if (!customerRefreshInFlight) {
+    const csrfToken = readCookie("customer_csrf_token");
+    customerRefreshInFlight = fetch(`${API_URL}/auth/customer/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
+    })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        customerRefreshInFlight = null;
+      });
+  }
+
+  return customerRefreshInFlight;
+}
+
 function buildUrl(
   path: string,
   query?: Record<string, string | undefined>,
@@ -65,7 +84,11 @@ function buildUrl(
   return url.toString();
 }
 
-async function rawRequest(path: string, options: RequestOptions) {
+async function rawRequest(
+  path: string,
+  options: RequestOptions,
+  csrfCookieName = "csrf_token",
+) {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
 
@@ -74,7 +97,7 @@ async function rawRequest(path: string, options: RequestOptions) {
   }
 
   if (method !== "GET") {
-    const csrfToken = readCookie("csrf_token");
+    const csrfToken = readCookie(csrfCookieName);
     if (csrfToken) {
       headers["x-csrf-token"] = csrfToken;
     }
@@ -87,6 +110,25 @@ async function rawRequest(path: string, options: RequestOptions) {
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   });
+}
+
+async function parseResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let body: { error?: string; details?: unknown } = {};
+    try {
+      body = await res.json();
+    } catch {
+      // A proxy or network layer may return a non-JSON error page.
+    }
+    throw new ApiError(
+      body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
+      res.status,
+      body.details,
+    );
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
 }
 
 /**
@@ -123,26 +165,36 @@ export async function apiRequest<T>(
     window.dispatchEvent(new Event("os-system:session-expired"));
   }
 
-  if (!res.ok) {
-    let body: { error?: string; details?: unknown } = {};
+  return parseResponse<T>(res);
+}
 
-    try {
-      body = await res.json();
-    } catch {
-      // Non-JSON error body (e.g. a proxy/network error page) — fall
-      // through to the generic message below.
+const CUSTOMER_PUBLIC_PATHS = new Set([
+  "/auth/customer/login",
+  "/auth/customer/refresh",
+  "/auth/customer/forgot-password",
+  "/auth/customer/reset-password",
+  "/auth/customer/register",
+  "/auth/customer/register/resend",
+  "/auth/customer/register/confirm",
+]);
+
+export async function customerApiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  let res = await rawRequest(path, options, "customer_csrf_token");
+  const canRefresh = !CUSTOMER_PUBLIC_PATHS.has(path);
+
+  if (res.status === 401 && canRefresh) {
+    const refreshed = await attemptCustomerRefresh();
+    if (refreshed) {
+      res = await rawRequest(path, options, "customer_csrf_token");
     }
-
-    throw new ApiError(
-      body.error ?? "Ocorreu um erro inesperado. Tente novamente.",
-      res.status,
-      body.details,
-    );
   }
 
-  if (res.status === 204) {
-    return undefined as T;
+  if (res.status === 401 && canRefresh) {
+    window.dispatchEvent(new Event("os-system:customer-session-expired"));
   }
 
-  return res.json() as Promise<T>;
+  return parseResponse<T>(res);
 }
