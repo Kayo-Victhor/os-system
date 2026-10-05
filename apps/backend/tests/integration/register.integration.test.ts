@@ -1,179 +1,262 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 import app from "../../src/app.js";
+import { verifyPassword } from "../../src/lib/password.js";
+import { isPendingCustomerRegistrationTokenValid } from "../../src/services/customer-registration.service.js";
+import {
+  clearTestEmailOutbox,
+  EmailDeliveryError,
+  getTestEmailOutbox,
+} from "../../src/services/email.service.js";
+import * as emailService from "../../src/services/email.service.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
-import { createFixtureUser, FIXTURE_PASSWORD } from "../helpers/fixtures.js";
+import { createFixtureCustomer, createFixtureUser, FIXTURE_PASSWORD } from "../helpers/fixtures.js";
 import { loginAs } from "../helpers/integration-auth.js";
 
 beforeEach(async () => {
   await resetDatabase();
+  clearTestEmailOutbox();
+  vi.restoreAllMocks();
 });
 
-describe("POST /auth/register — public self-registration", () => {
-  it("creates an account with role CUSTOMER, always", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "João Cliente",
-      email: "joao@example.com",
-      password: "senha123456",
-    });
+function registrationData(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "João Cliente",
+    email: "  Joao.Cliente@Example.COM  ",
+    password: "senha123456",
+    phone: "11999998888",
+    document: "12345678900",
+    address: "Rua Exemplo, 10",
+    ...overrides,
+  };
+}
 
-    expect(res.status).toBe(201);
-    expect(res.body.user.role).toBe("CUSTOMER");
-    expect(res.body.user.password).toBeUndefined();
+function tokenFromLatestCustomerRegistrationEmail() {
+  const url = getTestEmailOutbox().at(-1)?.customerRegistrationUrl;
+  if (!url) throw new Error("E-mail de cadastro pendente não encontrado no outbox de teste");
+  return new URL(url).searchParams.get("token") ?? "";
+}
 
-    const stored = await testPrisma.user.findUniqueOrThrow({
-      where: { email: "joao@example.com" },
+describe("POST /auth/customer/register — cadastro público pendente", () => {
+  it("cria somente pending e token seguro, com e-mail normalizado", async () => {
+    const before = {
+      users: await testPrisma.user.count(),
+      customers: await testPrisma.customer.count(),
+      accounts: await testPrisma.customerAccount.count(),
+    };
+
+    const response = await request(app)
+      .post("/auth/customer/register")
+      .send(registrationData());
+
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({
+      message: "Se os dados forem válidos, enviaremos um e-mail para confirmação.",
     });
-    expect(stored.role).toBe("CUSTOMER");
-    expect(stored.password).not.toBe("senha123456");
-    expect(stored.password.startsWith("$argon2id$")).toBe(true);
+    expect(JSON.stringify(response.body)).not.toContain("senha123456");
+
+    const pending = await testPrisma.pendingCustomerRegistration.findUniqueOrThrow({
+      where: { email: "joao.cliente@example.com" },
+      include: { verificationToken: true },
+    });
+    expect(pending.name).toBe("João Cliente");
+    expect(pending.passwordHash).not.toBe("senha123456");
+    expect(pending.passwordHash.startsWith("$argon2id$")).toBe(true);
+    expect(await verifyPassword(pending.passwordHash, "senha123456")).toBe(true);
+    expect(pending.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(pending.verificationToken?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+
+    const rawToken = tokenFromLatestCustomerRegistrationEmail();
+    expect(rawToken.length).toBeGreaterThanOrEqual(40);
+    expect(pending.verificationToken?.tokenHash).not.toBe(rawToken);
+    expect(await isPendingCustomerRegistrationTokenValid(rawToken)).toBe(true);
+    expect(getTestEmailOutbox().at(-1)?.to).toBe("joao.cliente@example.com");
+
+    expect(await testPrisma.user.count()).toBe(before.users);
+    expect(await testPrisma.customer.count()).toBe(before.customers);
+    expect(await testPrisma.customerAccount.count()).toBe(before.accounts);
   });
 
-  it("ignores a client-supplied role of ADMIN and still creates a CUSTOMER", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "Tentativa Admin",
-      email: "tentativa-admin@example.com",
-      password: "senha123456",
-      role: "ADMIN",
-    });
+  it("mantém um pending e somente o token mais recente válido", async () => {
+    await request(app).post("/auth/customer/register").send(registrationData());
+    const oldToken = tokenFromLatestCustomerRegistrationEmail();
 
-    expect(res.status).toBe(201);
-    expect(res.body.user.role).toBe("CUSTOMER");
+    await request(app).post("/auth/customer/register").send(
+      registrationData({ name: "João Atualizado", password: "nova-senha-123" }),
+    );
+    const newToken = tokenFromLatestCustomerRegistrationEmail();
 
-    const stored = await testPrisma.user.findUniqueOrThrow({
-      where: { email: "tentativa-admin@example.com" },
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(1);
+    expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(1);
+    expect(newToken).not.toBe(oldToken);
+    expect(await isPendingCustomerRegistrationTokenValid(oldToken)).toBe(false);
+    expect(await isPendingCustomerRegistrationTokenValid(newToken)).toBe(true);
+
+    const pending = await testPrisma.pendingCustomerRegistration.findUniqueOrThrow({
+      where: { email: "joao.cliente@example.com" },
     });
-    expect(stored.role).toBe("CUSTOMER");
+    expect(pending.name).toBe("João Atualizado");
+    expect(await verifyPassword(pending.passwordHash, "nova-senha-123")).toBe(true);
   });
 
-  it("ignores a client-supplied role of TECHNICIAN and still creates a CUSTOMER", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "Tentativa Tecnico",
-      email: "tentativa-tech@example.com",
-      password: "senha123456",
-      role: "TECHNICIAN",
-    });
+  it("mantém /auth/register como alias seguro sem criar User(CUSTOMER)", async () => {
+    const response = await request(app).post("/auth/register").send(registrationData());
 
-    expect(res.status).toBe(201);
-    expect(res.body.user.role).toBe("CUSTOMER");
+    expect(response.status).toBe(202);
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(1);
+    expect(await testPrisma.user.count()).toBe(0);
+    expect(await testPrisma.customer.count()).toBe(0);
   });
 
-  it("rejects a duplicate email with 409", async () => {
-    await createFixtureUser("CUSTOMER", { email: "existing@example.com" });
+  it("rejeita dados inválidos antes de persistir", async () => {
+    const response = await request(app).post("/auth/customer/register").send(
+      registrationData({ email: "invalido", password: "123" }),
+    );
 
-    const res = await request(app).post("/auth/register").send({
-      name: "Outra Pessoa",
-      email: "existing@example.com",
-      password: "senha123456",
-    });
-
-    expect(res.status).toBe(409);
+    expect(response.status).toBe(400);
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(0);
   });
 
-  it("rejects a password shorter than the minimum", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "Nome Valido",
-      email: "senha-curta@example.com",
-      password: "123",
-    });
+  it("ignora mass assignment e nunca cria identidade User", async () => {
+    const response = await request(app).post("/auth/customer/register").send(
+      registrationData({ role: "ADMIN", isPrimaryAdmin: true }),
+    );
 
-    expect(res.status).toBe(400);
-
-    const stored = await testPrisma.user.findUnique({
-      where: { email: "senha-curta@example.com" },
-    });
-    expect(stored).toBeNull();
-  });
-
-  it("rejects a password with fewer than eight characters", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "Nome Valido",
-      email: "sete-caracteres@example.com",
-      password: "1234567",
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  it("rejects an invalid email format", async () => {
-    const res = await request(app).post("/auth/register").send({
-      name: "Nome Valido",
-      email: "not-an-email",
-      password: "senha123456",
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  it("rejects missing required fields", async () => {
-    const res = await request(app).post("/auth/register").send({
-      email: "faltando-nome@example.com",
-      password: "senha123456",
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  it("requires e-mail confirmation before a newly registered CUSTOMER can log in", async () => {
-    await request(app).post("/auth/register").send({
-      name: "Maria Cliente",
-      email: "maria@example.com",
-      password: "senha123456",
-    });
-
-    const loginRes = await request(app)
-      .post("/auth/login")
-      .send({ email: "maria@example.com", password: "senha123456" });
-
-    expect(loginRes.status).toBe(403);
-    expect(loginRes.body.code).toBe("EMAIL_NOT_VERIFIED");
+    expect(response.status).toBe(202);
+    expect(await testPrisma.user.count()).toBe(0);
   });
 });
 
-describe("CUSTOMER access control", () => {
-  it("a CUSTOMER can access routes available to any authenticated user (GET /auth/me)", async () => {
-    const { user } = await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
+describe("Cadastro pendente — conflitos sem enumeração", () => {
+  it("responde igual e não cria pending para e-mail de User existente", async () => {
+    await createFixtureUser("ATTENDANT", { email: "joao.cliente@example.com" });
 
-    const res = await request(app).get("/auth/me").set("Cookie", session.cookie);
+    const response = await request(app)
+      .post("/auth/customer/register")
+      .send(registrationData());
 
-    expect(res.status).toBe(200);
-    expect(res.body.user.role).toBe("CUSTOMER");
+    expect(response.status).toBe(202);
+    expect(response.body.message).toBe("Se os dados forem válidos, enviaremos um e-mail para confirmação.");
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(0);
+    expect(getTestEmailOutbox()).toHaveLength(0);
   });
 
-  it("a CUSTOMER cannot access administrative functionality (GET /users)", async () => {
-    const { user } = await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
+  it("responde igual e não cria pending para CustomerAccount existente", async () => {
+    const customer = await createFixtureCustomer();
+    await testPrisma.customerAccount.create({
+      data: {
+        customerId: customer.id,
+        email: "joao.cliente@example.com",
+        passwordHash: "hash-existente",
+      },
+    });
 
-    const res = await request(app).get("/users").set("Cookie", session.cookie);
+    const response = await request(app)
+      .post("/auth/customer/register")
+      .send(registrationData({ document: "documento-novo" }));
 
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(202);
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(0);
+    expect(await testPrisma.customerAccount.count()).toBe(1);
   });
 
-  it("a CUSTOMER cannot create service orders", async () => {
-    const { user } = await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
+  it("não vincula Customer existente por documento", async () => {
+    await createFixtureCustomer({ document: "12345678900" });
 
-    const res = await request(app)
-      .post("/service-orders")
-      .set("Cookie", session.cookie)
-      .set("x-csrf-token", session.csrfHeader)
-      .send({ title: "x", description: "y", customerId: "00000000-0000-0000-0000-000000000000" });
+    const response = await request(app)
+      .post("/auth/customer/register")
+      .send(registrationData());
 
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(202);
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(0);
+    expect(await testPrisma.customer.count()).toBe(1);
+    expect(await testPrisma.customerAccount.count()).toBe(0);
+  });
+});
+
+describe("POST /auth/customer/register/resend", () => {
+  it("rotaciona o token e mantém resposta genérica", async () => {
+    await request(app).post("/auth/customer/register").send(registrationData());
+    const oldToken = tokenFromLatestCustomerRegistrationEmail();
+
+    const response = await request(app)
+      .post("/auth/customer/register/resend")
+      .send({ email: " JOAO.CLIENTE@example.com " });
+    const newToken = tokenFromLatestCustomerRegistrationEmail();
+
+    expect(response.status).toBe(202);
+    expect(response.body.message).toBe("Se os dados forem válidos, enviaremos um e-mail para confirmação.");
+    expect(newToken).not.toBe(oldToken);
+    expect(await isPendingCustomerRegistrationTokenValid(oldToken)).toBe(false);
+    expect(await isPendingCustomerRegistrationTokenValid(newToken)).toBe(true);
+    expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(1);
   });
 
-  it("a CUSTOMER cannot create business customer records", async () => {
+  it("não revela pending inexistente", async () => {
+    const response = await request(app)
+      .post("/auth/customer/register/resend")
+      .send({ email: "inexistente@example.com" });
+
+    expect(response.status).toBe(202);
+    expect(response.body.message).toBe("Se os dados forem válidos, enviaremos um e-mail para confirmação.");
+    expect(getTestEmailOutbox()).toHaveLength(0);
+  });
+
+  it("não renova pending expirado e considera token expirado inválido", async () => {
+    await request(app).post("/auth/customer/register").send(registrationData());
+    const token = tokenFromLatestCustomerRegistrationEmail();
+    const pending = await testPrisma.pendingCustomerRegistration.findUniqueOrThrow({
+      where: { email: "joao.cliente@example.com" },
+    });
+    await testPrisma.pendingCustomerRegistration.update({
+      where: { id: pending.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    const response = await request(app)
+      .post("/auth/customer/register/resend")
+      .send({ email: pending.email });
+
+    expect(response.status).toBe(202);
+    expect(getTestEmailOutbox()).toHaveLength(1);
+    expect(await isPendingCustomerRegistrationTokenValid(token)).toBe(false);
+  });
+
+  it("preserva o pending e invalida o token quando o provider falha", async () => {
+    vi.spyOn(emailService, "sendCustomerRegistrationVerificationEmail")
+      .mockRejectedValueOnce(new EmailDeliveryError());
+
+    const response = await request(app)
+      .post("/auth/customer/register")
+      .send(registrationData());
+
+    expect(response.status).toBe(503);
+    const pending = await testPrisma.pendingCustomerRegistration.findUnique({
+      where: { email: "joao.cliente@example.com" },
+    });
+    expect(pending).not.toBeNull();
+    expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(0);
+  });
+});
+
+describe("CUSTOMER legado — regressão de acesso", () => {
+  it("continua autenticando e acessando /auth/me", async () => {
     const { user } = await createFixtureUser("CUSTOMER");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
 
-    const res = await request(app)
-      .post("/customers")
-      .set("Cookie", session.cookie)
-      .set("x-csrf-token", session.csrfHeader)
-      .send({ name: "Alguém" });
+    const response = await request(app).get("/auth/me").set("Cookie", session.cookie);
 
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(response.body.user.role).toBe("CUSTOMER");
+  });
+
+  it("continua sem acesso administrativo", async () => {
+    const { user } = await createFixtureUser("CUSTOMER");
+    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
+
+    const response = await request(app).get("/users").set("Cookie", session.cookie);
+
+    expect(response.status).toBe(403);
   });
 });

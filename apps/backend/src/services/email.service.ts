@@ -8,7 +8,12 @@ export class EmailDeliveryError extends Error {
 }
 
 interface LinkEmail { to: string; token: string; }
-interface TestEmail { to: string; verificationUrl: string; passwordResetUrl?: string; }
+interface TestEmail {
+  to: string;
+  verificationUrl: string;
+  passwordResetUrl?: string;
+  customerRegistrationUrl?: string;
+}
 
 const testOutbox: TestEmail[] = [];
 const BREVO_SEND_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
@@ -52,6 +57,23 @@ export async function sendPasswordResetEmail({ to, token }: LinkEmail) {
   const url = linkUrl("/resetar-senha", token);
   if (process.env.NODE_ENV === "test") { testOutbox.push({ to, verificationUrl: "", passwordResetUrl: url }); return; }
   await deliverEmail(to, "Redefina sua senha no OS System", '<p>Recebemos uma solicitação para redefinir sua senha no OS System.</p><p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p><p>Se você não solicitou esta alteração, ignore esta mensagem.</p>');
+}
+
+export async function sendCustomerRegistrationVerificationEmail({ to, token }: LinkEmail) {
+  const url = linkUrl("/confirmar-cadastro", token);
+  if (process.env.NODE_ENV === "test") {
+    testOutbox.push({ to, verificationUrl: "", customerRegistrationUrl: url });
+    return;
+  }
+
+  await deliverEmail(
+    to,
+    "Confirme seu cadastro de cliente no OS System",
+    '<h1>Confirme seu cadastro</h1>' +
+      '<p>Recebemos uma solicitação de cadastro de cliente no OS System.</p>' +
+      '<p>Este link é válido por 24 horas: <a href="' + url + '">Confirmar cadastro</a>.</p>' +
+      '<p>Se você não solicitou este cadastro, ignore esta mensagem.</p>',
+  );
 }
 
 function isEmailAddress(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }

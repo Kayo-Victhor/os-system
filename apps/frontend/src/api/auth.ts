@@ -4,7 +4,14 @@ import type { AuthUser } from "./types.ts";
 export interface RegisterCustomerInput { name: string; email: string; password: string; phone?: string; document?: string; address?: string; }
 
 export function registerCustomer(data: RegisterCustomerInput) {
-  return apiRequest<{ user: AuthUser }>("/auth/register", { method: "POST", body: data });
+  return apiRequest<{ message: string }>("/auth/customer/register", { method: "POST", body: data });
+}
+
+export function resendCustomerRegistration(email: string) {
+  return apiRequest<{ message: string }>("/auth/customer/register/resend", {
+    method: "POST",
+    body: { email },
+  });
 }
 
 export function login(email: string, password: string) {

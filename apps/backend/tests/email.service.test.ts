@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EmailDeliveryError, sendPasswordResetEmail, sendVerificationEmail } from "../src/services/email.service.js";
+import { EmailDeliveryError, sendCustomerRegistrationVerificationEmail, sendPasswordResetEmail, sendVerificationEmail } from "../src/services/email.service.js";
 
 const originalEnv = { ...process.env };
 
@@ -51,6 +51,24 @@ describe("serviço de e-mail da Brevo", () => {
     expect(payload.subject).toBe("Redefina sua senha no OS System");
     expect(payload.htmlContent).toContain("60 minutos");
     expect(payload.htmlContent).toContain("http://localhost:5173/resetar-senha?token=token-seguro");
+    expect(payload.htmlContent).toContain("ignore");
+  });
+
+  it("envia confirmação específica de cadastro pendente", async () => {
+    configureBrevo();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ messageId: "id" }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendCustomerRegistrationVerificationEmail({
+      to: "novo-cliente@example.com",
+      token: "token-pendente-seguro",
+    });
+
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload.to).toEqual([{ email: "novo-cliente@example.com" }]);
+    expect(payload.subject).toBe("Confirme seu cadastro de cliente no OS System");
+    expect(payload.htmlContent).toContain("24 horas");
+    expect(payload.htmlContent).toContain("http://localhost:5173/confirmar-cadastro?token=token-pendente-seguro");
     expect(payload.htmlContent).toContain("ignore");
   });
 

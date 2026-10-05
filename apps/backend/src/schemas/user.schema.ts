@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeEmail } from "../lib/email.js";
 
 export const passwordSchema = z.string().min(8, "A senha deve ter pelo menos 8 caracteres").max(128);
 
@@ -15,16 +16,12 @@ export const updateUserSchema = z.object({
   role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).optional(),
 });
 
-// No `role` field, on purpose. Zod's default behavior strips keys that
-// aren't part of the schema, so a client sending { ..., "role": "ADMIN" }
-// to the public register endpoint has that field silently dropped before
-// it ever reaches the service layer — the created account is always
-// CUSTOMER (see auth.service.ts#registerCustomer). This is stronger than
-// validating-then-rejecting a role field: there's no code path where a
-// role value from the request body can influence the created role at all.
+// No `role` field, on purpose. Zod strips unknown keys before the public
+// request reaches the pending-registration service. The request therefore
+// cannot create or influence any User role while awaiting e-mail ownership.
 export const registerSchema = z.object({
   name: z.string().min(2).max(100),
-  email: z.string().email(),
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
   password: passwordSchema,
   phone: z.string().min(8).max(30).optional(),
   document: z.string().min(3).max(40).optional(),

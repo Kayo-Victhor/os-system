@@ -57,6 +57,8 @@ export function generateRefreshToken(): {
 }
 
 export const EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+export const PENDING_CUSTOMER_REGISTRATION_TTL_SECONDS = 24 * 60 * 60;
+export const PENDING_CUSTOMER_REGISTRATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // A short lifetime limits the usefulness of a stolen password-reset link.
 export const PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
 
@@ -74,6 +76,25 @@ export function hashEmailVerificationToken(token: string): string {
     throw new Error("EMAIL_VERIFICATION_SECRET precisa estar configurado");
   }
   return createHmac("sha256", secret).update(token).digest("hex");
+}
+
+export function generatePendingCustomerRegistrationToken(): {
+  token: string;
+  tokenHash: string;
+} {
+  const token = randomBytes(48).toString("base64url");
+  return { token, tokenHash: hashPendingCustomerRegistrationToken(token) };
+}
+
+export function hashPendingCustomerRegistrationToken(token: string): string {
+  const secret = process.env.EMAIL_VERIFICATION_SECRET;
+  if (!secret) {
+    throw new Error("EMAIL_VERIFICATION_SECRET precisa estar configurado");
+  }
+
+  return createHmac("sha256", secret)
+    .update(`pending-customer-registration:${token}`)
+    .digest("hex");
 }
 
 export function generatePasswordResetToken(): {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { passwordSchema } from "./user.schema.js";
+import { normalizeEmail } from "../lib/email.js";
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -12,6 +13,10 @@ export const verifyEmailSchema = z.object({
 
 export const resendVerificationSchema = z.object({
   email: z.string().email(),
+});
+
+export const resendCustomerRegistrationSchema = z.object({
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
 });
 
 export const forgotPasswordSchema = z.object({ email: z.string().email() });

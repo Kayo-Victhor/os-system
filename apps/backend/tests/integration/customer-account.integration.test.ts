@@ -79,6 +79,19 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
     `;
     expect(rowSecurity).toEqual([{ rowSecurity: true }]);
 
+    const pendingRowSecurity = await testPrisma.$queryRaw<Array<{ relname: string; rowSecurity: boolean }>>`
+      SELECT c.relname, c.relrowsecurity AS "rowSecurity"
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname IN ('PendingCustomerRegistration', 'PendingCustomerRegistrationToken')
+      ORDER BY c.relname
+    `;
+    expect(pendingRowSecurity).toEqual([
+      { relname: "PendingCustomerRegistration", rowSecurity: true },
+      { relname: "PendingCustomerRegistrationToken", rowSecurity: true },
+    ]);
+
     const roles = await testPrisma.$queryRaw<Array<{ rolname: string }>>`
       SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')
     `;
@@ -87,6 +100,14 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
         SELECT has_table_privilege(${rolname}, 'public."CustomerAccount"', 'SELECT') AS "hasPrivilege"
       `;
       expect(privileges).toEqual([{ hasPrivilege: false }]);
+
+      for (const table of ["PendingCustomerRegistration", "PendingCustomerRegistrationToken"]) {
+        const pendingPrivileges = await testPrisma.$queryRawUnsafe<Array<{ hasPrivilege: boolean }>>(
+          `SELECT has_table_privilege($1, 'public."${table}"', 'SELECT') AS "hasPrivilege"`,
+          rolname,
+        );
+        expect(pendingPrivileges).toEqual([{ hasPrivilege: false }]);
+      }
     }
   });
 

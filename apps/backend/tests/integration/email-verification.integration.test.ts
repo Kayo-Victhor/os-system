@@ -17,12 +17,15 @@ function lastToken() {
   return new URL(message!.verificationUrl).searchParams.get("token")!;
 }
 
-async function register(email = "cliente-verificacao@example.com") {
-  return request(app).post("/auth/register").send({
-    name: "Cliente de Verificação",
+async function createLegacyUnverifiedCustomer(email = "cliente-verificacao@example.com") {
+  const { user } = await createFixtureUser("CUSTOMER", {
     email,
     password: "senha123456",
+    emailVerifiedAt: null,
   });
+  const resend = await request(app).post("/auth/resend-verification").send({ email });
+  expect(resend.status).toBe(202);
+  return user;
 }
 
 describe("Verificação real de posse de e-mail", () => {
@@ -40,11 +43,9 @@ describe("Verificação real de posse de e-mail", () => {
   });
 
   it("cria um token somente em hash, bloqueia login e confirma com link de uso único", async () => {
-    const registration = await register();
-    expect(registration.status).toBe(201);
+    const user = await createLegacyUnverifiedCustomer();
     expect(getTestEmailOutbox()).toHaveLength(1);
 
-    const user = await testPrisma.user.findUniqueOrThrow({ where: { email: "cliente-verificacao@example.com" } });
     expect(user.emailVerifiedAt).toBeNull();
     const stored = await testPrisma.emailVerificationToken.findUniqueOrThrow({ where: { userId: user.id } });
     expect(stored.tokenHash).not.toContain(lastToken());
@@ -69,9 +70,8 @@ describe("Verificação real de posse de e-mail", () => {
   });
 
   it("rejects an expired token and replaces the old token when resending", async () => {
-    await register("reenvio@example.com");
+    const user = await createLegacyUnverifiedCustomer("reenvio@example.com");
     const firstToken = lastToken();
-    const user = await testPrisma.user.findUniqueOrThrow({ where: { email: "reenvio@example.com" } });
 
     await testPrisma.emailVerificationToken.update({
       where: { userId: user.id },
@@ -93,7 +93,7 @@ describe("Verificação real de posse de e-mail", () => {
   });
 
   it("consome somente uma requisição concorrente e preserva token válido antes da expiração", async () => {
-    await register("concorrente@example.com");
+    await createLegacyUnverifiedCustomer("concorrente@example.com");
     const token = lastToken();
     const [first, second] = await Promise.all([
       request(app).post("/auth/verify-email").send({ token }),
@@ -101,9 +101,8 @@ describe("Verificação real de posse de e-mail", () => {
     ]);
     expect([first.status, second.status].sort()).toEqual([200, 400]);
 
-    await register("limite@example.com");
+    const user = await createLegacyUnverifiedCustomer("limite@example.com");
     const nearExpiryToken = lastToken();
-    const user = await testPrisma.user.findUniqueOrThrow({ where: { email: "limite@example.com" } });
     await testPrisma.emailVerificationToken.update({
       where: { userId: user.id },
       data: { expiresAt: new Date(Date.now() + 60_000) },
@@ -116,7 +115,7 @@ describe("Verificação real de posse de e-mail", () => {
     expect(unknown.status).toBe(202);
     expect(getTestEmailOutbox()).toHaveLength(0);
 
-    await register("confirmado@example.com");
+    await createLegacyUnverifiedCustomer("confirmado@example.com");
     const token = lastToken();
     await request(app).post("/auth/verify-email").send({ token });
     const verified = await request(app).post("/auth/resend-verification").send({ email: "confirmado@example.com" });
@@ -124,8 +123,8 @@ describe("Verificação real de posse de e-mail", () => {
     expect(getTestEmailOutbox()).toHaveLength(1);
   });
 
-  it("strips mass-assignment fields from public registration", async () => {
-    const response = await request(app).post("/auth/register").send({
+  it("strips mass-assignment fields from the new pending registration", async () => {
+    const response = await request(app).post("/auth/customer/register").send({
       name: "Tentativa de escalada",
       email: "mass-assignment@example.com",
       password: "senha123456",
@@ -135,9 +134,12 @@ describe("Verificação real de posse de e-mail", () => {
       customerId: "00000000-0000-0000-0000-000000000000",
     });
 
-    expect(response.status).toBe(201);
-    const user = await testPrisma.user.findUniqueOrThrow({ where: { email: "mass-assignment@example.com" } });
-    expect(user.role).toBe("CUSTOMER");
-    expect(user.emailVerifiedAt).toBeNull();
+    expect(response.status).toBe(202);
+    expect(await testPrisma.user.findUnique({ where: { email: "mass-assignment@example.com" } })).toBeNull();
+    const pending = await testPrisma.pendingCustomerRegistration.findUniqueOrThrow({
+      where: { email: "mass-assignment@example.com" },
+    });
+    expect(pending).not.toHaveProperty("role");
+    expect(pending).not.toHaveProperty("emailVerifiedAt");
   });
 });

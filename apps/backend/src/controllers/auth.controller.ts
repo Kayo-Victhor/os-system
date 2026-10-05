@@ -1,20 +1,23 @@
 import type { Response } from "express";
 
-import { forgotPasswordSchema, loginSchema, resendVerificationSchema, resetPasswordSchema, verifyEmailSchema } from "../schemas/auth.schema.js";
+import { forgotPasswordSchema, loginSchema, resendCustomerRegistrationSchema, resendVerificationSchema, resetPasswordSchema, verifyEmailSchema } from "../schemas/auth.schema.js";
 import { registerSchema } from "../schemas/user.schema.js";
 import {
   loginUser,
   refreshSession,
   revokeRefreshToken,
-  registerCustomer,
   resendEmailVerification,
   verifyEmail,
   requestPasswordReset,
   resetPassword,
   requiresEmailVerification,
 } from "../services/auth.service.js";
+import {
+  CUSTOMER_REGISTRATION_MESSAGE,
+  requestCustomerRegistration,
+  resendCustomerRegistration,
+} from "../services/customer-registration.service.js";
 import { EmailDeliveryError } from "../services/email.service.js";
-import { mapPrismaError } from "../lib/prisma-errors.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { prisma } from "../lib/prisma.js";
 import { generateCsrfToken } from "../lib/tokens.js";
@@ -50,18 +53,38 @@ export async function registerController(req: AuthenticatedRequest, res: Respons
   }
 
   try {
-    const registration = await registerCustomer(result.data);
-    res.status(201).json(registration);
+    await requestCustomerRegistration(result.data);
+    res.status(202).json({ message: CUSTOMER_REGISTRATION_MESSAGE });
   } catch (error) {
     if (error instanceof EmailDeliveryError) {
-      // The account remains unverified and can safely use the generic resend endpoint.
       res.status(503).json({ error: "Não foi possível enviar o e-mail de confirmação. Tente reenviar em alguns minutos." });
       return;
     }
-    const known = mapPrismaError(error);
-    if (known) { res.status(known.status).json(known.body); return; }
     console.error(error);
-    res.status(500).json({ error: "Erro ao criar conta" });
+    res.status(500).json({ error: "Não foi possível processar o cadastro" });
+  }
+}
+
+export async function resendCustomerRegistrationController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const result = resendCustomerRegistrationSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: "Informe um e-mail válido" });
+    return;
+  }
+
+  try {
+    await resendCustomerRegistration(result.data.email);
+    res.status(202).json({ message: CUSTOMER_REGISTRATION_MESSAGE });
+  } catch (error) {
+    if (error instanceof EmailDeliveryError) {
+      res.status(503).json({ error: "Não foi possível enviar o e-mail de confirmação. Tente novamente em alguns minutos." });
+      return;
+    }
+    console.error("Falha ao reenviar cadastro de cliente", error instanceof Error ? error.name : "erro desconhecido");
+    res.status(500).json({ error: "Não foi possível processar o reenvio" });
   }
 }
 

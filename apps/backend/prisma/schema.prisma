@@ -122,6 +122,38 @@ model CustomerAccount {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 }
 
+// Public customer registration remains isolated here until e-mail ownership
+// is confirmed. It never creates a legacy User(CUSTOMER) identity.
+model PendingCustomerRegistration {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  phone        String?
+  document     String?
+  address      String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  verificationToken PendingCustomerRegistrationToken?
+
+  @@index([expiresAt])
+}
+
+// One current token per pending registration. Rotation replaces the stored
+// HMAC, so every previously issued raw link becomes invalid immediately.
+model PendingCustomerRegistrationToken {
+  id                    String                      @id @default(uuid())
+  pendingRegistrationId String                      @unique
+  tokenHash             String                      @unique
+  expiresAt             DateTime
+  createdAt             DateTime                    @default(now())
+  pendingRegistration   PendingCustomerRegistration @relation(fields: [pendingRegistrationId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
 model ServiceOrder {
   id          String               @id @default(uuid())
   title       String

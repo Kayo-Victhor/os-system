@@ -1,7 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword, hashPassword } from "../lib/password.js";
 import type { LoginInput } from "../schemas/auth.schema.js";
-import type { RegisterInput } from "../schemas/user.schema.js";
 import type { UserRole } from "../generated/prisma/client.js";
 import {
   signAccessToken,
@@ -141,49 +140,6 @@ export async function revokeRefreshToken(presentedToken: string) {
     where: { tokenHash, revokedAt: null },
     data: { revokedAt: new Date() },
   });
-}
-
-/** Public registration always creates an unverified CUSTOMER and its linked
- * Customer record atomically. The verification credential is stored only as
- * an HMAC hash and raw token delivery happens after the transaction commits. */
-export async function registerCustomer(data: RegisterInput) {
-  const passwordHash = await hashPassword(data.password);
-  const { token, tokenHash } = generateEmailVerificationToken();
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000);
-
-  const registration = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        name: data.name,
-        email: data.email,
-        password: passwordHash,
-        role: "CUSTOMER",
-        emailVerifiedAt: null,
-      },
-      select: { id: true, name: true, email: true, role: true, createdAt: true, updatedAt: true },
-    });
-
-    const customer = await tx.customer.create({
-      data: {
-        userId: user.id,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        document: data.document,
-        address: data.address,
-      },
-      select: { id: true, name: true, email: true, phone: true, document: true, address: true, createdAt: true, updatedAt: true },
-    });
-
-    await tx.emailVerificationToken.create({
-      data: { tokenHash, userId: user.id, expiresAt },
-    });
-
-    return { user, customer };
-  });
-
-  await sendVerificationEmail({ to: registration.user.email, token });
-  return registration;
 }
 
 export async function verifyEmail(token: string): Promise<EmailVerificationResult> {

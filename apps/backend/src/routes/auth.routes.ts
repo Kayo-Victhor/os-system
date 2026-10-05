@@ -6,6 +6,7 @@ import {
   logoutController,
   meController,
   registerController,
+  resendCustomerRegistrationController,
   resendVerificationController,
   verifyEmailController,
   forgotPasswordController,
@@ -13,12 +14,25 @@ import {
 } from "../controllers/auth.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
-import { authRateLimiter, passwordResetRateLimiter } from "../middlewares/rate-limit.middleware.js";
+import {
+  authRateLimiter,
+  customerRegistrationRateLimiter,
+  customerRegistrationResendRateLimiter,
+  passwordResetRateLimiter,
+} from "../middlewares/rate-limit.middleware.js";
 import { csrfProtectionForSession } from "../middlewares/csrf.middleware.js";
 
 const router = Router();
 
-router.post("/register", authRateLimiter, registerController);
+// /register remains as a compatibility alias, but no longer creates a legacy
+// User(CUSTOMER). Both paths persist only a pending registration.
+router.post("/register", customerRegistrationRateLimiter, registerController);
+router.post("/customer/register", customerRegistrationRateLimiter, registerController);
+router.post(
+  "/customer/register/resend",
+  customerRegistrationResendRateLimiter,
+  resendCustomerRegistrationController,
+);
 router.post("/login", authRateLimiter, loginController);
 router.post("/verify-email", authRateLimiter, verifyEmailController);
 router.post("/resend-verification", authRateLimiter, resendVerificationController);

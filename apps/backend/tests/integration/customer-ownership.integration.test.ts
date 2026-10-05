@@ -27,11 +27,11 @@ describe("CUSTOMER ownership", () => {
     expect((await request(app).get("/service-orders/" + otherOrder.id).set("Cookie", session.cookie)).status).toBe(404);
   });
 
-  it("keeps registration atomic and links exactly one Customer", async () => {
-    const response = await request(app).post("/auth/register").send({ name: "Cliente Novo", email: "novo@example.com", password: "senha123456", document: "DOC-UNICO" });
-    expect(response.status).toBe(201); expect(response.body.user.role).toBe("CUSTOMER"); expect(response.body.user.password).toBeUndefined();
-    const user = await testPrisma.user.findUniqueOrThrow({ where: { email: "novo@example.com" }, include: { customer: true } });
-    expect(user.customer?.email).toBe("novo@example.com"); expect(user.customer?.userId).toBe(user.id);
+  it("preserves the unique legacy User(CUSTOMER) → Customer relation", async () => {
+    const { user } = await createFixtureUser("CUSTOMER", { email: "novo@example.com" });
+    const customer = await createFixtureCustomer({ userId: user.id, email: user.email });
+    expect(customer.email).toBe("novo@example.com");
+    expect(customer.userId).toBe(user.id);
     await expect(testPrisma.customer.create({ data: { name: "Duplicado", userId: user.id } })).rejects.toThrow();
   });
 });
