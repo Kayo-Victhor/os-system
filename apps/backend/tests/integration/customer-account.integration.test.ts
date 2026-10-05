@@ -84,10 +84,15 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public'
-        AND c.relname IN ('PendingCustomerRegistration', 'PendingCustomerRegistrationToken')
+        AND c.relname IN (
+          'CustomerAccountPasswordResetToken',
+          'PendingCustomerRegistration',
+          'PendingCustomerRegistrationToken'
+        )
       ORDER BY c.relname
     `;
     expect(pendingRowSecurity).toEqual([
+      { relname: "CustomerAccountPasswordResetToken", rowSecurity: true },
       { relname: "PendingCustomerRegistration", rowSecurity: true },
       { relname: "PendingCustomerRegistrationToken", rowSecurity: true },
     ]);
@@ -101,7 +106,11 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
       `;
       expect(privileges).toEqual([{ hasPrivilege: false }]);
 
-      for (const table of ["PendingCustomerRegistration", "PendingCustomerRegistrationToken"]) {
+      for (const table of [
+        "CustomerAccountPasswordResetToken",
+        "PendingCustomerRegistration",
+        "PendingCustomerRegistrationToken",
+      ]) {
         const pendingPrivileges = await testPrisma.$queryRawUnsafe<Array<{ hasPrivilege: boolean }>>(
           `SELECT has_table_privilege($1, 'public."${table}"', 'SELECT') AS "hasPrivilege"`,
           rolname,

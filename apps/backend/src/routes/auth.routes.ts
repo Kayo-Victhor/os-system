@@ -5,17 +5,22 @@ import {
   refreshController,
   logoutController,
   meController,
+  confirmCustomerRegistrationController,
+  forgotCustomerAccountPasswordController,
   registerController,
   resendCustomerRegistrationController,
   resendVerificationController,
   verifyEmailController,
   forgotPasswordController,
   resetPasswordController,
+  resetCustomerAccountPasswordController,
 } from "../controllers/auth.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import {
   authRateLimiter,
+  customerRegistrationConfirmationRateLimiter,
+  customerPasswordResetRateLimiter,
   customerRegistrationRateLimiter,
   customerRegistrationResendRateLimiter,
   passwordResetRateLimiter,
@@ -32,6 +37,21 @@ router.post(
   "/customer/register/resend",
   customerRegistrationResendRateLimiter,
   resendCustomerRegistrationController,
+);
+router.post(
+  "/customer/register/confirm",
+  customerRegistrationConfirmationRateLimiter,
+  confirmCustomerRegistrationController,
+);
+router.post(
+  "/customer/forgot-password",
+  customerPasswordResetRateLimiter,
+  forgotCustomerAccountPasswordController,
+);
+router.post(
+  "/customer/reset-password",
+  customerPasswordResetRateLimiter,
+  resetCustomerAccountPasswordController,
 );
 router.post("/login", authRateLimiter, loginController);
 router.post("/verify-email", authRateLimiter, verifyEmailController);

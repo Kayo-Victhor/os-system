@@ -37,21 +37,21 @@ enum ServiceOrderPriority {
 }
 
 model User {
-  id               String         @id @default(uuid())
-  name             String
-  email            String         @unique
-  password         String
-  role             UserRole       @default(ATTENDANT)
-  isPrimaryAdmin   Boolean        @default(false)
-  emailVerifiedAt  DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  createdOrders    ServiceOrder[] @relation("CreatedOrders")
-  technicianOrders ServiceOrder[] @relation("TechnicianOrders")
-  refreshTokens           RefreshToken[]
-  emailVerificationToken  EmailVerificationToken?
-  passwordResetToken       PasswordResetToken?
-  customer                Customer?
+  id                     String                  @id @default(uuid())
+  name                   String
+  email                  String                  @unique
+  password               String
+  role                   UserRole                @default(ATTENDANT)
+  isPrimaryAdmin         Boolean                 @default(false)
+  emailVerifiedAt        DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  createdOrders          ServiceOrder[]          @relation("CreatedOrders")
+  technicianOrders       ServiceOrder[]          @relation("TechnicianOrders")
+  refreshTokens          RefreshToken[]
+  emailVerificationToken EmailVerificationToken?
+  passwordResetToken     PasswordResetToken?
+  customer               Customer?
 }
 
 // Refresh tokens are stored as a hash (never the raw token) so a database
@@ -91,20 +91,20 @@ model PasswordResetToken {
 }
 
 model Customer {
-  id            String         @id @default(uuid())
-  name          String
-  email         String?
-  phone         String?
-  document      String?        @unique
-  address       String?
+  id              String           @id @default(uuid())
+  name            String
+  email           String?
+  phone           String?
+  document        String?          @unique
+  address         String?
   /// Legacy User(CUSTOMER) link. It remains until an explicit reconciliation
   /// migrates legacy identities to CustomerAccount in a later block.
-  userId        String?        @unique
-  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId          String?          @unique
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   customerAccount CustomerAccount?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  serviceOrders ServiceOrder[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  serviceOrders   ServiceOrder[]
 }
 
 // CustomerAccount is the future customer authentication identity. It is kept
@@ -119,22 +119,37 @@ model CustomerAccount {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer           Customer                           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  passwordResetToken CustomerAccountPasswordResetToken?
+}
+
+// Password recovery for CustomerAccount is intentionally independent from
+// the legacy User/PasswordResetToken authentication domain.
+model CustomerAccountPasswordResetToken {
+  id                String          @id @default(uuid())
+  customerAccountId String          @unique
+  tokenHash         String          @unique
+  expiresAt         DateTime
+  usedAt            DateTime?
+  createdAt         DateTime        @default(now())
+  customerAccount   CustomerAccount @relation(fields: [customerAccountId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 // Public customer registration remains isolated here until e-mail ownership
 // is confirmed. It never creates a legacy User(CUSTOMER) identity.
 model PendingCustomerRegistration {
-  id           String    @id @default(uuid())
+  id           String   @id @default(uuid())
   name         String
-  email        String    @unique
+  email        String   @unique
   passwordHash String
   phone        String?
   document     String?
   address      String?
   expiresAt    DateTime
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   verificationToken PendingCustomerRegistrationToken?
 

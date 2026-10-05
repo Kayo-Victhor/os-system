@@ -14,6 +14,13 @@ export function resendCustomerRegistration(email: string) {
   });
 }
 
+export function confirmCustomerRegistration(token: string) {
+  return apiRequest<{ message: string }>("/auth/customer/register/confirm", {
+    method: "POST",
+    body: { token },
+  });
+}
+
 export function login(email: string, password: string) {
 
   return apiRequest<{ user: AuthUser }>("/auth/login", {
@@ -40,6 +47,20 @@ export function requestPasswordReset(email: string) {
 
 export function resetPassword(token: string, password: string, passwordConfirmation: string) {
   return apiRequest<{ message: string }>("/auth/reset-password", { method: "POST", body: { token, password, passwordConfirmation } });
+}
+
+export function requestCustomerAccountPasswordReset(email: string) {
+  return apiRequest<{ message: string }>("/auth/customer/forgot-password", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export function resetCustomerAccountPassword(token: string, password: string) {
+  return apiRequest<{ message: string }>("/auth/customer/reset-password", {
+    method: "POST",
+    body: { token, password },
+  });
 }
 
 export function fetchCurrentUser() {

@@ -1,0 +1,109 @@
+import { prisma } from "../lib/prisma.js";
+import { normalizeEmail } from "../lib/email.js";
+import { hashPassword } from "../lib/password.js";
+import {
+  CUSTOMER_ACCOUNT_PASSWORD_RESET_TOKEN_TTL_SECONDS,
+  generateCustomerAccountPasswordResetToken,
+  hashCustomerAccountPasswordResetToken,
+} from "../lib/tokens.js";
+import { sendCustomerAccountPasswordResetEmail } from "./email.service.js";
+
+interface LockedCustomerPasswordReset {
+  id: string;
+  customerAccountId: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  status: "ACTIVE" | "SUSPENDED";
+  emailVerifiedAt: Date | null;
+}
+
+export async function requestCustomerAccountPasswordReset(
+  emailInput: string,
+): Promise<boolean> {
+  const email = normalizeEmail(emailInput);
+  const account = await prisma.customerAccount.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      status: true,
+      emailVerifiedAt: true,
+    },
+  });
+
+  // Password reset proves control of an e-mail; it must not become an
+  // alternative to the registration confirmation or unsuspend an account.
+  if (
+    !account ||
+    account.status !== "ACTIVE" ||
+    !account.emailVerifiedAt
+  ) {
+    return false;
+  }
+
+  const { token, tokenHash } = generateCustomerAccountPasswordResetToken();
+  const expiresAt = new Date(
+    Date.now() + CUSTOMER_ACCOUNT_PASSWORD_RESET_TOKEN_TTL_SECONDS * 1000,
+  );
+
+  await prisma.customerAccountPasswordResetToken.upsert({
+    where: { customerAccountId: account.id },
+    update: { tokenHash, expiresAt, usedAt: null, createdAt: new Date() },
+    create: { customerAccountId: account.id, tokenHash, expiresAt },
+  });
+
+  await sendCustomerAccountPasswordResetEmail({ to: account.email, token });
+  return true;
+}
+
+export async function resetCustomerAccountPassword(
+  token: string,
+  password: string,
+): Promise<boolean> {
+  const tokenHash = hashCustomerAccountPasswordResetToken(token);
+  // Argon2 is intentionally executed before opening the transaction so a
+  // slow password hash does not hold a database row lock unnecessarily.
+  const passwordHash = await hashPassword(password);
+
+  return prisma.$transaction(async (tx) => {
+    const [stored] = await tx.$queryRaw<LockedCustomerPasswordReset[]>`
+      SELECT
+        reset_token."id",
+        reset_token."customerAccountId",
+        reset_token."expiresAt",
+        reset_token."usedAt",
+        account."status",
+        account."emailVerifiedAt"
+      FROM "CustomerAccountPasswordResetToken" AS reset_token
+      INNER JOIN "CustomerAccount" AS account
+        ON account."id" = reset_token."customerAccountId"
+      WHERE reset_token."tokenHash" = ${tokenHash}
+      FOR UPDATE OF reset_token, account
+    `;
+
+    const now = new Date();
+    if (
+      !stored ||
+      stored.usedAt ||
+      stored.expiresAt <= now ||
+      stored.status !== "ACTIVE" ||
+      !stored.emailVerifiedAt
+    ) {
+      return false;
+    }
+
+    await tx.customerAccount.update({
+      where: { id: stored.customerAccountId },
+      data: { passwordHash },
+    });
+    await tx.customerAccountPasswordResetToken.update({
+      where: { id: stored.id },
+      data: { usedAt: now },
+    });
+
+    // CustomerSession does not exist yet. Its active sessions must be revoked
+    // here when that model is introduced; legacy User RefreshToken is kept
+    // deliberately untouched because it belongs to another identity domain.
+    return true;
+  });
+}

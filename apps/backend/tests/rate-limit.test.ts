@@ -67,4 +67,34 @@ describe("Rate limit de autenticação", () => {
       .send({ email: "e-mail-invalido" });
     expect(blocked.status).toBe(429);
   });
+
+  it("blocks the eleventh pending registration confirmation from the same IP", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/customer/register/confirm")
+        .send({ token: "inválido" });
+      expect(response.status).not.toBe(429);
+    }
+
+    const blocked = await request(app)
+      .post("/auth/customer/register/confirm")
+      .send({ token: "inválido" });
+    expect(blocked.status).toBe(429);
+  });
+
+  it("blocks the sixth customer password-reset request from the same IP", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/customer/forgot-password")
+        .send({ email: "cliente-reset@example.com" });
+      expect(response.status).not.toBe(429);
+    }
+
+    const blocked = await request(app)
+      .post("/auth/customer/forgot-password")
+      .send({ email: "cliente-reset@example.com" });
+    expect(blocked.status).toBe(429);
+  });
 });

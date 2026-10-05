@@ -8,9 +8,12 @@ import { AppLayout } from "./components/AppLayout.tsx";
 
 const LoginPage = lazy(() => import("./pages/LoginPage.tsx").then(({ LoginPage }) => ({ default: LoginPage })));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.tsx").then(({ RegisterPage }) => ({ default: RegisterPage })));
+const ConfirmCustomerRegistrationPage = lazy(() => import("./pages/ConfirmCustomerRegistrationPage.tsx").then(({ ConfirmCustomerRegistrationPage }) => ({ default: ConfirmCustomerRegistrationPage })));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage.tsx").then(({ VerifyEmailPage }) => ({ default: VerifyEmailPage })));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.tsx").then(({ ForgotPasswordPage }) => ({ default: ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.tsx").then(({ ResetPasswordPage }) => ({ default: ResetPasswordPage })));
+const CustomerForgotPasswordPage = lazy(() => import("./pages/CustomerForgotPasswordPage.tsx").then(({ CustomerForgotPasswordPage }) => ({ default: CustomerForgotPasswordPage })));
+const CustomerResetPasswordPage = lazy(() => import("./pages/CustomerResetPasswordPage.tsx").then(({ CustomerResetPasswordPage }) => ({ default: CustomerResetPasswordPage })));
 const CustomerPortalPage = lazy(() => import("./pages/CustomerPortalPage.tsx").then(({ CustomerPortalPage }) => ({ default: CustomerPortalPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage.tsx").then(({ DashboardPage }) => ({ default: DashboardPage })));
 const ServiceOrdersListPage = lazy(() => import("./pages/ServiceOrdersListPage.tsx").then(({ ServiceOrdersListPage }) => ({ default: ServiceOrdersListPage })));
@@ -41,9 +44,12 @@ function App() {
           <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registrar" element={<RegisterPage />} />
+          <Route path="/confirmar-cadastro" element={<ConfirmCustomerRegistrationPage />} />
           <Route path="/verificar-email" element={<VerifyEmailPage />} />
           <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
           <Route path="/resetar-senha" element={<ResetPasswordPage />} />
+          <Route path="/customer/forgot-password" element={<CustomerForgotPasswordPage />} />
+          <Route path="/customer/reset-password" element={<CustomerResetPasswordPage />} />
 
           <Route
             element={

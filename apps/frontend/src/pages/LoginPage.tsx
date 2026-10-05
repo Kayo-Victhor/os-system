@@ -90,6 +90,7 @@ export function LoginPage() {
         </form>
         <p className="page-subtitle">Ainda não possui conta? <Link to="/registrar">Criar conta de cliente</Link></p>
         <p className="page-subtitle"><Link to="/esqueci-senha">Esqueci minha senha</Link></p>
+        <p className="page-subtitle"><Link to="/customer/forgot-password">Recuperar senha da conta de cliente</Link></p>
         <p className="page-subtitle">Não recebeu a confirmação? <Link to="/verificar-email">Reenviar e-mail</Link></p>
       </div>
     </div>

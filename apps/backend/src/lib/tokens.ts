@@ -61,6 +61,7 @@ export const PENDING_CUSTOMER_REGISTRATION_TTL_SECONDS = 24 * 60 * 60;
 export const PENDING_CUSTOMER_REGISTRATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // A short lifetime limits the usefulness of a stolen password-reset link.
 export const PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
+export const CUSTOMER_ACCOUNT_PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
 
 export function generateEmailVerificationToken(): {
   token: string;
@@ -111,6 +112,25 @@ export function hashPasswordResetToken(token: string): string {
     throw new Error("PASSWORD_RESET_SECRET precisa estar configurado");
   }
   return createHmac("sha256", secret).update(token).digest("hex");
+}
+
+export function generateCustomerAccountPasswordResetToken(): {
+  token: string;
+  tokenHash: string;
+} {
+  const token = randomBytes(48).toString("base64url");
+  return { token, tokenHash: hashCustomerAccountPasswordResetToken(token) };
+}
+
+export function hashCustomerAccountPasswordResetToken(token: string): string {
+  const secret = process.env.PASSWORD_RESET_SECRET;
+  if (!secret) {
+    throw new Error("PASSWORD_RESET_SECRET precisa estar configurado");
+  }
+
+  return createHmac("sha256", secret)
+    .update(`customer-account-password-reset:${token}`)
+    .digest("hex");
 }
 
 // HMAC (keyed by JWT_REFRESH_SECRET) rather than a bare hash, so a database

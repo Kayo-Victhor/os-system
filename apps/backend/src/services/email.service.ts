@@ -13,6 +13,7 @@ interface TestEmail {
   verificationUrl: string;
   passwordResetUrl?: string;
   customerRegistrationUrl?: string;
+  customerPasswordResetUrl?: string;
 }
 
 const testOutbox: TestEmail[] = [];
@@ -57,6 +58,27 @@ export async function sendPasswordResetEmail({ to, token }: LinkEmail) {
   const url = linkUrl("/resetar-senha", token);
   if (process.env.NODE_ENV === "test") { testOutbox.push({ to, verificationUrl: "", passwordResetUrl: url }); return; }
   await deliverEmail(to, "Redefina sua senha no OS System", '<p>Recebemos uma solicitação para redefinir sua senha no OS System.</p><p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p><p>Se você não solicitou esta alteração, ignore esta mensagem.</p>');
+}
+
+export async function sendCustomerAccountPasswordResetEmail({ to, token }: LinkEmail) {
+  const url = linkUrl("/customer/reset-password", token);
+  if (process.env.NODE_ENV === "test") {
+    testOutbox.push({
+      to,
+      verificationUrl: "",
+      customerPasswordResetUrl: url,
+    });
+    return;
+  }
+
+  await deliverEmail(
+    to,
+    "Redefinição de senha da conta do cliente",
+    '<h1>Redefina sua senha</h1>' +
+      '<p>Recebemos uma solicitação para redefinir a senha da sua conta de cliente no OS System.</p>' +
+      '<p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p>' +
+      '<p>Se você não solicitou esta alteração, ignore esta mensagem.</p>',
+  );
 }
 
 export async function sendCustomerRegistrationVerificationEmail({ to, token }: LinkEmail) {

@@ -28,6 +28,15 @@ export const prismaMock = {
     update: vi.fn(),
     delete: vi.fn(),
   },
+  customerAccount: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
+  customerAccountPasswordResetToken: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+    update: vi.fn(),
+  },
   serviceOrder: {
     findUnique: vi.fn(),
     findMany: vi.fn(),

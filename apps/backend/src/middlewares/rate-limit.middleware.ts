@@ -52,6 +52,15 @@ export const passwordResetRateLimiter = rateLimit({
   message: { error: "Muitas tentativas. Tente novamente mais tarde." },
 });
 
+export const customerPasswordResetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: { error: "Muitas tentativas. Tente novamente mais tarde." },
+});
+
 export const customerRegistrationRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
@@ -66,6 +75,15 @@ export const customerRegistrationResendRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 3,
   keyGenerator: customerRegistrationKey("customer-register-resend"),
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: { error: "Muitas tentativas. Tente novamente mais tarde." },
+});
+
+export const customerRegistrationConfirmationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",

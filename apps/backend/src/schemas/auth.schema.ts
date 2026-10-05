@@ -19,7 +19,20 @@ export const resendCustomerRegistrationSchema = z.object({
   email: z.string().transform(normalizeEmail).pipe(z.string().email()),
 });
 
+export const confirmCustomerRegistrationSchema = z.object({
+  token: z.string().min(40).max(256),
+});
+
 export const forgotPasswordSchema = z.object({ email: z.string().email() });
+
+export const forgotCustomerAccountPasswordSchema = z.object({
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
+});
+
+export const resetCustomerAccountPasswordSchema = z.object({
+  token: z.string().min(40).max(256),
+  password: passwordSchema,
+});
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(40).max(256),

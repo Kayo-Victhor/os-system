@@ -16,6 +16,20 @@ import {
 export const CUSTOMER_REGISTRATION_MESSAGE =
   "Se os dados forem válidos, enviaremos um e-mail para confirmação.";
 
+export type CustomerRegistrationConfirmationResult = "CONFIRMED" | "INVALID";
+
+interface LockedPendingRegistration {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  phone: string | null;
+  document: string | null;
+  address: string | null;
+  pendingExpiresAt: Date;
+  tokenExpiresAt: Date;
+}
+
 async function hasIdentityConflict(email: string, document?: string) {
   const [user, customerAccount, customerWithDocument] = await Promise.all([
     prisma.user.findFirst({
@@ -157,4 +171,75 @@ export async function isPendingCustomerRegistrationTokenValid(token: string) {
       stored.expiresAt > now &&
       stored.pendingRegistration.expiresAt > now,
   );
+}
+
+/**
+ * Converts one pending registration into exactly one Customer identity.
+ *
+ * PostgreSQL locks both the token and its pending row before validating them.
+ * A concurrent request for the same HMAC therefore waits for the first one;
+ * after that transaction deletes the pending row, the waiting query observes
+ * no row and cannot create a second identity. Database unique constraints are
+ * the second line of defence for account e-mail, document and customerId.
+ */
+export async function confirmCustomerRegistration(
+  token: string,
+): Promise<CustomerRegistrationConfirmationResult> {
+  const tokenHash = hashPendingCustomerRegistrationToken(token);
+
+  return prisma.$transaction(async (tx) => {
+    const [pending] = await tx.$queryRaw<LockedPendingRegistration[]>`
+      SELECT
+        pending."id",
+        pending."name",
+        pending."email",
+        pending."passwordHash",
+        pending."phone",
+        pending."document",
+        pending."address",
+        pending."expiresAt" AS "pendingExpiresAt",
+        registration_token."expiresAt" AS "tokenExpiresAt"
+      FROM "PendingCustomerRegistrationToken" AS registration_token
+      INNER JOIN "PendingCustomerRegistration" AS pending
+        ON pending."id" = registration_token."pendingRegistrationId"
+      WHERE registration_token."tokenHash" = ${tokenHash}
+      FOR UPDATE OF registration_token, pending
+    `;
+
+    const now = new Date();
+    if (
+      !pending ||
+      pending.tokenExpiresAt <= now ||
+      pending.pendingExpiresAt <= now
+    ) {
+      return "INVALID";
+    }
+
+    const customer = await tx.customer.create({
+      data: {
+        name: pending.name,
+        email: pending.email,
+        phone: pending.phone,
+        document: pending.document,
+        address: pending.address,
+      },
+      select: { id: true },
+    });
+
+    await tx.customerAccount.create({
+      data: {
+        customerId: customer.id,
+        email: pending.email,
+        passwordHash: pending.passwordHash,
+        emailVerifiedAt: now,
+        status: "ACTIVE",
+      },
+    });
+
+    // The FK uses ON DELETE CASCADE, so consuming the pending registration
+    // removes its only current token in the same atomic transaction.
+    await tx.pendingCustomerRegistration.delete({ where: { id: pending.id } });
+
+    return "CONFIRMED";
+  });
 }
