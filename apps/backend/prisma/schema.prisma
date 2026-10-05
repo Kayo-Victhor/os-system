@@ -16,6 +16,11 @@ enum UserRole {
   CUSTOMER
 }
 
+enum CustomerAccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum ServiceOrderStatus {
   OPEN
   IN_PROGRESS
@@ -92,11 +97,29 @@ model Customer {
   phone         String?
   document      String?        @unique
   address       String?
+  /// Legacy User(CUSTOMER) link. It remains until an explicit reconciliation
+  /// migrates legacy identities to CustomerAccount in a later block.
   userId        String?        @unique
   user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerAccount CustomerAccount?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   serviceOrders ServiceOrder[]
+}
+
+// CustomerAccount is the future customer authentication identity. It is kept
+// independent from User, which is reserved for internal staff identities.
+model CustomerAccount {
+  id              String                @id @default(uuid())
+  customerId      String                @unique
+  email           String                @unique
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  status          CustomerAccountStatus @default(ACTIVE)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 }
 
 model ServiceOrder {
