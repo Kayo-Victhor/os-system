@@ -22,7 +22,7 @@ import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 // staff (or vice versa) isn't a supported operation on this endpoint, so
 // it isn't offered as a choice (see PATCH /users/:id in
 // schemas/user.schema.ts).
-const EDITABLE_ROLES: UserRole[] = ["ADMIN", "USER", "TECHNICIAN"];
+const EDITABLE_ROLES: UserRole[] = ["ADMIN", "ATTENDANT", "TECHNICIAN"];
 
 export function UsersListPage() {
   const { user: currentUser } = useAuth();
@@ -48,7 +48,7 @@ export function UsersListPage() {
 
   useInitialAsyncLoad(load);
 
-  type EditableUserRole = "ADMIN" | "USER" | "TECHNICIAN";
+  type EditableUserRole = "ADMIN" | "ATTENDANT" | "TECHNICIAN";
 
   async function handleRoleChange(id: string, role: EditableUserRole) {
     setActionError(null);
@@ -127,13 +127,17 @@ export function UsersListPage() {
             <tbody>
               {users.map((u) => {
                 const isSelf = u.id === currentUser?.id;
+                const isPrimaryAdmin = u.isPrimaryAdmin;
                 return (
                   <tr key={u.id}>
                     <td>{u.name}</td>
                     <td>{u.email}</td>
                     <td>
-                      {isSelf || u.role === "CUSTOMER" ? (
-                        <RoleBadge role={u.role} />
+                      {isSelf || isPrimaryAdmin || u.role === "CUSTOMER" ? (
+                        <>
+                          <RoleBadge role={u.role} />
+                          {isPrimaryAdmin && <span className="field-hint">Administrador principal</span>}
+                        </>
                       ) : (
                         <select
                           className="input"
@@ -162,8 +166,8 @@ export function UsersListPage() {
                     </td>
                     <td>{new Date(u.createdAt).toLocaleDateString("pt-BR")}</td>
                     <td>
-                      {isSelf ? (
-                        <span className="field-hint">Sua conta</span>
+                      {isSelf || isPrimaryAdmin ? (
+                        <span className="field-hint">{isPrimaryAdmin ? "Administrador principal" : "Sua conta"}</span>
                       ) : (
                         <button
                           type="button"

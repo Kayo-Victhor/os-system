@@ -1,4 +1,5 @@
-export type UserRole = "ADMIN" | "USER" | "TECHNICIAN" | "CUSTOMER";
+export type UserRole = "ADMIN" | "ATTENDANT" | "TECHNICIAN" | "CUSTOMER";
+export type InternalUserRole = Exclude<UserRole, "CUSTOMER">;
 
 export type ServiceOrderStatus =
   | "OPEN"
@@ -14,6 +15,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  isPrimaryAdmin: boolean;
 }
 
 export interface UserRecord {
@@ -21,6 +23,7 @@ export interface UserRecord {
   name: string;
   email: string;
   role: UserRole;
+  isPrimaryAdmin: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,7 +87,7 @@ export const PRIORITY_LABELS: Record<ServiceOrderPriority, string> = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
-  USER: "Atendente",
+  ATTENDANT: "Atendente",
   TECHNICIAN: "Técnico",
   CUSTOMER: "Cliente",
 };

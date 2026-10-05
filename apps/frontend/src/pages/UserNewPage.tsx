@@ -14,7 +14,7 @@ export function UserNewPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"USER" | "TECHNICIAN">("USER");
+  const [role, setRole] = useState<"ADMIN" | "ATTENDANT" | "TECHNICIAN">("ATTENDANT");
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -85,17 +85,13 @@ export function UserNewPage() {
 
           <Field label="Papel" required>
             {(props) => (
-              <select {...props} className="input" value={role} onChange={(e) => setRole(e.target.value as "USER" | "TECHNICIAN")}>
-                <option value="USER">Atendente</option>
+              <select {...props} className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "ATTENDANT" | "TECHNICIAN")}>
+                <option value="ADMIN">Administrador</option>
+                <option value="ATTENDANT">Atendente</option>
                 <option value="TECHNICIAN">Técnico</option>
               </select>
             )}
           </Field>
-
-          <p className="field-hint">
-            Contas de administrador não podem ser criadas por aqui — altere o papel de um usuário existente na
-            lista de usuários, se necessário.
-          </p>
 
           <div className="form-actions">
             <button type="submit" className="btn btn-primary" disabled={submitting}>

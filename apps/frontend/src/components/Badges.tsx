@@ -22,7 +22,7 @@ const PRIORITY_COLOR: Record<ServiceOrderPriority, string> = {
 
 const ROLE_COLOR: Record<UserRole, string> = {
   ADMIN: "badge-red",
-  USER: "badge-blue",
+  ATTENDANT: "badge-blue",
   TECHNICIAN: "badge-green",
   CUSTOMER: "badge-gray",
 };

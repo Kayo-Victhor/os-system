@@ -83,11 +83,11 @@ Possui acesso administrativo amplo para gerenciamento de:
 - atribuição e reatribuição de técnicos;
 - correções operacionais.
 
-O ADMIN não precisa aprovar individualmente cada ordem de serviço criada por um USER.
+O ADMIN não precisa aprovar individualmente cada ordem de serviço criada por um ATTENDANT.
 
 ---
 
-## 2. USER
+## 2. ATTENDANT
 
 **Perfil:** atendente ou funcionário responsável pela operação diária do sistema.
 
@@ -102,7 +102,7 @@ De acordo com as regras atuais da aplicação, pode:
 - reatribuir técnicos;
 - acompanhar a operação das OS.
 
-A atribuição de uma OS a um técnico pelo USER não depende de aprovação do ADMIN.
+A atribuição de uma OS a um técnico pelo ATTENDANT não depende de aprovação do ADMIN.
 
 ---
 
@@ -164,6 +164,12 @@ Em particular:
 
 - `User.password` não deve ser exposto;
 - `RefreshToken.tokenHash` não deve ser exposto.
+
+### Verificação de e-mail na transição atual
+
+Usuários internos (`ADMIN`, `ATTENDANT` e `TECHNICIAN`) não exigem confirmação de e-mail para autenticação. O administrador inicial é criado exclusivamente pelo seed, que exige `ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` configurados no ambiente e nunca registra a senha. O seed mantém uma única conta marcada como administrador principal: ela preserva o mesmo identificador quando atualizada, não pode ser excluída nem rebaixada de papel e só pode ter seus dados próprios normais alterados pela própria conta.
+
+Enquanto a separação de `CustomerAccount` não é implementada, `CUSTOMER` permanece uma role legada em `User` e continua exigindo confirmação de e-mail antes do login e da recuperação de senha.
 
 ## Autorização
 
@@ -551,7 +557,7 @@ Não armazene secrets ou credenciais de produção no repositório.
 - Controle de prioridade das OS.
 - Alteração de status das OS.
 - Controle de acesso para ADMIN.
-- Controle de acesso para USER.
+- Controle de acesso para ATTENDANT.
 - Controle de acesso para TECHNICIAN.
 - Painel operacional e visualização da fila de atendimento no frontend.
 
@@ -737,7 +743,7 @@ As roles principais são:
 
 ```text
 ADMIN
-USER
+ATTENDANT
 TECHNICIAN
 CUSTOMER
 ```

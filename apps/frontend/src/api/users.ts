@@ -1,11 +1,11 @@
 import { apiRequest } from "./client.ts";
-import type { UserRecord, UserRole } from "./types.ts";
+import type { InternalUserRole, UserRecord } from "./types.ts";
 
 export interface CreateUserInput {
   name: string;
   email: string;
   password: string;
-  role: "USER" | "TECHNICIAN";
+  role: "ADMIN" | "ATTENDANT" | "TECHNICIAN";
 }
 
 export interface UpdateUserInput {
@@ -13,10 +13,10 @@ export interface UpdateUserInput {
   email?: string;
   // Matches the backend's updateUserSchema — CUSTOMER is deliberately not
   // settable here, see EDITABLE_ROLES in pages/UsersListPage.tsx.
-  role?: "ADMIN" | "USER" | "TECHNICIAN";
+  role?: "ADMIN" | "ATTENDANT" | "TECHNICIAN";
 }
 
-export function listUsers(role?: UserRole, signal?: AbortSignal) {
+export function listUsers(role?: InternalUserRole, signal?: AbortSignal) {
   return apiRequest<UserRecord[]>("/users", { query: { role }, signal });
 }
 
