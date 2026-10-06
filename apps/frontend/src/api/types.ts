@@ -42,7 +42,10 @@ export interface Customer {
 export interface CustomerAccountProfile {
   id: string;
   email: string;
-  customer: Customer;
+  customer: Pick<
+    Customer,
+    "id" | "name" | "email" | "phone" | "document" | "address"
+  >;
 }
 
 export interface ServiceOrder {
@@ -67,7 +70,7 @@ export interface CustomerServiceOrder {
   description: string;
   status: ServiceOrderStatus;
   priority: ServiceOrderPriority;
-  technician: { id: string; name: string } | null;
+  technician: { name: string } | null;
   createdAt: string;
   updatedAt: string;
 }

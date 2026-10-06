@@ -6,6 +6,7 @@ import {
   generateCustomerSessionRefreshToken,
   hashCustomerSessionRefreshToken,
   signCustomerAccessToken,
+  verifyCustomerAccessToken,
 } from "../lib/tokens.js";
 import type { CustomerLoginInput } from "../schemas/auth.schema.js";
 
@@ -265,16 +266,41 @@ export async function refreshCustomerSession(
   };
 }
 
-export async function revokeCustomerSession(presentedToken: string) {
-  const tokenHash = hashCustomerSessionRefreshToken(presentedToken);
-  const token = await prisma.customerSessionRefreshToken.findUnique({
-    where: { tokenHash },
-    select: { customerSessionId: true },
-  });
-  if (!token) return;
+export async function revokeCustomerSession(credentials: {
+  accessToken?: string;
+  refreshToken?: string;
+}) {
+  const sessions: Array<{ id: string; customerAccountId?: string }> = [];
+
+  if (credentials.refreshToken) {
+    const tokenHash = hashCustomerSessionRefreshToken(credentials.refreshToken);
+    const token = await prisma.customerSessionRefreshToken.findUnique({
+      where: { tokenHash },
+      select: { customerSessionId: true },
+    });
+    if (token) sessions.push({ id: token.customerSessionId });
+  }
+
+  if (credentials.accessToken) {
+    try {
+      const payload = verifyCustomerAccessToken(credentials.accessToken);
+      sessions.push({ id: payload.sid, customerAccountId: payload.sub });
+    } catch {
+      // Logout remains idempotent: an invalid/expired access token must not
+      // prevent cookie cleanup or reveal token validation details.
+    }
+  }
+
+  if (sessions.length === 0) return;
 
   await prisma.customerSession.updateMany({
-    where: { id: token.customerSessionId, revokedAt: null },
+    where: {
+      revokedAt: null,
+      OR: sessions.map(({ id, customerAccountId }) => ({
+        id,
+        ...(customerAccountId ? { customerAccountId } : {}),
+      })),
+    },
     data: { revokedAt: new Date() },
   });
 }
@@ -293,7 +319,7 @@ export async function listCustomerServiceOrders(customerAccountId: string) {
       description: true,
       status: true,
       priority: true,
-      technician: { select: { id: true, name: true } },
+      technician: { select: { name: true } },
       createdAt: true,
       updatedAt: true,
     },
@@ -315,7 +341,7 @@ export async function getCustomerServiceOrder(
       description: true,
       status: true,
       priority: true,
-      technician: { select: { id: true, name: true } },
+      technician: { select: { name: true } },
       createdAt: true,
       updatedAt: true,
     },

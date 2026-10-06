@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { z } from "zod";
 
 import {
   CUSTOMER_ACCESS_TOKEN_COOKIE,
@@ -120,8 +121,14 @@ export async function customerLogoutController(
   const presentedToken = req.cookies?.[CUSTOMER_REFRESH_TOKEN_COOKIE] as
     | string
     | undefined;
+  const accessToken = req.cookies?.[CUSTOMER_ACCESS_TOKEN_COOKIE] as
+    | string
+    | undefined;
   try {
-    if (presentedToken) await revokeCustomerSession(presentedToken);
+    await revokeCustomerSession({
+      accessToken,
+      refreshToken: presentedToken,
+    });
   } catch (error) {
     console.error(
       "Falha ao revogar sessão de cliente",
@@ -164,16 +171,17 @@ export async function customerServiceOrderController(
     res.status(401).json({ error: "Não autenticado" });
     return;
   }
-  const serviceOrderId = Array.isArray(req.params.id)
+  const requestedId = Array.isArray(req.params.id)
     ? req.params.id[0]
     : req.params.id;
-  if (!serviceOrderId) {
+  const serviceOrderId = z.string().uuid().safeParse(requestedId);
+  if (!serviceOrderId.success) {
     res.status(404).json({ error: "Ordem de serviço não encontrada" });
     return;
   }
   const serviceOrder = await getCustomerServiceOrder(
     req.customerAccountId,
-    serviceOrderId,
+    serviceOrderId.data,
   );
   if (!serviceOrder) {
     res.status(404).json({ error: "Ordem de serviço não encontrada" });

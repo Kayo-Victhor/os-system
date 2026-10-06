@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { randomUUID } from "node:crypto";
+import jwt from "jsonwebtoken";
 
 import app from "../../src/app.js";
 import { hashPassword } from "../../src/lib/password.js";
@@ -78,6 +80,16 @@ function customerSessionCookies(response: Awaited<ReturnType<typeof customerLogi
   };
 }
 
+function signArtificialAccessToken(
+  payload: Record<string, unknown>,
+  algorithm: "HS256" | "HS384" = "HS256",
+) {
+  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET!, {
+    algorithm,
+    expiresIn: "15m",
+  });
+}
+
 describe("autenticação independente de CustomerAccount", () => {
   it("faz login, persiste somente hashes e retorna dados mínimos", async () => {
     const { account, customer } = await createCustomerAccount();
@@ -137,6 +149,74 @@ describe("autenticação independente de CustomerAccount", () => {
     expect((await request(app).get("/auth/customer/me").set(
       "Cookie",
       `access_token=${cookieValue(internalCookies, "access_token")}`,
+    )).status).toBe(401);
+  });
+
+  it.each([
+    ["principal interno", { principalType: "INTERNAL_USER" }],
+    ["role injetada", { principalType: "CUSTOMER_ACCOUNT", role: "ADMIN" }],
+    ["sem sessão", { principalType: "CUSTOMER_ACCOUNT", sid: undefined }],
+    ["subject inválido", { principalType: "CUSTOMER_ACCOUNT", sub: "not-a-uuid" }],
+    ["sessão inválida", { principalType: "CUSTOMER_ACCOUNT", sid: "not-a-uuid" }],
+    ["customerId injetado", { principalType: "CUSTOMER_ACCOUNT", customerId: randomUUID() }],
+  ])("rejeita JWT de cliente com claims artificiais: %s", async (_label, overrides) => {
+    const { account } = await createCustomerAccount();
+    const session = await testPrisma.customerSession.create({
+      data: {
+        customerAccountId: account.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const token = signArtificialAccessToken({
+      sub: account.id,
+      sid: session.id,
+      principalType: "CUSTOMER_ACCOUNT",
+      ...overrides,
+    });
+
+    expect((await request(app)
+      .get("/auth/customer/me")
+      .set("Cookie", `customer_access_token=${token}`)).status).toBe(401);
+  });
+
+  it("rejeita algoritmo inesperado e não aceita identidade de cliente como User", async () => {
+    const { account } = await createCustomerAccount();
+    const session = await testPrisma.customerSession.create({
+      data: {
+        customerAccountId: account.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const wrongAlgorithm = signArtificialAccessToken({
+      sub: account.id,
+      sid: session.id,
+      principalType: "CUSTOMER_ACCOUNT",
+    }, "HS384");
+    const mixedInternalToken = signArtificialAccessToken({
+      sub: account.id,
+      role: "ADMIN",
+      principalType: "CUSTOMER_ACCOUNT",
+    });
+    const expiredCustomerToken = jwt.sign({
+      sub: account.id,
+      sid: session.id,
+      principalType: "CUSTOMER_ACCOUNT",
+    }, process.env.JWT_ACCESS_SECRET!, {
+      algorithm: "HS256",
+      expiresIn: -1,
+    });
+
+    expect((await request(app).get("/auth/customer/me").set(
+      "Cookie",
+      `customer_access_token=${wrongAlgorithm}`,
+    )).status).toBe(401);
+    expect((await request(app).get("/auth/me").set(
+      "Cookie",
+      `access_token=${mixedInternalToken}`,
+    )).status).toBe(401);
+    expect((await request(app).get("/auth/customer/me").set(
+      "Cookie",
+      `customer_access_token=${expiredCustomerToken}`,
     )).status).toBe(401);
   });
 });
@@ -216,6 +296,30 @@ describe("refresh, reutilização e concorrência", () => {
       .set("x-csrf-token", "csrf-incorreto")).status).toBe(403);
   });
 
+  it("exige CSRF nos fluxos públicos quando o navegador já possui sessão de cliente", async () => {
+    const { account } = await createCustomerAccount();
+    const session = customerSessionCookies(await customerLogin(account.email));
+
+    expect((await request(app)
+      .post("/auth/customer/login")
+      .set("Cookie", `customer_access_token=${session.access}`)
+      .send({ email: account.email, password: CUSTOMER_PASSWORD })).status).toBe(403);
+    expect((await request(app)
+      .post("/auth/customer/forgot-password")
+      .set("Cookie", `customer_access_token=${session.access}`)
+      .send({ email: account.email })).status).toBe(403);
+    expect((await request(app)
+      .post("/auth/customer/reset-password")
+      .set("Cookie", `customer_access_token=${session.access}`)
+      .send({ token: "x".repeat(48), password: CUSTOMER_PASSWORD })).status).toBe(403);
+
+    expect((await request(app)
+      .post("/auth/customer/login")
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrf)
+      .send({ email: account.email, password: CUSTOMER_PASSWORD })).status).toBe(200);
+  });
+
   it("logout revoga somente a sessão atual", async () => {
     const { account } = await createCustomerAccount();
     const first = customerSessionCookies(await customerLogin(account.email));
@@ -233,6 +337,21 @@ describe("refresh, reutilização e concorrência", () => {
       .post("/auth/customer/refresh")
       .set("Cookie", `customer_refresh_token=${second.refresh}; customer_csrf_token=${second.csrf}`)
       .set("x-csrf-token", second.csrf)).status).toBe(200);
+  });
+
+  it("logout revoga pelo access token quando o refresh cookie está ausente", async () => {
+    const { account } = await createCustomerAccount();
+    const session = customerSessionCookies(await customerLogin(account.email));
+    const logout = await request(app)
+      .post("/auth/customer/logout")
+      .set("Cookie", `customer_access_token=${session.access}; customer_csrf_token=${session.csrf}`)
+      .set("x-csrf-token", session.csrf);
+
+    expect(logout.status).toBe(204);
+    expect((await testPrisma.customerSession.findFirstOrThrow()).revokedAt).not.toBeNull();
+    expect((await request(app)
+      .get("/auth/customer/me")
+      .set("Cookie", `customer_access_token=${session.access}`)).status).toBe(401);
   });
 
   it("logout concorrente com refresh nunca deixa a família utilizável", async () => {
@@ -285,11 +404,29 @@ describe("me, suspensão e ownership", () => {
       .set("Cookie", session.cookie)).status).toBe(401);
   });
 
+  it("recusa access token quando a sessão foi revogada ou expirou no banco", async () => {
+    const { account } = await createCustomerAccount();
+    const revoked = customerSessionCookies(await customerLogin(account.email));
+    await testPrisma.customerSession.updateMany({ data: { revokedAt: new Date() } });
+    expect((await request(app)
+      .get("/auth/customer/service-orders")
+      .set("Cookie", revoked.cookie)).status).toBe(401);
+
+    const expired = customerSessionCookies(await customerLogin(account.email));
+    await testPrisma.customerSession.updateMany({
+      where: { revokedAt: null },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    expect((await request(app)
+      .get("/auth/customer/service-orders")
+      .set("Cookie", expired.cookie)).status).toBe(401);
+  });
+
   it("retorna somente o Customer próprio e somente suas ordens", async () => {
     const { account: accountA, customer: customerA } = await createCustomerAccount({
       email: "cliente.a@example.com",
     });
-    const { customer: customerB } = await createCustomerAccount({
+    const { account: accountB, customer: customerB } = await createCustomerAccount({
       email: "cliente.b@example.com",
     });
     const { user: attendant } = await createFixtureUser("ATTENDANT");
@@ -304,23 +441,45 @@ describe("me, suspensão e ownership", () => {
       createdById: attendant.id,
     });
     const session = customerSessionCookies(await customerLogin(accountA.email));
+    const sessionB = customerSessionCookies(await customerLogin(accountB.email));
 
-    const me = await request(app).get("/auth/customer/me").set("Cookie", session.cookie);
+    const me = await request(app)
+      .get(`/auth/customer/me?customerAccountId=${accountB.id}&customerId=${customerB.id}`)
+      .set("x-customer-id", customerB.id)
+      .set("Cookie", session.cookie);
     expect(me.status).toBe(200);
     expect(me.body.customerAccount.customer.id).toBe(customerA.id);
     const list = await request(app)
-      .get(`/auth/customer/service-orders?customerId=${customerB.id}`)
+      .get(`/auth/customer/service-orders?customerId=${customerB.id}&id=${orderB.id}&page=1&limit=999999&sort=customerId&status=OPEN&priority=URGENT`)
+      .set("x-customer-id", customerB.id)
       .set("Cookie", session.cookie);
     expect(list.status).toBe(200);
     expect(list.body.map((order: { id: string }) => order.id)).toEqual([orderA.id]);
     expect(list.body[0]).not.toHaveProperty("createdBy");
     expect(list.body[0].technician).not.toHaveProperty("email");
+    expect(list.body[0].technician).not.toHaveProperty("id");
+    expect(list.body[0].technician).not.toHaveProperty("role");
     expect((await request(app)
       .get(`/auth/customer/service-orders/${orderA.id}`)
       .set("Cookie", session.cookie)).status).toBe(200);
-    expect((await request(app)
+    const crossAccount = await request(app)
       .get(`/auth/customer/service-orders/${orderB.id}`)
-      .set("Cookie", session.cookie)).status).toBe(404);
+      .set("x-customer-id", customerB.id)
+      .send({ customerId: customerB.id })
+      .set("Cookie", session.cookie);
+    const nonexistent = await request(app)
+      .get(`/auth/customer/service-orders/${randomUUID()}`)
+      .set("Cookie", session.cookie);
+    const malformed = await request(app)
+      .get("/auth/customer/service-orders/not-a-uuid")
+      .set("Cookie", session.cookie);
+    expect(crossAccount.status).toBe(404);
+    expect(crossAccount.body).toEqual(nonexistent.body);
+    expect(malformed.status).toBe(404);
+    expect(malformed.body).toEqual(nonexistent.body);
+    expect((await request(app)
+      .get(`/auth/customer/service-orders/${orderA.id}`)
+      .set("Cookie", sessionB.cookie)).status).toBe(404);
   });
 });
 
@@ -345,6 +504,9 @@ describe("reset de senha revoga sessões de cliente", () => {
       .post("/auth/customer/refresh")
       .set("Cookie", `customer_refresh_token=${customerSession.refresh}; customer_csrf_token=${customerSession.csrf}`)
       .set("x-csrf-token", customerSession.csrf)).status).toBe(401);
+    expect((await request(app)
+      .get("/auth/customer/me")
+      .set("Cookie", `customer_access_token=${customerSession.access}`)).status).toBe(401);
     expect(await testPrisma.refreshToken.count({
       where: { userId: user.id, revokedAt: null },
     })).toBe(1);

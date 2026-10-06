@@ -35,6 +35,17 @@ const INTERNAL_USER_ROLES = new Set<UserRole>([
   "TECHNICIAN",
 ]);
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasOwnClaim(payload: object, claim: string): boolean {
+  return Object.prototype.hasOwnProperty.call(payload, claim);
+}
+
+function isUuidClaim(value: unknown): value is string {
+  return typeof value === "string" && UUID_PATTERN.test(value);
+}
+
 export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, JWT_ACCESS_SECRET, {
     algorithm: "HS256",
@@ -49,10 +60,14 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 
   if (
     typeof decoded === "string" ||
-    !decoded.sub ||
+    typeof decoded.sub !== "string" ||
+    decoded.sub.length === 0 ||
     typeof decoded.role !== "string" ||
     !INTERNAL_USER_ROLES.has(decoded.role as UserRole) ||
-    decoded.principalType
+    hasOwnClaim(decoded, "principalType") ||
+    hasOwnClaim(decoded, "sid") ||
+    hasOwnClaim(decoded, "customerId") ||
+    hasOwnClaim(decoded, "customerAccountId")
   ) {
     throw new Error("Token de acesso inválido");
   }
@@ -81,17 +96,20 @@ export function verifyCustomerAccessToken(
 
   if (
     typeof decoded === "string" ||
-    !decoded.sub ||
-    !decoded.sid ||
+    !isUuidClaim(decoded.sub) ||
+    !isUuidClaim(decoded.sid) ||
     decoded.principalType !== "CUSTOMER_ACCOUNT" ||
-    decoded.role
+    hasOwnClaim(decoded, "role") ||
+    hasOwnClaim(decoded, "userId") ||
+    hasOwnClaim(decoded, "customerId") ||
+    hasOwnClaim(decoded, "customerAccountId")
   ) {
     throw new Error("Token de acesso de cliente inválido");
   }
 
   return {
     sub: decoded.sub,
-    sid: decoded.sid as string,
+    sid: decoded.sid,
     principalType: "CUSTOMER_ACCOUNT",
   };
 }

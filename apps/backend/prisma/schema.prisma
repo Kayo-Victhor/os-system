@@ -87,8 +87,8 @@ model Customer {
   serviceOrders   ServiceOrder[]
 }
 
-// CustomerAccount is the future customer authentication identity. It is kept
-// independent from User, which is reserved for internal staff identities.
+// CustomerAccount is the customer authentication identity. It is independent
+// from User, which is reserved exclusively for internal staff identities.
 model CustomerAccount {
   id              String                @id @default(uuid())
   customerId      String                @unique
