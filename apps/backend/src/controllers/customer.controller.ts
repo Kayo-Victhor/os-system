@@ -8,15 +8,51 @@ import {
   getCustomerByIdForTechnician,
   updateCustomer,
   deleteCustomer,
+  setCustomerAccountStatus,
+  deleteCustomerAccount,
+  anonymizeCustomer,
+  CustomerLifecycleError,
 } from "../services/customer.service.js";
 
 import {
   createCustomerSchema,
   updateCustomerSchema,
+  customerAccountStatusSchema,
+  customerIdSchema,
+  emptyCustomerLifecycleSchema,
 } from "../schemas/customer.schema.js";
 
 import { mapPrismaError } from "../lib/prisma-errors.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
+
+function validCustomerId(rawId: string, res: Response): string | null {
+  const parsed = customerIdSchema.safeParse(rawId);
+  if (!parsed.success) {
+    res.status(404).json({ error: "Cliente não encontrado" });
+    return null;
+  }
+  return parsed.data;
+}
+
+function respondToLifecycleError(error: unknown, res: Response): boolean {
+  if (!(error instanceof CustomerLifecycleError)) return false;
+
+  if (error.code === "SERVICE_ORDER_HISTORY_EXISTS") {
+    res.status(409).json({
+      error:
+        "Este cliente possui histórico de ordens de serviço. Anonimize o cadastro para preservar o histórico.",
+    });
+    return true;
+  }
+
+  res.status(404).json({
+    error:
+      error.code === "ACCOUNT_NOT_FOUND"
+        ? "Conta de acesso do cliente não encontrada"
+        : "Cliente não encontrado",
+  });
+  return true;
+}
 
 export async function createCustomerController(req: Request, res: Response) {
   const result = createCustomerSchema.safeParse(req.body);
@@ -156,25 +192,103 @@ export async function deleteCustomerController(
   req: Request<{ id: string }>,
   res: Response
 ) {
+  const customerId = validCustomerId(req.params.id, res);
+  if (!customerId) return;
+
   try {
-    const customer = await getCustomerById(req.params.id);
-
-    if (!customer) {
-      res.status(404).json({
-        error: "Cliente não encontrado"
-      });
-
-      return;
-    }
-
-    await deleteCustomer(req.params.id);
+    await deleteCustomer(customerId);
 
     res.status(204).send();
   } catch (error) {
+    if (respondToLifecycleError(error, res)) return;
+
+    const known = mapPrismaError(error);
+    if (known) {
+      res.status(known.status).json(known.body);
+      return;
+    }
+
     console.error(error);
 
     res.status(500).json({
       error: "Erro ao excluir cliente"
     });
+  }
+}
+
+export async function updateCustomerAccountStatusController(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const customerId = validCustomerId(req.params.id, res);
+  if (!customerId) return;
+  const result = customerAccountStatusSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: "Status de conta inválido" });
+    return;
+  }
+
+  try {
+    const customerAccount = await setCustomerAccountStatus(
+      customerId,
+      result.data.status,
+    );
+    console.info(
+      result.data.status === "SUSPENDED"
+        ? "customer account suspended"
+        : "customer account reactivated",
+      { customerId },
+    );
+    res.json({ customerAccount });
+  } catch (error) {
+    if (respondToLifecycleError(error, res)) return;
+    console.error(error);
+    res.status(500).json({ error: "Não foi possível alterar a conta do cliente" });
+  }
+}
+
+export async function deleteCustomerAccountController(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const customerId = validCustomerId(req.params.id, res);
+  if (!customerId) return;
+  const body = emptyCustomerLifecycleSchema.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "Dados inválidos" });
+    return;
+  }
+
+  try {
+    await deleteCustomerAccount(customerId);
+    console.info("customer account deleted", { customerId });
+    res.status(204).send();
+  } catch (error) {
+    if (respondToLifecycleError(error, res)) return;
+    console.error(error);
+    res.status(500).json({ error: "Não foi possível excluir a conta de acesso" });
+  }
+}
+
+export async function anonymizeCustomerController(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const customerId = validCustomerId(req.params.id, res);
+  if (!customerId) return;
+  const body = emptyCustomerLifecycleSchema.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "Dados inválidos" });
+    return;
+  }
+
+  try {
+    const customer = await anonymizeCustomer(customerId);
+    console.info("customer anonymized", { customerId });
+    res.json(customer);
+  } catch (error) {
+    if (respondToLifecycleError(error, res)) return;
+    console.error(error);
+    res.status(500).json({ error: "Não foi possível anonimizar o cliente" });
   }
 }

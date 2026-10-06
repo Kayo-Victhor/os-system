@@ -11,6 +11,18 @@ export const createCustomerSchema = z.object({
 export const updateCustomerSchema =
   createCustomerSchema.partial();
 
+export const customerAccountStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED"]),
+}).strict();
+
+export const emptyCustomerLifecycleSchema = z.object({}).strict();
+
+export const customerIdSchema = z.string().uuid();
+
 export type CreateCustomerInput = z.infer<
   typeof createCustomerSchema
+>;
+
+export type CustomerAccountStatusInput = z.infer<
+  typeof customerAccountStatusSchema
 >;

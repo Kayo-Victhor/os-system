@@ -106,7 +106,10 @@ describe("POST /customers", () => {
       .send(validCustomer);
 
     expect(res.status).toBe(201);
-    expect(prismaMock.customer.create).toHaveBeenCalledWith({ data: validCustomer });
+    expect(prismaMock.customer.create).toHaveBeenCalledWith({
+      data: validCustomer,
+      include: { customerAccount: { select: { status: true } } },
+    });
   });
 });
 
@@ -138,12 +141,16 @@ describe("DELETE /customers/:id", () => {
 
   it("an ADMIN can delete an existing customer", async () => {
     const { cookie, csrfHeader } = authAs("admin-1", "ADMIN");
+    const customerId = "11111111-1111-4111-8111-111111111111";
 
-    prismaMock.customer.findUnique.mockResolvedValueOnce({ id: "cust-1" });
-    prismaMock.customer.delete.mockResolvedValueOnce({ id: "cust-1" });
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ id: customerId }])
+      .mockResolvedValueOnce([]);
+    prismaMock.serviceOrder.count.mockResolvedValueOnce(0);
+    prismaMock.customer.delete.mockResolvedValueOnce({ id: customerId });
 
     const res = await request(app)
-      .delete("/customers/cust-1")
+      .delete(`/customers/${customerId}`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader);
 

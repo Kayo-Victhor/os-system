@@ -11,6 +11,8 @@ export const permissions = {
     "CUSTOMER_READ",
     "CUSTOMER_UPDATE",
     "CUSTOMER_DELETE",
+    "CUSTOMER_ACCOUNT_MANAGE",
+    "CUSTOMER_ANONYMIZE",
 
     "OS_CREATE",
     "OS_READ",
@@ -49,6 +51,8 @@ export type Permission =
   | "CUSTOMER_READ"
   | "CUSTOMER_UPDATE"
   | "CUSTOMER_DELETE"
+  | "CUSTOMER_ACCOUNT_MANAGE"
+  | "CUSTOMER_ANONYMIZE"
   | "OS_CREATE"
   | "OS_READ"
   | "OS_UPDATE"

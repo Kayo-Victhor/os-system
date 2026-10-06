@@ -786,6 +786,25 @@ As consultas do portal derivam o `Customer` de `CustomerAccount.id` presente na
 sessão validada. O backend não aceita `customerId` do navegador como prova de
 ownership. Não existe relação entre `Customer` e `User`.
 
+## Ciclo de vida e retenção do cliente
+
+`CustomerAccount`, `Customer` e `ServiceOrder` possuem ciclos de vida
+independentes. Somente `ADMIN` pode suspender ou reativar uma conta de acesso,
+excluir suas credenciais ou anonimizar o cadastro. Suspensão revoga sessões e
+tokens de recuperação; reativação permite um novo login, mas nunca restaura
+sessões antigas.
+
+Excluir uma `CustomerAccount` preserva o `Customer` e suas ordens. A
+anonimização remove a conta de acesso, substitui o nome por um identificador
+técnico e apaga e-mail, telefone, documento e endereço, mantendo o ID do
+`Customer` e `ServiceOrder.customerId`. O hard delete de `Customer` só é
+permitido quando não existe nenhuma ordem vinculada; quando há histórico, a API
+retorna conflito e orienta o uso da anonimização.
+
+Registros expirados de `PendingCustomerRegistration` permanecem isolados de
+clientes confirmados. Não existe cleanup automático ou cron para esses
+registros neste momento.
+
 ## Operação de ordens por função
 
 - **ADMIN** cria, consulta, edita, exclui e atribui ordens; pode atribuir ou reatribuir somente usuários com a role `TECHNICIAN` e alterar qualquer status.

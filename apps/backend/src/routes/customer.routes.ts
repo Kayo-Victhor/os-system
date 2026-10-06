@@ -5,7 +5,10 @@ import {
   listCustomersController,
   getCustomerByIdController,
   updateCustomerController,
-  deleteCustomerController
+  deleteCustomerController,
+  updateCustomerAccountStatusController,
+  deleteCustomerAccountController,
+  anonymizeCustomerController,
 } from "../controllers/customer.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -42,6 +45,30 @@ router.patch(
   writeRateLimiter,
   requirePermission("CUSTOMER_UPDATE"),
   updateCustomerController
+);
+
+router.patch(
+  "/:id/account/status",
+  authMiddleware,
+  writeRateLimiter,
+  requirePermission("CUSTOMER_ACCOUNT_MANAGE"),
+  updateCustomerAccountStatusController,
+);
+
+router.delete(
+  "/:id/account",
+  authMiddleware,
+  writeRateLimiter,
+  requirePermission("CUSTOMER_ACCOUNT_MANAGE"),
+  deleteCustomerAccountController,
+);
+
+router.post(
+  "/:id/anonymize",
+  authMiddleware,
+  writeRateLimiter,
+  requirePermission("CUSTOMER_ANONYMIZE"),
+  anonymizeCustomerController,
 );
 
 router.delete(

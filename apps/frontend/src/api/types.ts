@@ -1,5 +1,6 @@
 export type UserRole = "ADMIN" | "ATTENDANT" | "TECHNICIAN";
 export type InternalUserRole = UserRole;
+export type CustomerAccountStatus = "ACTIVE" | "SUSPENDED";
 
 export type ServiceOrderStatus =
   | "OPEN"
@@ -37,6 +38,7 @@ export interface Customer {
   address: string | null;
   createdAt: string;
   updatedAt: string;
+  customerAccount?: { status: CustomerAccountStatus } | null;
 }
 
 export interface CustomerAccountProfile {

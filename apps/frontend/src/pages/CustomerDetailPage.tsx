@@ -13,6 +13,44 @@ import { CustomerForm } from "./CustomerForm.tsx";
 import { IconArrowLeft } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
+type LifecycleAction =
+  | "SUSPEND"
+  | "REACTIVATE"
+  | "DELETE_ACCOUNT"
+  | "ANONYMIZE";
+
+const lifecycleDialog: Record<
+  LifecycleAction,
+  { title: string; description: string; confirmLabel: string; danger?: boolean }
+> = {
+  SUSPEND: {
+    title: "Suspender conta",
+    description:
+      "A conta deixará de acessar o portal e todas as sessões serão encerradas. O cliente e suas ordens serão preservados.",
+    confirmLabel: "Suspender conta",
+  },
+  REACTIVATE: {
+    title: "Reativar conta",
+    description:
+      "A conta poderá fazer um novo login. Sessões encerradas anteriormente não serão restauradas.",
+    confirmLabel: "Reativar conta",
+  },
+  DELETE_ACCOUNT: {
+    title: "Excluir conta de acesso",
+    description:
+      "As credenciais e sessões serão removidas, mas o cadastro do cliente e todo o histórico de ordens serão preservados.",
+    confirmLabel: "Excluir conta",
+    danger: true,
+  },
+  ANONYMIZE: {
+    title: "Anonimizar cliente",
+    description:
+      "Nome, e-mail, telefone, documento e endereço serão substituídos ou removidos. A conta de acesso será excluída e as ordens serão preservadas. Esta ação não pode ser desfeita.",
+    confirmLabel: "Anonimizar cliente",
+    danger: true,
+  },
+};
+
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -29,6 +67,9 @@ export function CustomerDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [lifecycleAction, setLifecycleAction] =
+    useState<LifecycleAction | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const [orderHistoryError, setOrderHistoryError] = useState<string | null>(null);
 
@@ -112,6 +153,51 @@ export function CustomerDetailPage() {
     }
   }
 
+  async function handleLifecycleAction() {
+    if (!customer || !lifecycleAction) return;
+    setLifecycleBusy(true);
+    setDeleteError(null);
+
+    try {
+      if (lifecycleAction === "SUSPEND" || lifecycleAction === "REACTIVATE") {
+        const status = lifecycleAction === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+        const result = await customersApi.updateCustomerAccountStatus(
+          customer.id,
+          status,
+        );
+        setCustomer({ ...customer, customerAccount: result.customerAccount });
+        setSuccessMessage(
+          status === "SUSPENDED"
+            ? "Conta de acesso suspensa e sessões encerradas."
+            : "Conta de acesso reativada. Um novo login já pode ser realizado.",
+        );
+      } else if (lifecycleAction === "DELETE_ACCOUNT") {
+        await customersApi.deleteCustomerAccount(customer.id);
+        setCustomer({ ...customer, customerAccount: null });
+        setSuccessMessage(
+          "Conta de acesso excluída. O cliente e o histórico foram preservados.",
+        );
+      } else {
+        const anonymized = await customersApi.anonymizeCustomer(customer.id);
+        setCustomer(anonymized);
+        setEditing(false);
+        setSuccessMessage(
+          "Cliente anonimizado. A conta de acesso foi removida e o histórico foi preservado.",
+        );
+      }
+      setLifecycleAction(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof ApiError
+          ? err.message
+          : "Não foi possível concluir a operação.",
+      );
+      setLifecycleAction(null);
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
   return (
     <div>
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/customers")}>
@@ -180,15 +266,72 @@ export function CustomerDetailPage() {
             )}
           </div>
 
-          {can("CUSTOMER_DELETE") && !editing && (
+          <div className="card detail-section">
+            <h2>Conta de acesso</h2>
+            <dl className="kv-list">
+              <div className="kv-row">
+                <dt>Situação</dt>
+                <dd>
+                  {customer.customerAccount?.status === "ACTIVE"
+                    ? "Ativa"
+                    : customer.customerAccount?.status === "SUSPENDED"
+                      ? "Suspensa"
+                      : "Sem conta de acesso"}
+                </dd>
+              </div>
+            </dl>
+
+            {can("CUSTOMER_ACCOUNT_MANAGE") && customer.customerAccount && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    setLifecycleAction(
+                      customer.customerAccount?.status === "ACTIVE"
+                        ? "SUSPEND"
+                        : "REACTIVATE",
+                    )
+                  }
+                >
+                  {customer.customerAccount.status === "ACTIVE"
+                    ? "Suspender conta"
+                    : "Reativar conta"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => setLifecycleAction("DELETE_ACCOUNT")}
+                >
+                  Excluir conta de acesso
+                </button>
+              </div>
+            )}
+          </div>
+
+          {(can("CUSTOMER_DELETE") || can("CUSTOMER_ANONYMIZE")) && !editing && (
             <div className="card detail-section">
               <h2>Zona de risco</h2>
               <p className="page-subtitle" style={{ marginBottom: 12 }}>
-                Excluir um cliente é permanente e não pode ser desfeito.
+                A exclusão física só é permitida quando não há histórico de ordens.
+                Para preservar o histórico, use a anonimização.
               </p>
-              <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteOpen(true)}>
-                Excluir cliente
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {can("CUSTOMER_ANONYMIZE") && (
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => setLifecycleAction("ANONYMIZE")}
+                  >
+                    Anonimizar cliente
+                  </button>
+                )}
+                {can("CUSTOMER_DELETE") && (
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteOpen(true)}>
+                    Excluir cliente sem histórico
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -226,12 +369,23 @@ export function CustomerDetailPage() {
       <ConfirmDialog
         open={deleteOpen}
         title="Excluir cliente"
-        description={`Tem certeza que deseja excluir "${customer.name}"? Esta ação não pode ser desfeita.`}
+        description={`Tem certeza que deseja excluir "${customer.name}"? A operação será recusada se houver ordens de serviço vinculadas.`}
         confirmLabel="Excluir"
         danger
         busy={deleting}
         onConfirm={handleDelete}
         onCancel={() => setDeleteOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={lifecycleAction !== null}
+        title={lifecycleAction ? lifecycleDialog[lifecycleAction].title : "Confirmar operação"}
+        description={lifecycleAction ? lifecycleDialog[lifecycleAction].description : ""}
+        confirmLabel={lifecycleAction ? lifecycleDialog[lifecycleAction].confirmLabel : "Confirmar"}
+        danger={lifecycleAction ? lifecycleDialog[lifecycleAction].danger : false}
+        busy={lifecycleBusy}
+        onConfirm={handleLifecycleAction}
+        onCancel={() => setLifecycleAction(null)}
       />
     </div>
   );

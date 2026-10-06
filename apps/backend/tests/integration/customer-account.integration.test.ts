@@ -144,6 +144,9 @@ describe("CustomerAccount — estrutura isolada de acesso do cliente", () => {
 
     expect(response.status).toBe(200);
     expect(JSON.stringify(response.body)).not.toContain("hash-secreto-que-nao-pode-ser-enviado");
-    expect(response.body).not.toHaveProperty("customerAccount");
+    expect(response.body.customerAccount).toEqual({ status: "ACTIVE" });
+    expect(response.body.customerAccount).not.toHaveProperty("id");
+    expect(response.body.customerAccount).not.toHaveProperty("email");
+    expect(response.body.customerAccount).not.toHaveProperty("passwordHash");
   });
 });

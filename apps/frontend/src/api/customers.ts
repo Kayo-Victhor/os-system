@@ -1,5 +1,5 @@
 import { apiRequest } from "./client.ts";
-import type { Customer } from "./types.ts";
+import type { Customer, CustomerAccountStatus } from "./types.ts";
 
 export interface CustomerInput {
   name: string;
@@ -30,4 +30,27 @@ export function updateCustomer(id: string, data: Partial<CustomerInput>) {
 
 export function deleteCustomer(id: string) {
   return apiRequest<void>(`/customers/${id}`, { method: "DELETE" });
+}
+
+export function updateCustomerAccountStatus(
+  id: string,
+  status: CustomerAccountStatus,
+) {
+  return apiRequest<{ customerAccount: { status: CustomerAccountStatus } }>(
+    `/customers/${id}/account/status`,
+    { method: "PATCH", body: { status } },
+  );
+}
+
+export function deleteCustomerAccount(id: string) {
+  return apiRequest<void>(`/customers/${id}/account`, {
+    method: "DELETE",
+  });
+}
+
+export function anonymizeCustomer(id: string) {
+  return apiRequest<Customer>(`/customers/${id}/anonymize`, {
+    method: "POST",
+    body: {},
+  });
 }

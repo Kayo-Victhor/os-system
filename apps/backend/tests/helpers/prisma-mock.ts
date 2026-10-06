@@ -11,6 +11,8 @@ import { vi } from "vitest";
  * transparent than adding a new dependency for it.
  */
 export const prismaMock = {
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
   user: {
     findUnique: vi.fn(),
     findUniqueOrThrow: vi.fn(),
@@ -31,11 +33,19 @@ export const prismaMock = {
   customerAccount: {
     findUnique: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
   },
   customerAccountPasswordResetToken: {
     findUnique: vi.fn(),
     upsert: vi.fn(),
     update: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  customerSession: {
+    updateMany: vi.fn(),
+  },
+  customerSessionRefreshToken: {
+    updateMany: vi.fn(),
   },
   serviceOrder: {
     findUnique: vi.fn(),
@@ -43,6 +53,7 @@ export const prismaMock = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    count: vi.fn(),
   },
   passwordResetToken: {
     findUnique: vi.fn(),
@@ -59,8 +70,16 @@ export const prismaMock = {
 
 export function resetPrismaMock() {
   for (const model of Object.values(prismaMock)) {
+    if (typeof model === "function") {
+      model.mockReset();
+      continue;
+    }
     for (const fn of Object.values(model)) {
       fn.mockReset();
     }
   }
+
+  prismaMock.$transaction.mockImplementation(
+    async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock),
+  );
 }
