@@ -76,7 +76,6 @@ describe("POST /auth/customer/register/confirm", () => {
       email: registration.email,
       phone: registration.phone,
       address: registration.address,
-      userId: null,
     });
     expect(await testPrisma.user.count()).toBe(before.users);
     expect(await testPrisma.customer.count()).toBe(before.customers + 1);

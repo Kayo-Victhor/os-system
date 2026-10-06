@@ -17,11 +17,7 @@ import { ApiError } from "../api/client.ts";
 import { IconPlus } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
-// Matches the backend's updateUserSchema role enum exactly — CUSTOMER is
-// deliberately excluded: converting a self-registered customer account to
-// staff (or vice versa) isn't a supported operation on this endpoint, so
-// it isn't offered as a choice (see PATCH /users/:id in
-// schemas/user.schema.ts).
+// Matches the backend's internal User role enum exactly.
 const EDITABLE_ROLES: UserRole[] = ["ADMIN", "ATTENDANT", "TECHNICIAN"];
 
 export function UsersListPage() {
@@ -133,7 +129,7 @@ export function UsersListPage() {
                     <td>{u.name}</td>
                     <td>{u.email}</td>
                     <td>
-                      {isSelf || isPrimaryAdmin || u.role === "CUSTOMER" ? (
+                      {isSelf || isPrimaryAdmin ? (
                         <>
                           <RoleBadge role={u.role} />
                           {isPrimaryAdmin && <span className="field-hint">Administrador principal</span>}

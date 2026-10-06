@@ -67,10 +67,6 @@ export async function getCustomerByIdForTechnician(id: string, technicianId: str
   });
 }
 
-export async function getCustomerByUserId(userId: string) {
-  return prisma.customer.findUnique({ where: { userId } });
-}
-
 export async function updateCustomer(
   id: string,
   data: Partial<CreateCustomerInput>

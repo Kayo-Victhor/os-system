@@ -11,9 +11,6 @@ enum UserRole {
   ADMIN
   ATTENDANT
   TECHNICIAN
-  /// Legacy/migration-only role. It remains temporarily while customer
-  /// identities are separated from internal users in the next blocks.
-  CUSTOMER
 }
 
 enum CustomerAccountStatus {
@@ -43,15 +40,12 @@ model User {
   password               String
   role                   UserRole                @default(ATTENDANT)
   isPrimaryAdmin         Boolean                 @default(false)
-  emailVerifiedAt        DateTime?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   createdOrders          ServiceOrder[]          @relation("CreatedOrders")
   technicianOrders       ServiceOrder[]          @relation("TechnicianOrders")
   refreshTokens          RefreshToken[]
-  emailVerificationToken EmailVerificationToken?
   passwordResetToken     PasswordResetToken?
-  customer               Customer?
 }
 
 // Refresh tokens are stored as a hash (never the raw token) so a database
@@ -68,16 +62,6 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
-}
-
-model EmailVerificationToken {
-  id        String    @id @default(uuid())
-  tokenHash String    @unique
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
 }
 
 model PasswordResetToken {
@@ -97,10 +81,6 @@ model Customer {
   phone           String?
   document        String?          @unique
   address         String?
-  /// Legacy User(CUSTOMER) link. It remains until an explicit reconciliation
-  /// migrates legacy identities to CustomerAccount in a later block.
-  userId          String?          @unique
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   customerAccount CustomerAccount?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -124,7 +104,7 @@ model CustomerAccount {
   sessions            CustomerSession[]
 }
 
-// A customer authentication session is independent from the legacy User
+// A customer authentication session is independent from the internal User
 // refresh-token domain. Every rotated token remains as a hash in the family
 // so reuse of any ancestor can revoke the whole session.
 model CustomerSession {
@@ -158,7 +138,7 @@ model CustomerSessionRefreshToken {
 }
 
 // Password recovery for CustomerAccount is intentionally independent from
-// the legacy User/PasswordResetToken authentication domain.
+// the internal User/PasswordResetToken authentication domain.
 model CustomerAccountPasswordResetToken {
   id                String          @id @default(uuid())
   customerAccountId String          @unique
@@ -172,7 +152,7 @@ model CustomerAccountPasswordResetToken {
 }
 
 // Public customer registration remains isolated here until e-mail ownership
-// is confirmed. It never creates a legacy User(CUSTOMER) identity.
+// is confirmed. It never creates an internal User identity.
 model PendingCustomerRegistration {
   id           String   @id @default(uuid())
   name         String

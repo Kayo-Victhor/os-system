@@ -10,7 +10,7 @@ beforeEach(async () => {
 });
 
 describe("bootstrap do administrador principal", () => {
-  it("cria o primeiro ADMIN como principal sem confirmação de e-mail", async () => {
+  it("cria o primeiro ADMIN como principal", async () => {
     const admin = await bootstrapPrimaryAdmin(testPrisma.user, {
       email: "principal@example.com",
       password: "senha-principal123",
@@ -18,7 +18,6 @@ describe("bootstrap do administrador principal", () => {
 
     expect(admin.role).toBe("ADMIN");
     expect(admin.isPrimaryAdmin).toBe(true);
-    expect(admin.emailVerifiedAt).toBeNull();
     expect(await verifyPassword(admin.password, "senha-principal123")).toBe(true);
   });
 

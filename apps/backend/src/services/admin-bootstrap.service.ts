@@ -39,7 +39,6 @@ export async function bootstrapPrimaryAdmin(
     password,
     role: "ADMIN" as const,
     isPrimaryAdmin: true,
-    emailVerifiedAt: null,
   };
 
   if (primaryAdmins[0]) {

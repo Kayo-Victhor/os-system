@@ -29,7 +29,6 @@ describe("POST /auth/login", () => {
       email: "ana@example.com",
       password: passwordHash,
       role: "ADMIN",
-      emailVerifiedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -39,7 +38,6 @@ describe("POST /auth/login", () => {
       email: "ana@example.com",
       password: passwordHash,
       role: "ADMIN",
-      emailVerifiedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -90,7 +88,6 @@ describe("POST /auth/login", () => {
       email: "ana@example.com",
       password: passwordHash,
       role: "ADMIN",
-      emailVerifiedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -135,7 +132,6 @@ describe("Session protection", () => {
       name: "Ana",
       email: "ana@example.com",
       role: "ADMIN",
-      emailVerifiedAt: new Date(),
     });
 
     const res = await request(app).get("/auth/me").set("Cookie", cookie);

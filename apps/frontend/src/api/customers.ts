@@ -13,10 +13,6 @@ export function listCustomers(search?: string, signal?: AbortSignal) {
   return apiRequest<Customer[]>("/customers", { query: { search }, signal });
 }
 
-export function getOwnCustomer(signal?: AbortSignal) {
-  return apiRequest<Customer>("/customers/me", { signal });
-}
-
 export function getCustomer(id: string, signal?: AbortSignal) {
   return apiRequest<Customer>(`/customers/${id}`, { signal });
 }

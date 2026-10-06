@@ -10,7 +10,6 @@ export class EmailDeliveryError extends Error {
 interface LinkEmail { to: string; token: string; }
 interface TestEmail {
   to: string;
-  verificationUrl: string;
   passwordResetUrl?: string;
   customerRegistrationUrl?: string;
   customerPasswordResetUrl?: string;
@@ -48,15 +47,9 @@ async function deliverEmail(to: string, subject: string, htmlContent: string) {
   }
 }
 
-export async function sendVerificationEmail({ to, token }: LinkEmail) {
-  const url = linkUrl("/verificar-email", token);
-  if (process.env.NODE_ENV === "test") { testOutbox.push({ to, verificationUrl: url }); return; }
-  await deliverEmail(to, "Confirme seu e-mail no OS System", '<p>Confirme seu endereço de e-mail no OS System.</p><p><a href="' + url + '">Confirmar e-mail</a></p>');
-}
-
 export async function sendPasswordResetEmail({ to, token }: LinkEmail) {
   const url = linkUrl("/resetar-senha", token);
-  if (process.env.NODE_ENV === "test") { testOutbox.push({ to, verificationUrl: "", passwordResetUrl: url }); return; }
+  if (process.env.NODE_ENV === "test") { testOutbox.push({ to, passwordResetUrl: url }); return; }
   await deliverEmail(to, "Redefina sua senha no OS System", '<p>Recebemos uma solicitação para redefinir sua senha no OS System.</p><p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p><p>Se você não solicitou esta alteração, ignore esta mensagem.</p>');
 }
 
@@ -65,7 +58,6 @@ export async function sendCustomerAccountPasswordResetEmail({ to, token }: LinkE
   if (process.env.NODE_ENV === "test") {
     testOutbox.push({
       to,
-      verificationUrl: "",
       customerPasswordResetUrl: url,
     });
     return;
@@ -84,7 +76,7 @@ export async function sendCustomerAccountPasswordResetEmail({ to, token }: LinkE
 export async function sendCustomerRegistrationVerificationEmail({ to, token }: LinkEmail) {
   const url = linkUrl("/confirmar-cadastro", token);
   if (process.env.NODE_ENV === "test") {
-    testOutbox.push({ to, verificationUrl: "", customerRegistrationUrl: url });
+    testOutbox.push({ to, customerRegistrationUrl: url });
     return;
   }
 

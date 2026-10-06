@@ -24,7 +24,6 @@ const ROLE_COLOR: Record<UserRole, string> = {
   ADMIN: "badge-red",
   ATTENDANT: "badge-blue",
   TECHNICIAN: "badge-green",
-  CUSTOMER: "badge-gray",
 };
 
 export function StatusBadge({ status }: { status: ServiceOrderStatus }) {

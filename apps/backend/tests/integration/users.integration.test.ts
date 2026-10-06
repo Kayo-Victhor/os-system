@@ -24,7 +24,6 @@ describe("Initial admin (seed equivalent)", () => {
         email: "admin@os-system.local",
         password: passwordHash,
         role: "ADMIN",
-        emailVerifiedAt: null,
       },
     });
 
@@ -35,8 +34,6 @@ describe("Initial admin (seed equivalent)", () => {
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.user.id).toBe(admin.id);
     expect(loginRes.body.user.role).toBe("ADMIN");
-    expect((await testPrisma.user.findUniqueOrThrow({ where: { id: admin.id } })).emailVerifiedAt).toBeNull();
-    expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: admin.id } })).toBeNull();
   });
 });
 
@@ -63,12 +60,10 @@ describe("POST /users — creation (admin only)", () => {
       where: { email: "tecnico-novo@example.com" },
     });
     expect(stored.role).toBe("TECHNICIAN");
-    expect(stored.emailVerifiedAt).toBeNull();
-    expect(await testPrisma.emailVerificationToken.findUnique({ where: { userId: stored.id } })).toBeNull();
     expect(await verifyPassword(stored.password, "senha123456")).toBe(true);
   });
 
-  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)(
     "a %s cannot create users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);
@@ -208,18 +203,7 @@ describe("GET /users — query (admin only)", () => {
     },
   );
 
-  it("does not expose legacy CUSTOMER accounts in team administration", async () => {
-    const { user: admin } = await createFixtureUser("ADMIN");
-    await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
-
-    const res = await request(app).get("/users").set("Cookie", session.cookie);
-
-    expect(res.status).toBe(200);
-    expect(res.body.every((user: { role: string }) => user.role !== "CUSTOMER")).toBe(true);
-  });
-
-  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)(
     "a %s cannot list users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);
@@ -394,7 +378,7 @@ describe("DELETE /users/:id", () => {
   // depth for if that ever changes (e.g. a future role gains
   // USER_DELETE), not because it fires today.
 
-  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)(
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)(
     "a %s cannot delete users (403)",
     async (role) => {
       const { user } = await createFixtureUser(role);

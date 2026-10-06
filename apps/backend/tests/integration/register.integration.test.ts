@@ -11,8 +11,7 @@ import {
 } from "../../src/services/email.service.js";
 import * as emailService from "../../src/services/email.service.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
-import { createFixtureCustomer, createFixtureUser, FIXTURE_PASSWORD } from "../helpers/fixtures.js";
-import { loginAs } from "../helpers/integration-auth.js";
+import { createFixtureCustomer, createFixtureUser } from "../helpers/fixtures.js";
 
 beforeEach(async () => {
   await resetDatabase();
@@ -100,7 +99,7 @@ describe("POST /auth/customer/register — cadastro público pendente", () => {
     expect(await verifyPassword(pending.passwordHash, "nova-senha-123")).toBe(true);
   });
 
-  it("mantém /auth/register como alias seguro sem criar User(CUSTOMER)", async () => {
+  it("mantém /auth/register como alias seguro sem criar User", async () => {
     const response = await request(app).post("/auth/register").send(registrationData());
 
     expect(response.status).toBe(202);
@@ -237,26 +236,5 @@ describe("POST /auth/customer/register/resend", () => {
     });
     expect(pending).not.toBeNull();
     expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(0);
-  });
-});
-
-describe("CUSTOMER legado — regressão de acesso", () => {
-  it("continua autenticando e acessando /auth/me", async () => {
-    const { user } = await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
-
-    const response = await request(app).get("/auth/me").set("Cookie", session.cookie);
-
-    expect(response.status).toBe(200);
-    expect(response.body.user.role).toBe("CUSTOMER");
-  });
-
-  it("continua sem acesso administrativo", async () => {
-    const { user } = await createFixtureUser("CUSTOMER");
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
-
-    const response = await request(app).get("/users").set("Cookie", session.cookie);
-
-    expect(response.status).toBe(403);
   });
 });

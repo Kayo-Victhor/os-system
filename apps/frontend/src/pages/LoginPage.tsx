@@ -28,8 +28,8 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
-      const user = await login(email, password);
-      navigate(user.role === "CUSTOMER" ? "/minha-area" : "/", { replace: true });
+      await login(email, password);
+      navigate("/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setError(
@@ -91,7 +91,6 @@ export function LoginPage() {
         <p className="page-subtitle">É cliente? <Link to="/customer/login">Acessar área do cliente</Link></p>
         <p className="page-subtitle">Ainda não possui conta? <Link to="/registrar">Criar conta de cliente</Link></p>
         <p className="page-subtitle"><Link to="/esqueci-senha">Esqueci minha senha</Link></p>
-        <p className="page-subtitle">Não recebeu a confirmação? <Link to="/verificar-email">Reenviar e-mail</Link></p>
       </div>
     </div>
   );

@@ -21,10 +21,10 @@ describe("Rate limit de autenticação", () => {
   it("blocks the eleventh request in the 15-minute window", async () => {
     const { default: app } = await import("../src/app.js");
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const response = await request(app).post("/auth/resend-verification").send({ email: "limite@example.com" });
+      const response = await request(app).post("/auth/login").send({ email: "limite@example.com", password: "senha-incorreta" });
       expect(response.status).not.toBe(429);
     }
-    const blocked = await request(app).post("/auth/resend-verification").send({ email: "limite@example.com" });
+    const blocked = await request(app).post("/auth/login").send({ email: "limite@example.com", password: "senha-incorreta" });
     expect(blocked.status).toBe(429);
     expect(blocked.body.error).toContain("Muitas tentativas");
   });

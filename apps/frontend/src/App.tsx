@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Outlet, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Outlet, Routes, Route } from "react-router-dom";
 
-import { useAuth } from "./hooks/useAuth.ts";
 import { AuthProvider } from "./context/AuthProvider.tsx";
 import { CustomerAuthProvider } from "./context/CustomerAuthProvider.tsx";
 import { RequireAuth, RequireCustomerAuth, RequirePermission } from "./components/Guards.tsx";
@@ -10,7 +9,6 @@ import { AppLayout } from "./components/AppLayout.tsx";
 const LoginPage = lazy(() => import("./pages/LoginPage.tsx").then(({ LoginPage }) => ({ default: LoginPage })));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.tsx").then(({ RegisterPage }) => ({ default: RegisterPage })));
 const ConfirmCustomerRegistrationPage = lazy(() => import("./pages/ConfirmCustomerRegistrationPage.tsx").then(({ ConfirmCustomerRegistrationPage }) => ({ default: ConfirmCustomerRegistrationPage })));
-const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage.tsx").then(({ VerifyEmailPage }) => ({ default: VerifyEmailPage })));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.tsx").then(({ ForgotPasswordPage }) => ({ default: ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.tsx").then(({ ResetPasswordPage }) => ({ default: ResetPasswordPage })));
 const CustomerForgotPasswordPage = lazy(() => import("./pages/CustomerForgotPasswordPage.tsx").then(({ CustomerForgotPasswordPage }) => ({ default: CustomerForgotPasswordPage })));
@@ -18,7 +16,6 @@ const CustomerResetPasswordPage = lazy(() => import("./pages/CustomerResetPasswo
 const CustomerLoginPage = lazy(() => import("./pages/CustomerLoginPage.tsx").then(({ CustomerLoginPage }) => ({ default: CustomerLoginPage })));
 const CustomerAccountPortalPage = lazy(() => import("./pages/CustomerAccountPortalPage.tsx").then(({ CustomerAccountPortalPage }) => ({ default: CustomerAccountPortalPage })));
 const CustomerServiceOrderDetailPage = lazy(() => import("./pages/CustomerServiceOrderDetailPage.tsx").then(({ CustomerServiceOrderDetailPage }) => ({ default: CustomerServiceOrderDetailPage })));
-const CustomerPortalPage = lazy(() => import("./pages/CustomerPortalPage.tsx").then(({ CustomerPortalPage }) => ({ default: CustomerPortalPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage.tsx").then(({ DashboardPage }) => ({ default: DashboardPage })));
 const ServiceOrdersListPage = lazy(() => import("./pages/ServiceOrdersListPage.tsx").then(({ ServiceOrdersListPage }) => ({ default: ServiceOrdersListPage })));
 const ServiceOrderNewPage = lazy(() => import("./pages/ServiceOrderNewPage.tsx").then(({ ServiceOrderNewPage }) => ({ default: ServiceOrderNewPage })));
@@ -30,11 +27,6 @@ const TechniciansListPage = lazy(() => import("./pages/TechniciansListPage.tsx")
 const UsersListPage = lazy(() => import("./pages/UsersListPage.tsx").then(({ UsersListPage }) => ({ default: UsersListPage })));
 const UserNewPage = lazy(() => import("./pages/UserNewPage.tsx").then(({ UserNewPage }) => ({ default: UserNewPage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx").then(({ NotFoundPage }) => ({ default: NotFoundPage })));
-
-function RoleHome() {
-  const { user } = useAuth();
-  return user?.role === "CUSTOMER" ? <Navigate to="/minha-area" replace /> : <DashboardPage />;
-}
 
 function RouteLoading() {
   return <div className="page-loading" role="status"><span className="spinner" />Carregando página...</div>;
@@ -55,7 +47,6 @@ function App() {
           <Routes>
           <Route path="/registrar" element={<RegisterPage />} />
           <Route path="/confirmar-cadastro" element={<ConfirmCustomerRegistrationPage />} />
-          <Route path="/verificar-email" element={<VerifyEmailPage />} />
           <Route path="/customer/forgot-password" element={<CustomerForgotPasswordPage />} />
           <Route path="/customer/reset-password" element={<CustomerResetPasswordPage />} />
 
@@ -79,8 +70,7 @@ function App() {
               </RequireAuth>
             }
           >
-            <Route path="/" element={<RoleHome />} />
-            <Route path="/minha-area" element={<CustomerPortalPage />} />
+            <Route path="/" element={<DashboardPage />} />
 
             <Route
               path="/service-orders"

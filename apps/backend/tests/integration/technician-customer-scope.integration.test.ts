@@ -16,7 +16,7 @@ beforeEach(async () => {
 });
 
 describe("TECHNICIAN — Customers no escopo operacional", () => {
-  it("cria Customer sem criar User ou vínculo de conta", async () => {
+  it("cria Customer sem criar identidade de autenticação", async () => {
     const { user: technician } = await createFixtureUser("TECHNICIAN");
     const session = await loginAs(app, technician.email, FIXTURE_PASSWORD);
 
@@ -28,7 +28,7 @@ describe("TECHNICIAN — Customers no escopo operacional", () => {
 
     expect(response.status).toBe(201);
     const customer = await testPrisma.customer.findUniqueOrThrow({ where: { id: response.body.id } });
-    expect(customer.userId).toBeNull();
+    expect(customer).not.toHaveProperty("userId");
     expect(await testPrisma.user.count()).toBe(1);
   });
 

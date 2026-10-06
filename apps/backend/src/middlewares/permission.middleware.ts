@@ -23,7 +23,7 @@ export function requirePermission(permission: Permission) {
 
     const rolePermissions = permissions[req.userRole];
 
-    if (!(rolePermissions as readonly Permission[]).includes(permission)) {
+    if (!rolePermissions || !(rolePermissions as readonly Permission[]).includes(permission)) {
       res.status(403).json({
         error: "Você não tem permissão para executar esta ação"
       });

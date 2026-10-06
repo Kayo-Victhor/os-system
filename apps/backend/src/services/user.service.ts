@@ -1,11 +1,9 @@
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
 import type { CreateUserInput, UpdateUserInput } from "../schemas/user.schema.js";
-import type { UserRole } from "../generated/prisma/client.js";
 
 export const INTERNAL_USER_ROLES = ["ADMIN", "ATTENDANT", "TECHNICIAN"] as const;
 export type InternalUserRole = (typeof INTERNAL_USER_ROLES)[number];
-const internalUserRoleValues: UserRole[] = [...INTERNAL_USER_ROLES];
 
 export async function createUser(data: CreateUserInput) {
   const passwordHash = await hashPassword(data.password);
@@ -17,7 +15,6 @@ export async function createUser(data: CreateUserInput) {
       password: passwordHash,
       role: data.role,
       isPrimaryAdmin: false,
-      // Internal accounts do not use the legacy User e-mail verification flow.
     },
     select: {
       id: true,
@@ -33,11 +30,9 @@ export async function createUser(data: CreateUserInput) {
 
 export async function listUsers(filters: { role?: InternalUserRole } = {}) {
   return prisma.user.findMany({
-    // CUSTOMER remains in User only for the temporary legacy flow. It is not
-    // an internal account and must never appear in team administration.
     where: filters.role
       ? { role: filters.role }
-      : { role: { in: internalUserRoleValues } },
+      : undefined,
     select: {
       id: true,
       name: true,

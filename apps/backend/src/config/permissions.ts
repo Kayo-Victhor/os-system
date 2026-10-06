@@ -38,16 +38,6 @@ export const permissions = {
     "OS_READ",
     "OS_UPDATE_STATUS"
   ],
-
-  // Legacy/migration-only: a self-registered CUSTOMER is bound to exactly
-  // one Customer record until CustomerAccount replaces this flow.
-  // Controller-level ownership checks restrict these permissions to that
-  // linked record and its service orders.
-  CUSTOMER: [
-    "CUSTOMER_READ",
-    "CUSTOMER_UPDATE",
-    "OS_READ",
-  ]
 } as const satisfies Record<UserRole, readonly string[]>;
 
 export type Permission =

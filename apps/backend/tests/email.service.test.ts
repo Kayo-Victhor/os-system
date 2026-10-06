@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EmailDeliveryError, sendCustomerAccountPasswordResetEmail, sendCustomerRegistrationVerificationEmail, sendPasswordResetEmail, sendVerificationEmail } from "../src/services/email.service.js";
+import { EmailDeliveryError, sendCustomerAccountPasswordResetEmail, sendCustomerRegistrationVerificationEmail, sendPasswordResetEmail } from "../src/services/email.service.js";
 
 const originalEnv = { ...process.env };
 
@@ -17,29 +17,6 @@ function configureBrevo() {
 }
 
 describe("serviço de e-mail da Brevo", () => {
-  it("envia o payload de confirmação para o endpoint oficial", async () => {
-    configureBrevo();
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ messageId: "id" }), { status: 201 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await sendVerificationEmail({ to: "cliente@example.com", token: "token-seguro" });
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://api.brevo.com/v3/smtp/email");
-    expect(options.headers).toEqual({
-      "api-key": "brevo-secret-that-must-not-leak",
-      "Content-Type": "application/json",
-    });
-    const payload = JSON.parse(options.body);
-    expect(payload).toMatchObject({
-      sender: { name: "OS System", email: "remetente-verificado@example.com" },
-      to: [{ email: "cliente@example.com" }],
-      subject: "Confirme seu e-mail no OS System",
-    });
-    expect(payload.htmlContent).toContain("http://localhost:5173/verificar-email?token=token-seguro");
-  });
-
   it("envia a mensagem de redefinição com link e prazo", async () => {
     configureBrevo();
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ messageId: "id" }), { status: 201 }));
@@ -98,7 +75,7 @@ describe("serviço de e-mail da Brevo", () => {
     configureBrevo();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
 
-    await expect(sendVerificationEmail({ to: "cliente@example.com", token: "token-seguro" })).rejects.toEqual(
+    await expect(sendCustomerRegistrationVerificationEmail({ to: "cliente@example.com", token: "token-seguro" })).rejects.toEqual(
       expect.objectContaining({ name: "EmailDeliveryError", message: "Não foi possível enviar o e-mail de verificação" }),
     );
   });
@@ -110,7 +87,7 @@ describe("serviço de e-mail da Brevo", () => {
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
 
-      await expect(sendVerificationEmail({ to: "cliente@example.com", token: "token-seguro" })).rejects.toBeInstanceOf(EmailDeliveryError);
+      await expect(sendCustomerRegistrationVerificationEmail({ to: "cliente@example.com", token: "token-seguro" })).rejects.toBeInstanceOf(EmailDeliveryError);
       expect(consoleError).not.toHaveBeenCalled();
     },
   );

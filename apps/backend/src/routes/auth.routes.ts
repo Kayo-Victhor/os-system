@@ -9,8 +9,6 @@ import {
   forgotCustomerAccountPasswordController,
   registerController,
   resendCustomerRegistrationController,
-  resendVerificationController,
-  verifyEmailController,
   forgotPasswordController,
   resetPasswordController,
   resetCustomerAccountPasswordController,
@@ -42,8 +40,8 @@ import { customerAuthMiddleware } from "../middlewares/customer-auth.middleware.
 
 const router = Router();
 
-// /register remains as a compatibility alias, but no longer creates a legacy
-// User(CUSTOMER). Both paths persist only a pending registration.
+// /register remains as a compatibility alias. Both paths persist only a
+// pending customer registration and never create an internal User.
 router.post("/register", customerRegistrationRateLimiter, registerController);
 router.post("/customer/register", customerRegistrationRateLimiter, registerController);
 router.post(
@@ -98,8 +96,6 @@ router.get(
   customerServiceOrderController,
 );
 router.post("/login", authRateLimiter, loginController);
-router.post("/verify-email", authRateLimiter, verifyEmailController);
-router.post("/resend-verification", authRateLimiter, resendVerificationController);
 router.post("/forgot-password", passwordResetRateLimiter, forgotPasswordController);
 router.post("/reset-password", passwordResetRateLimiter, resetPasswordController);
 router.post("/refresh", authRateLimiter, csrfProtectionForSession, refreshController);

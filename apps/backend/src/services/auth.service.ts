@@ -7,14 +7,11 @@ import {
   generateRefreshToken,
   hashToken,
   REFRESH_TOKEN_TTL_SECONDS,
-  EMAIL_VERIFICATION_TOKEN_TTL_SECONDS,
-  generateEmailVerificationToken,
-  hashEmailVerificationToken,
   PASSWORD_RESET_TOKEN_TTL_SECONDS,
   generatePasswordResetToken,
   hashPasswordResetToken,
 } from "../lib/tokens.js";
-import { sendVerificationEmail, sendPasswordResetEmail } from "./email.service.js";
+import { sendPasswordResetEmail } from "./email.service.js";
 
 export interface SessionResult {
   accessToken: string;
@@ -28,16 +25,7 @@ export interface SessionResult {
   };
 }
 
-export type LoginResult = SessionResult | "UNVERIFIED" | null;
-export type EmailVerificationResult = "VERIFIED" | "INVALID" | "EXPIRED" | "USED";
-
-/**
- * CUSTOMER remains a legacy User identity until CustomerAccount replaces it.
- * Internal accounts never require the legacy User e-mail verification flow.
- */
-export function requiresEmailVerification(role: UserRole): boolean {
-  return role === "CUSTOMER";
-}
+export type LoginResult = SessionResult | null;
 
 async function issueSession(userId: string): Promise<{
   accessToken: string;
@@ -69,19 +57,6 @@ function sessionUser(user: { id: string; name: string; email: string; role: User
   };
 }
 
-async function replaceEmailVerificationToken(userId: string) {
-  const { token, tokenHash } = generateEmailVerificationToken();
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000);
-
-  await prisma.emailVerificationToken.upsert({
-    where: { userId },
-    update: { tokenHash, expiresAt, usedAt: null },
-    create: { tokenHash, userId, expiresAt },
-  });
-
-  return token;
-}
-
 export async function loginUser(data: LoginInput): Promise<LoginResult> {
   const user = await prisma.user.findUnique({ where: { email: data.email } });
 
@@ -93,8 +68,6 @@ export async function loginUser(data: LoginInput): Promise<LoginResult> {
   const passwordValid = await verifyPassword(passwordHash, data.password);
 
   if (!user || !passwordValid) return null;
-  if (requiresEmailVerification(user.role) && !user.emailVerifiedAt) return "UNVERIFIED";
-
   const { accessToken, refreshToken } = await issueSession(user.id);
   return { accessToken, refreshToken, user: sessionUser(user) };
 }
@@ -113,11 +86,7 @@ export async function refreshSession(presentedToken: string): Promise<SessionRes
   if (!stored) return null;
 
   const isExpired = stored.expiresAt.getTime() < Date.now();
-  if (
-    stored.revokedAt ||
-    isExpired ||
-    (requiresEmailVerification(stored.user.role) && !stored.user.emailVerifiedAt)
-  ) {
+  if (stored.revokedAt || isExpired) {
     await prisma.refreshToken.updateMany({
       where: { userId: stored.userId, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -142,51 +111,6 @@ export async function revokeRefreshToken(presentedToken: string) {
   });
 }
 
-export async function verifyEmail(token: string): Promise<EmailVerificationResult> {
-  const tokenHash = hashEmailVerificationToken(token);
-  const now = new Date();
-  const stored = await prisma.emailVerificationToken.findUnique({
-    where: { tokenHash },
-    include: { user: { select: { role: true } } },
-  });
-
-  if (!stored) return "INVALID";
-  if (!requiresEmailVerification(stored.user.role)) return "INVALID";
-  if (stored.usedAt) return "USED";
-  if (stored.expiresAt <= now) return "EXPIRED";
-
-  return prisma.$transaction(async (tx) => {
-    const claimed = await tx.emailVerificationToken.updateMany({
-      where: { id: stored.id, tokenHash, usedAt: null, expiresAt: { gt: now } },
-      data: { usedAt: now },
-    });
-    if (claimed.count !== 1) {
-      const current = await tx.emailVerificationToken.findUnique({ where: { id: stored.id } });
-      if (!current) return "INVALID";
-      if (current.usedAt) return "USED";
-      return "EXPIRED";
-    }
-    await tx.user.update({ where: { id: stored.userId }, data: { emailVerifiedAt: now } });
-    return "VERIFIED";
-  });
-}
-
-/** Returns true only when an unverified account received a new link. The
- * controller deliberately exposes the same generic response either way. */
-export async function resendEmailVerification(email: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, emailVerifiedAt: true, role: true },
-  });
-
-  if (!user || !requiresEmailVerification(user.role) || user.emailVerifiedAt) return false;
-
-  const token = await replaceEmailVerificationToken(user.id);
-  await sendVerificationEmail({ to: user.email, token });
-  return true;
-}
-
-
 async function replacePasswordResetToken(userId: string) {
   const { token, tokenHash } = generatePasswordResetToken();
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_SECONDS * 1000);
@@ -198,14 +122,14 @@ async function replacePasswordResetToken(userId: string) {
   return token;
 }
 
-/** Returns false for absent or unverified accounts. The controller always gives
+/** Returns false for absent accounts. The controller always gives
  * the same accepted response, so this result can never enumerate users. */
 export async function requestPasswordReset(email: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, emailVerifiedAt: true, role: true },
+    select: { id: true, email: true },
   });
-  if (!user || (requiresEmailVerification(user.role) && !user.emailVerifiedAt)) return false;
+  if (!user) return false;
   const token = await replacePasswordResetToken(user.id);
   await sendPasswordResetEmail({ to: user.email, token });
   return true;

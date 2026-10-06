@@ -33,14 +33,6 @@ export function logout() {
   return apiRequest<void>("/auth/logout", { method: "POST" });
 }
 
-export function verifyEmail(token: string) {
-  return apiRequest<{ message: string }>("/auth/verify-email", { method: "POST", body: { token } });
-}
-
-export function resendEmailVerification(email: string) {
-  return apiRequest<{ message: string }>("/auth/resend-verification", { method: "POST", body: { email } });
-}
-
 export function requestPasswordReset(email: string) {
   return apiRequest<{ message: string }>("/auth/forgot-password", { method: "POST", body: { email } });
 }

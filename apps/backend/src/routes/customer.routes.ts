@@ -4,7 +4,6 @@ import {
   createCustomerController,
   listCustomersController,
   getCustomerByIdController,
-  getOwnCustomerController,
   updateCustomerController,
   deleteCustomerController
 } from "../controllers/customer.controller.js";
@@ -28,13 +27,6 @@ router.get(
   authMiddleware,
   requirePermission("CUSTOMER_READ"),
   listCustomersController
-);
-
-router.get(
-  "/me",
-  authMiddleware,
-  requirePermission("CUSTOMER_READ"),
-  getOwnCustomerController
 );
 
 router.get(

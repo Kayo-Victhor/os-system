@@ -6,7 +6,6 @@ import {
   listCustomersForTechnician,
   getCustomerById,
   getCustomerByIdForTechnician,
-  getCustomerByUserId,
   updateCustomer,
   deleteCustomer,
 } from "../services/customer.service.js";
@@ -53,12 +52,6 @@ export async function createCustomerController(req: Request, res: Response) {
 
 export async function listCustomersController(req: AuthenticatedRequest, res: Response) {
   try {
-    if (req.userRole === "CUSTOMER") {
-      const customer = req.userId ? await getCustomerByUserId(req.userId) : null;
-      if (!customer) { res.status(404).json({ error: "Cadastro de cliente não encontrado" }); return; }
-      res.json([customer]);
-      return;
-    }
     const search =
       typeof req.query.search === "string" && req.query.search.trim().length > 0
         ? req.query.search.trim()
@@ -90,10 +83,6 @@ export async function getCustomerByIdController(
       if (!customer) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
       res.json(customer);
       return;
-    }
-    if (req.userRole === "CUSTOMER") {
-      const own = req.userId ? await getCustomerByUserId(req.userId) : null;
-      if (!own || own.id !== req.params.id) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
     }
     const customer = await getCustomerById(req.params.id);
 
@@ -131,10 +120,6 @@ export async function updateCustomerController(
   }
 
   try {
-    if (req.userRole === "CUSTOMER") {
-      const own = req.userId ? await getCustomerByUserId(req.userId) : null;
-      if (!own || own.id !== req.params.id) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
-    }
     const customer = await getCustomerById(req.params.id);
 
     if (!customer) {
@@ -192,11 +177,4 @@ export async function deleteCustomerController(
       error: "Erro ao excluir cliente"
     });
   }
-}
-
-export async function getOwnCustomerController(req: AuthenticatedRequest, res: Response) {
-  if (!req.userId) { res.status(401).json({ error: "Não autenticado" }); return; }
-  const customer = await getCustomerByUserId(req.userId);
-  if (!customer) { res.status(404).json({ error: "Cadastro de cliente não encontrado" }); return; }
-  res.json(customer);
 }

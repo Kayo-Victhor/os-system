@@ -144,7 +144,7 @@ describe("POST /service-orders — invalid input", () => {
     expect(res.status).toBe(400);
   });
 
-  it.each(["TECHNICIAN", "CUSTOMER"] as const)("a %s cannot create a service order (403)", async (role) => {
+  it.each(["TECHNICIAN"] as const)("a %s cannot create a service order (403)", async (role) => {
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
@@ -284,7 +284,7 @@ describe("PATCH /service-orders/:id/status — validation and authorization", ()
     expect(res.status).toBe(403);
   });
 
-  it.each(["ATTENDANT", "CUSTOMER"] as const)("a %s cannot update order status at all (403)", async (role) => {
+  it.each(["ATTENDANT"] as const)("a %s cannot update order status at all (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();
@@ -336,7 +336,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     expect(unchanged.technicianId).toBeNull();
   });
 
-  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot assign technicians (403)", async (role) => {
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)("a %s cannot assign technicians (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const { user: tech } = await createFixtureUser("TECHNICIAN");
@@ -423,7 +423,7 @@ describe("DELETE /service-orders/:id", () => {
     expect(await testPrisma.serviceOrder.findUnique({ where: { id: order.id } })).toBeNull();
   });
 
-  it.each(["ATTENDANT", "TECHNICIAN", "CUSTOMER"] as const)("a %s cannot delete a service order (403)", async (role) => {
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)("a %s cannot delete a service order (403)", async (role) => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user } = await createFixtureUser(role);
     const customer = await createFixtureCustomer();

@@ -183,9 +183,9 @@ describe("recuperação de senha exclusiva de CustomerAccount", () => {
     expect(stored.usedAt).not.toBeNull();
   });
 
-  it("mantém PasswordResetToken legado completamente separado", async () => {
+  it("mantém PasswordResetToken de usuário interno completamente separado", async () => {
     const { account } = await createCustomerAccount();
-    const { user } = await createFixtureUser("CUSTOMER", { email: "legado@example.com" });
+    const { user } = await createFixtureUser("ATTENDANT", { email: "interno@example.com" });
 
     await forgot(account.email);
     expect(await testPrisma.passwordResetToken.findUnique({ where: { userId: user.id } }))

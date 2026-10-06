@@ -1,5 +1,5 @@
-export type UserRole = "ADMIN" | "ATTENDANT" | "TECHNICIAN" | "CUSTOMER";
-export type InternalUserRole = Exclude<UserRole, "CUSTOMER">;
+export type UserRole = "ADMIN" | "ATTENDANT" | "TECHNICIAN";
+export type InternalUserRole = UserRole;
 
 export type ServiceOrderStatus =
   | "OPEN"
@@ -106,5 +106,4 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
   ATTENDANT: "Atendente",
   TECHNICIAN: "Técnico",
-  CUSTOMER: "Cliente",
 };

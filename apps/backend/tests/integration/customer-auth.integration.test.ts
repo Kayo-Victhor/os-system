@@ -118,7 +118,7 @@ describe("autenticação independente de CustomerAccount", () => {
     expect(response.body).toEqual({ error: "E-mail ou senha inválidos." });
   });
 
-  it("mantém cookies e tokens totalmente separados do User legado", async () => {
+  it("mantém cookies e tokens totalmente separados do User interno", async () => {
     const { account } = await createCustomerAccount();
     const customerResponse = await customerLogin(account.email);
     const customerCookies = customerSessionCookies(customerResponse);

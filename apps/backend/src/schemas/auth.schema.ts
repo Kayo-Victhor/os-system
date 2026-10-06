@@ -12,14 +12,6 @@ export const customerLoginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-export const verifyEmailSchema = z.object({
-  token: z.string().min(40).max(256),
-});
-
-export const resendVerificationSchema = z.object({
-  email: z.string().email(),
-});
-
 export const resendCustomerRegistrationSchema = z.object({
   email: z.string().transform(normalizeEmail).pipe(z.string().email()),
 });

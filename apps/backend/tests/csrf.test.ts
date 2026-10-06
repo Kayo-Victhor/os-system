@@ -32,7 +32,6 @@ describe("CSRF centralizado para sessões por cookie", () => {
       name: "Admin",
       email: "admin@example.com",
       role: "ADMIN",
-      emailVerifiedAt: new Date(),
     });
 
     const res = await request(app).get("/auth/me").set("Cookie", accessCookie());

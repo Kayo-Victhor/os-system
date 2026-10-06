@@ -121,13 +121,13 @@ O acesso do técnico deve permanecer limitado às operações permitidas pelo ba
 
 ---
 
-## 4. CUSTOMER
+## 4. Cliente
 
 **Perfil:** cliente final da empresa.
 
 ### Intenção funcional
 
-O CUSTOMER deve poder:
+O cliente deve poder:
 
 - realizar login;
 - consultar suas próprias ordens de serviço;
@@ -142,8 +142,8 @@ ao cadastro `Customer`. O login independente está em `/customer/login` e o
 portal autenticado em `/customer/area`. O backend deriva o `Customer` da sessão,
 portanto IDs enviados pelo navegador não definem ownership.
 
-`User(role=CUSTOMER)` continua existindo somente como compatibilidade legada e
-usa o fluxo antigo. Não há fallback entre as duas identidades.
+Clientes não são `User`: toda autenticação de cliente passa exclusivamente por
+`CustomerAccount`. Não há fallback para a autenticação interna.
 
 ---
 
@@ -180,7 +180,7 @@ O access token expira em 15 minutos e declara explicitamente o principal
 refresh token anterior; os hashes de toda a família são preservados para que a
 reutilização de qualquer token antigo revogue a sessão inteira. A redefinição
 de senha revoga todas as sessões de cliente ativas sem afetar `RefreshToken` de
-usuários internos ou legados.
+usuários internos.
 
 Endpoints principais:
 
@@ -200,14 +200,13 @@ Em particular:
 - `User.password` não deve ser exposto;
 - `RefreshToken.tokenHash` não deve ser exposto.
 
-### Verificação de e-mail na transição atual
+### Verificação de e-mail
 
 Usuários internos (`ADMIN`, `ATTENDANT` e `TECHNICIAN`) não exigem confirmação de e-mail para autenticação. O administrador inicial é criado exclusivamente pelo seed, que exige `ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` configurados no ambiente e nunca registra a senha. O seed mantém uma única conta marcada como administrador principal: ela preserva o mesmo identificador quando atualizada, não pode ser excluída nem rebaixada de papel e só pode ter seus dados próprios normais alterados pela própria conta.
 
-`CUSTOMER` permanece em `User` somente para compatibilidade legada e continua
-exigindo confirmação de e-mail no fluxo antigo. Novos cadastros confirmados
-criam `CustomerAccount` e usam exclusivamente a autenticação independente de
-cliente.
+O cadastro público permanece em `PendingCustomerRegistration` até a confirmação
+do e-mail. A confirmação cria `Customer` e `CustomerAccount` em uma única
+transação; usuários internos não utilizam esse fluxo.
 
 ## Autorização
 
@@ -217,7 +216,9 @@ A aplicação não depende do frontend para garantir segurança.
 
 O frontend pode ocultar botões e funcionalidades para melhorar a experiência do usuário, mas isso **não substitui a autorização do backend**.
 
-Quando necessário, as regras de acesso também devem verificar ownership, por exemplo, garantindo que um CUSTOMER só consiga acessar recursos pertencentes a ele.
+Quando necessário, as regras de acesso também verificam ownership. No portal,
+o backend deriva o `Customer` da `CustomerSession`, sem confiar em IDs enviados
+pelo navegador.
 
 ---
 
@@ -602,27 +603,6 @@ Não armazene secrets ou credenciais de produção no repositório.
   próprios de `CustomerAccount`.
 - Ownership de ordens do cliente derivado da sessão no backend.
 
----
-
-## Compatibilidade temporária
-
-### CUSTOMER legado
-
-`User(role=CUSTOMER)`, `Customer.userId`, `RefreshToken` e as rotas antigas
-permanecem operacionais até uma migração de dados dedicada. Eles não são usados
-como fallback pelo novo login de `CustomerAccount`.
-
----
-
-# 📋 Pendências
-
-## Migração do CUSTOMER legado
-
-Reconciliar futuramente os registros antigos de `User(role=CUSTOMER)` com a
-nova identidade sem associar automaticamente contas por coincidência de e-mail.
-
----
-
 ## Auditoria da Data API / RLS do Supabase
 
 A migration:
@@ -780,12 +760,10 @@ As roles principais são:
 ADMIN
 ATTENDANT
 TECHNICIAN
-CUSTOMER
 ```
 
-O fluxo novo de cliente usa `CustomerAccount` e `CustomerSession`, separado da
-autenticação interna. A role `CUSTOMER` em `User` existe apenas durante a
-transição dos dados legados.
+O fluxo de cliente usa `CustomerAccount` e `CustomerSession`, completamente
+separado da autenticação interna.
 
 A questão de RLS/Data API do Supabase permanece como uma decisão técnica que deve ser baseada na exposição e nos grants efetivamente encontrados, e não apenas nos alertas do painel.
 
@@ -806,14 +784,13 @@ confirmação do e-mail e só então cria ambos de modo transacional.
 
 As consultas do portal derivam o `Customer` de `CustomerAccount.id` presente na
 sessão validada. O backend não aceita `customerId` do navegador como prova de
-ownership. Registros legados continuam em `Customer.userId` até reconciliação
-explícita futura.
+ownership. Não existe relação entre `Customer` e `User`.
 
 ## Operação de ordens por função
 
 - **ADMIN** cria, consulta, edita, exclui e atribui ordens; pode atribuir ou reatribuir somente usuários com a role `TECHNICIAN` e alterar qualquer status.
 - **TECHNICIAN** cria cadastros de clientes sem criar uma conta de acesso, vê apenas Customers associados a ordens atribuídas a ele e opera somente o status das próprias ordens atribuídas. Não pode editar Customer, alterar o cliente da ordem, reatribuir técnico ou excluir ordens.
-- **CUSTOMER** consulta somente o cadastro vinculado à própria sessão e suas ordens. Não pode criar ordens, alterar status, atribuir técnico ou acessar recursos administrativos.
+- **Cliente autenticado por CustomerAccount** consulta somente o cadastro vinculado à própria sessão e suas ordens. Não pode criar ordens, alterar status, atribuir técnico ou acessar recursos administrativos.
 
 O backend impõe o escopo de `customerId` e `technicianId`; filtros e IDs enviados pelo navegador nunca concedem acesso adicional. As transições de status permanecem sem máquina de estados formal: ADMIN pode alterar qualquer status e TECHNICIAN pode alterar o status das ordens atribuídas a ele.
 
@@ -829,20 +806,26 @@ O cadastro público cria primeiro uma solicitação pendente. Após a confirmaç
 cria um `Customer` e uma `CustomerAccount` já verificada. Senhas novas exigem
 ao menos oito caracteres. O token de confirmação é aleatório, é persistido somente como HMAC,
 expira em 24 horas e possui uso único. Reenvios substituem o token anterior.
-O fluxo legado de `User(CUSTOMER)` continua separado até a migração definitiva.
+Não existe fluxo de `User(CUSTOMER)` nem endpoint de verificação de e-mail para
+usuários internos.
 
 Configure no backend, sem expor valores ao frontend:
 
 - `EMAIL_VERIFICATION_SECRET`: segredo exclusivo para HMAC dos links.
 - `PASSWORD_RESET_SECRET`: segredo exclusivo para HMAC dos links de redefinição de senha.
 - `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` e `EMAIL_FROM`: envio transacional pela API HTTP da Brevo. `EMAIL_FROM` deve ser um endereço autorizado na conta Brevo; para o teste inicial, domínio próprio não é obrigatório.
-- `APP_BASE_URL`: URL pública do frontend usada em `/verificar-email`; deve usar HTTPS em produção.
+- `APP_BASE_URL`: URL pública do frontend usada nos links de confirmação de cadastro e redefinição de senha; deve usar HTTPS em produção.
 
 Para ativar o envio, crie uma conta na Brevo, gere uma API key transacional com o menor privilégio disponível e autorize um remetente individual na própria Brevo. Configure as variáveis somente no ambiente do backend; em desenvolvimento, use um remetente autorizado e `APP_BASE_URL=http://localhost:5173`. Um domínio próprio é recomendado para produção, mas não é necessário para o primeiro teste com remetente autorizado.
 
-A API usa o endpoint `POST /auth/verify-email` e o reenvio genérico
-`POST /auth/resend-verification`. O segundo responde de forma uniforme para
-contas inexistentes ou já verificadas, reduzindo enumeração. Recuperação de senha usa `POST /auth/forgot-password` e `POST /auth/reset-password`. O link expira em 60 minutos, é de uso único e cada solicitação substitui o token anterior. Após a redefinição, todos os refresh tokens da conta são revogados; o usuário deve entrar novamente. Os endpoints são públicos, respondem de forma uniforme na solicitação e não exigem CSRF porque não dependem de uma sessão em cookie.
+A confirmação de cliente usa `POST /auth/customer/register/confirm` e o reenvio
+genérico usa `POST /auth/customer/register/resend`. Recuperação de senha interna
+usa `POST /auth/forgot-password` e `POST /auth/reset-password`; a recuperação de
+cliente usa os endpoints correspondentes sob `/auth/customer`. Os links de
+redefinição expiram em 60 minutos, são de uso único e cada solicitação substitui
+o token anterior. Após a redefinição, as sessões do respectivo domínio são
+revogadas. Os endpoints públicos respondem de forma uniforme e não dependem de
+uma sessão em cookie.
 
 Antes de produção, configure um domínio/remetente verificado no provider, uma
 chave de envio com privilégio mínimo e uma caixa de teste autorizada para

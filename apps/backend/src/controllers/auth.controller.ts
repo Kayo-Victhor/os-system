@@ -1,16 +1,13 @@
 import type { Response } from "express";
 
-import { confirmCustomerRegistrationSchema, forgotCustomerAccountPasswordSchema, forgotPasswordSchema, loginSchema, resendCustomerRegistrationSchema, resendVerificationSchema, resetCustomerAccountPasswordSchema, resetPasswordSchema, verifyEmailSchema } from "../schemas/auth.schema.js";
+import { confirmCustomerRegistrationSchema, forgotCustomerAccountPasswordSchema, forgotPasswordSchema, loginSchema, resendCustomerRegistrationSchema, resetCustomerAccountPasswordSchema, resetPasswordSchema } from "../schemas/auth.schema.js";
 import { registerSchema } from "../schemas/user.schema.js";
 import {
   loginUser,
   refreshSession,
   revokeRefreshToken,
-  resendEmailVerification,
-  verifyEmail,
   requestPasswordReset,
   resetPassword,
-  requiresEmailVerification,
 } from "../services/auth.service.js";
 import {
   CUSTOMER_REGISTRATION_MESSAGE,
@@ -140,14 +137,6 @@ export async function loginController(req: AuthenticatedRequest, res: Response) 
       res.status(401).json({ error: "Credenciais inválidas" });
       return;
     }
-    if (session === "UNVERIFIED") {
-      res.status(403).json({
-        error: "Confirme seu endereço de e-mail antes de entrar.",
-        code: "EMAIL_NOT_VERIFIED",
-      });
-      return;
-    }
-
     setSessionCookies(res, session);
     res.json({ user: session.user });
   } catch (error) {
@@ -186,47 +175,14 @@ export async function meController(req: AuthenticatedRequest, res: Response) {
   if (!req.userId) { res.status(401).json({ error: "Não autenticado" }); return; }
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { id: true, name: true, email: true, role: true, isPrimaryAdmin: true, emailVerifiedAt: true },
+    select: { id: true, name: true, email: true, role: true, isPrimaryAdmin: true },
   });
-  if (!user || (requiresEmailVerification(user.role) && !user.emailVerifiedAt)) {
+  if (!user) {
     res.status(401).json({ error: "Sessão inválida ou expirada" });
     return;
   }
   res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, isPrimaryAdmin: user.isPrimaryAdmin } });
 }
-
-export async function verifyEmailController(req: AuthenticatedRequest, res: Response) {
-  const result = verifyEmailSchema.safeParse(req.body);
-  if (!result.success) { res.status(400).json({ error: "Link de confirmação inválido ou expirado" }); return; }
-
-  try {
-    const verification = await verifyEmail(result.data.token);
-    if (verification !== "VERIFIED") { res.status(400).json({ error: "Link de confirmação inválido ou expirado" }); return; }
-    res.json({ message: "E-mail confirmado com sucesso. Você já pode entrar." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Não foi possível confirmar o e-mail" });
-  }
-}
-
-export async function resendVerificationController(req: AuthenticatedRequest, res: Response) {
-  const result = resendVerificationSchema.safeParse(req.body);
-  if (!result.success) { res.status(400).json({ error: "Dados inválidos" }); return; }
-
-  try {
-    await resendEmailVerification(result.data.email);
-    // Deliberately generic: the same response prevents account enumeration.
-    res.status(202).json({ message: "Se houver uma conta pendente para este e-mail, enviaremos uma nova confirmação." });
-  } catch (error) {
-    if (error instanceof EmailDeliveryError) {
-      res.status(503).json({ error: "Não foi possível enviar o e-mail de confirmação. Tente novamente em alguns minutos." });
-      return;
-    }
-    console.error(error);
-    res.status(500).json({ error: "Não foi possível processar o reenvio" });
-  }
-}
-
 
 const PASSWORD_RESET_MESSAGE = "Se o e-mail estiver cadastrado, enviaremos instruções para redefinir sua senha.";
 const CUSTOMER_PASSWORD_RESET_MESSAGE =

@@ -28,20 +28,6 @@ describe("POST /customers — creation", () => {
     expect(stored.email).toBe("maria.souza@example.com");
   });
 
-  it("a CUSTOMER cannot create a customer (403)", async () => {
-    const role = "CUSTOMER" as const;
-    const { user } = await createFixtureUser(role);
-    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
-
-    const res = await request(app)
-      .post("/customers")
-      .set("Cookie", session.cookie)
-      .set("x-csrf-token", session.csrfHeader)
-      .send({ name: "Maria Souza" });
-
-    expect(res.status).toBe(403);
-  });
-
   it("rejects a name that's too short", async () => {
     const { user } = await createFixtureUser("ATTENDANT");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
