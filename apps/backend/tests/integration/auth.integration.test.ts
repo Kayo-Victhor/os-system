@@ -208,6 +208,28 @@ describe("POST /auth/refresh — real rotation", () => {
     expect(finalAttempt.status).toBe(401);
   });
 
+  it("serializes two simultaneous refreshes of the same token", async () => {
+    const { user } = await createFixtureUser("ADMIN");
+    const loginRes = await request(app)
+      .post("/auth/login")
+      .send({ email: user.email, password: FIXTURE_PASSWORD });
+    const refreshToken = (loginRes.headers["set-cookie"] as unknown as string[])
+      .find((cookie) => cookie.startsWith("refresh_token="))!
+      .split(";")[0]
+      .split("=")[1];
+    const refresh = () => request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `refresh_token=${refreshToken}; csrf_token=test-csrf`)
+      .set("x-csrf-token", "test-csrf");
+
+    const responses = await Promise.all([refresh(), refresh()]);
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 401]);
+    expect(await testPrisma.refreshToken.count({
+      where: { userId: user.id, revokedAt: null },
+    })).toBe(0);
+  });
+
   it("rejects a refresh with no token", async () => {
     const res = await request(app).post("/auth/refresh");
     expect(res.status).toBe(401);
@@ -266,5 +288,30 @@ describe("POST /auth/logout — real revocation", () => {
       .set("x-csrf-token", "test-csrf");
 
     expect(afterLogout.status).toBe(401);
+  });
+
+  it("does not leave a usable token when logout races with refresh", async () => {
+    const { user } = await createFixtureUser("ADMIN");
+    const loginRes = await request(app)
+      .post("/auth/login")
+      .send({ email: user.email, password: FIXTURE_PASSWORD });
+    const refreshToken = (loginRes.headers["set-cookie"] as unknown as string[])
+      .find((cookie) => cookie.startsWith("refresh_token="))!
+      .split(";")[0]
+      .split("=")[1];
+    const cookie = `refresh_token=${refreshToken}; csrf_token=test-csrf`;
+
+    const [logout, refresh] = await Promise.all([
+      request(app).post("/auth/logout").set("Cookie", cookie)
+        .set("x-csrf-token", "test-csrf"),
+      request(app).post("/auth/refresh").set("Cookie", cookie)
+        .set("x-csrf-token", "test-csrf"),
+    ]);
+
+    expect(logout.status).toBe(204);
+    expect([200, 401]).toContain(refresh.status);
+    expect(await testPrisma.refreshToken.count({
+      where: { userId: user.id, revokedAt: null },
+    })).toBe(0);
   });
 });

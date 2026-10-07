@@ -27,6 +27,10 @@ export interface SessionResult {
 
 export type LoginResult = SessionResult | null;
 
+interface LockedRefreshToken {
+  id: string;
+}
+
 async function issueSession(userId: string): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -78,36 +82,83 @@ export async function loginUser(data: LoginInput): Promise<LoginResult> {
  */
 export async function refreshSession(presentedToken: string): Promise<SessionResult | null> {
   const tokenHash = hashToken(presentedToken);
-  const stored = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    include: { user: true },
-  });
+  const nextRefresh = generateRefreshToken();
 
-  if (!stored) return null;
+  return prisma.$transaction(async (tx) => {
+    const [candidate] = await tx.$queryRaw<LockedRefreshToken[]>`
+      SELECT "id"
+      FROM "RefreshToken"
+      WHERE "tokenHash" = ${tokenHash}
+      FOR UPDATE
+    `;
+    if (!candidate) return null;
 
-  const isExpired = stored.expiresAt.getTime() < Date.now();
-  if (stored.revokedAt || isExpired) {
-    await prisma.refreshToken.updateMany({
-      where: { userId: stored.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    const stored = await tx.refreshToken.findUniqueOrThrow({
+      where: { id: candidate.id },
+      include: { user: true },
     });
-    return null;
-  }
+    const now = new Date();
+    const isExpired = stored.expiresAt <= now;
 
-  await prisma.refreshToken.update({
-    where: { id: stored.id },
-    data: { revokedAt: new Date() },
+    if (stored.revokedAt || isExpired) {
+      await tx.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      return null;
+    }
+
+    await tx.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: now },
+    });
+    await tx.refreshToken.create({
+      data: {
+        tokenHash: nextRefresh.tokenHash,
+        userId: stored.userId,
+        expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_SECONDS * 1000),
+      },
+    });
+
+    return {
+      accessToken: signAccessToken({ sub: stored.user.id, role: stored.user.role }),
+      refreshToken: nextRefresh.token,
+      user: sessionUser(stored.user),
+    };
   });
-
-  const { accessToken, refreshToken } = await issueSession(stored.userId);
-  return { accessToken, refreshToken, user: sessionUser(stored.user) };
 }
 
 export async function revokeRefreshToken(presentedToken: string) {
   const tokenHash = hashToken(presentedToken);
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash, revokedAt: null },
-    data: { revokedAt: new Date() },
+  await prisma.$transaction(async (tx) => {
+    const [candidate] = await tx.$queryRaw<LockedRefreshToken[]>`
+      SELECT "id"
+      FROM "RefreshToken"
+      WHERE "tokenHash" = ${tokenHash}
+      FOR UPDATE
+    `;
+    if (!candidate) return;
+
+    const stored = await tx.refreshToken.findUniqueOrThrow({
+      where: { id: candidate.id },
+      select: { id: true, userId: true, revokedAt: true },
+    });
+    const now = new Date();
+
+    if (stored.revokedAt) {
+      // A concurrent refresh already replaced the presented token. Revoke
+      // every still-active token for the user so logout cannot lose that race.
+      await tx.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      return;
+    }
+
+    await tx.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: now },
+    });
   });
 }
 

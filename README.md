@@ -839,7 +839,9 @@ anterior para rejeitar operações concorrentes incompatíveis.
 O backend usa JWT de acesso com validade de 15 minutos em cookie HttpOnly e
 refresh token opaco de sete dias, armazenado apenas como HMAC no banco. Todo
 refresh é rotacionado; a reutilização de um token revogado invalida as sessões
-ativas daquele usuário. Operações com sessão exigem o token CSRF double-submit,
+ativas daquele usuário. Rotação e logout usam bloqueio transacional para que
+requisições concorrentes não deixem um token substituto utilizável. Operações
+com sessão exigem o token CSRF double-submit,
 e o frontend o envia também durante o refresh automático.
 
 O cadastro público cria primeiro uma solicitação pendente. Após a confirmação,

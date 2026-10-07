@@ -117,7 +117,7 @@ describe("CSRF em refresh e logout", () => {
   });
 
   it("permite refresh com CSRF válido alcançar a validação da sessão", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValueOnce(null);
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
 
     const res = await request(app)
       .post("/auth/refresh")
@@ -125,7 +125,7 @@ describe("CSRF em refresh e logout", () => {
       .set("x-csrf-token", "csrf-valido");
 
     expect(res.status).toBe(401);
-    expect(prismaMock.refreshToken.findUnique).toHaveBeenCalledOnce();
+    expect(prismaMock.$queryRaw).toHaveBeenCalledOnce();
   });
 
   it("bloqueia logout com sessão e sem CSRF", async () => {

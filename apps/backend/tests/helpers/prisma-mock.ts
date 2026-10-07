@@ -64,6 +64,7 @@ export const prismaMock = {
   },
   refreshToken: {
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
