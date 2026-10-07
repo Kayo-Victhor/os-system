@@ -80,10 +80,31 @@ export const customerRegistrationRateLimiter = rateLimit({
   message: { error: "Muitas tentativas. Tente novamente mais tarde." },
 });
 
+// The per-address limiter above protects one recipient, while this IP-only
+// ceiling prevents bypassing it by cycling through many different addresses
+// to turn the registration endpoint into an e-mail spam relay.
+export const customerRegistrationIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: { error: "Muitas tentativas. Tente novamente mais tarde." },
+});
+
 export const customerRegistrationResendRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 3,
   keyGenerator: customerRegistrationKey("customer-register-resend"),
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: { error: "Muitas tentativas. Tente novamente mais tarde." },
+});
+
+export const customerRegistrationResendIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",

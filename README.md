@@ -855,6 +855,8 @@ E-mails de identidade são normalizados e exclusivos entre os domínios
 `User` e `CustomerAccount`. Como essa unicidade atravessa duas tabelas, criação
 e alteração de usuário interno e confirmação de cliente usam o mesmo bloqueio
 transacional por e-mail e repetem a verificação imediatamente antes da escrita.
+Os limites de cadastro e reenvio combinam teto por destinatário e por IP para
+evitar contorno por rotação de endereços.
 
 Configure no backend, sem expor valores ao frontend:
 

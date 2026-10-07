@@ -54,6 +54,20 @@ describe("Rate limit de autenticação", () => {
     expect(blocked.status).toBe(429);
   });
 
+  it("blocks registration spam even when the same IP changes the recipient", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/customer/register")
+        .send({ email: `destinatario-${attempt}@example.com` });
+      expect(response.status).not.toBe(429);
+    }
+    const blocked = await request(app)
+      .post("/auth/customer/register")
+      .send({ email: "destinatario-final@example.com" });
+    expect(blocked.status).toBe(429);
+  });
+
   it("blocks the fourth pending registration resend for the same IP and e-mail", async () => {
     const { default: app } = await import("../src/app.js");
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -65,6 +79,20 @@ describe("Rate limit de autenticação", () => {
     const blocked = await request(app)
       .post("/auth/customer/register/resend")
       .send({ email: "e-mail-invalido" });
+    expect(blocked.status).toBe(429);
+  });
+
+  it("blocks resend spam even when the same IP changes the recipient", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/customer/register/resend")
+        .send({ email: `reenvio-invalido-${attempt}` });
+      expect(response.status).not.toBe(429);
+    }
+    const blocked = await request(app)
+      .post("/auth/customer/register/resend")
+      .send({ email: "reenvio-invalido-final" });
     expect(blocked.status).toBe(429);
   });
 

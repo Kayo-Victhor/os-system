@@ -27,8 +27,10 @@ import {
   authRateLimiter,
   customerAuthRateLimiter,
   customerRegistrationConfirmationRateLimiter,
+  customerRegistrationIpRateLimiter,
   customerPasswordResetRateLimiter,
   customerRegistrationRateLimiter,
+  customerRegistrationResendIpRateLimiter,
   customerRegistrationResendRateLimiter,
   passwordResetRateLimiter,
 } from "../middlewares/rate-limit.middleware.js";
@@ -42,10 +44,21 @@ const router = Router();
 
 // /register remains as a compatibility alias. Both paths persist only a
 // pending customer registration and never create an internal User.
-router.post("/register", customerRegistrationRateLimiter, registerController);
-router.post("/customer/register", customerRegistrationRateLimiter, registerController);
+router.post(
+  "/register",
+  customerRegistrationIpRateLimiter,
+  customerRegistrationRateLimiter,
+  registerController,
+);
+router.post(
+  "/customer/register",
+  customerRegistrationIpRateLimiter,
+  customerRegistrationRateLimiter,
+  registerController,
+);
 router.post(
   "/customer/register/resend",
+  customerRegistrationResendIpRateLimiter,
   customerRegistrationResendRateLimiter,
   resendCustomerRegistrationController,
 );
