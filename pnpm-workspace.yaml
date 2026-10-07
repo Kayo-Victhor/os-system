@@ -1,6 +1,13 @@
 packages:
   - "apps/*"
   - "packages/*"
+overrides:
+  deepmerge-ts: 8.0.2
+  fast-uri: 3.1.8
+  ip-address: 10.7.3
+  mysql2: 3.24.5
+  proxy-addr: 2.0.8
+  qs: 6.16.0
 allowBuilds:
   '@prisma/engines': true
   argon2: true
