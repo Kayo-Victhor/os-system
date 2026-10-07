@@ -156,18 +156,18 @@ export async function customerServiceOrdersController(
   req: CustomerAuthenticatedRequest,
   res: Response,
 ) {
-  if (!req.customerAccountId) {
+  if (!req.customerId) {
     res.status(401).json({ error: "Não autenticado" });
     return;
   }
-  res.json(await listCustomerServiceOrders(req.customerAccountId));
+  res.json(await listCustomerServiceOrders(req.customerId));
 }
 
 export async function customerServiceOrderController(
   req: CustomerAuthenticatedRequest,
   res: Response,
 ) {
-  if (!req.customerAccountId) {
+  if (!req.customerId) {
     res.status(401).json({ error: "Não autenticado" });
     return;
   }
@@ -180,7 +180,7 @@ export async function customerServiceOrderController(
     return;
   }
   const serviceOrder = await getCustomerServiceOrder(
-    req.customerAccountId,
+    req.customerId,
     serviceOrderId.data,
   );
   if (!serviceOrder) {

@@ -6,6 +6,7 @@ import { verifyCustomerAccessToken } from "../lib/tokens.js";
 
 export interface CustomerAuthenticatedRequest extends Request {
   customerAccountId?: string;
+  customerId?: string;
   customerSessionId?: string;
   principalType?: "CUSTOMER_ACCOUNT";
 }
@@ -36,7 +37,11 @@ export async function customerAuthMiddleware(
           emailVerifiedAt: { not: null },
         },
       },
-      select: { id: true, customerAccountId: true },
+      select: {
+        id: true,
+        customerAccountId: true,
+        customerAccount: { select: { customerId: true } },
+      },
     });
 
     if (!session) {
@@ -45,6 +50,7 @@ export async function customerAuthMiddleware(
     }
 
     req.customerAccountId = session.customerAccountId;
+    req.customerId = session.customerAccount.customerId;
     req.customerSessionId = session.id;
     req.principalType = "CUSTOMER_ACCOUNT";
     next();

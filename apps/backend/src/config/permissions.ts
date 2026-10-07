@@ -31,7 +31,9 @@ export const permissions = {
     "CUSTOMER_UPDATE",
 
     "OS_CREATE",
-    "OS_READ"
+    "OS_READ",
+    "OS_UPDATE",
+    "OS_ASSIGN"
   ],
 
   TECHNICIAN: [

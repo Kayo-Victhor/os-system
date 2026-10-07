@@ -261,7 +261,7 @@ describe("PATCH /service-orders/:id/status — validation and authorization", ()
       .set("x-csrf-token", tech2Session.csrfHeader)
       .send({ status: "IN_PROGRESS" });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
 
     const stillOpen = await testPrisma.serviceOrder.findUniqueOrThrow({ where: { id: order.id } });
     expect(stillOpen.status).toBe("OPEN");
@@ -281,7 +281,7 @@ describe("PATCH /service-orders/:id/status — validation and authorization", ()
       .set("x-csrf-token", session.csrfHeader)
       .send({ status: "IN_PROGRESS" });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it.each(["ATTENDANT"] as const)("a %s cannot update order status at all (403)", async (role) => {
@@ -336,9 +336,27 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     expect(unchanged.technicianId).toBeNull();
   });
 
-  it.each(["ATTENDANT", "TECHNICIAN"] as const)("a %s cannot assign technicians (403)", async (role) => {
+  it("an ATTENDANT can assign a valid technician", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
-    const { user } = await createFixtureUser(role);
+    const { user: attendant } = await createFixtureUser("ATTENDANT");
+    const { user: technician } = await createFixtureUser("TECHNICIAN");
+    const customer = await createFixtureCustomer();
+    const order = await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id });
+    const session = await loginAs(app, attendant.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .patch(`/service-orders/${order.id}/technician`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ technicianId: technician.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.technicianId).toBe(technician.id);
+  });
+
+  it("a TECHNICIAN cannot assign technicians (403)", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user } = await createFixtureUser("TECHNICIAN");
     const { user: tech } = await createFixtureUser("TECHNICIAN");
     const customer = await createFixtureCustomer();
     const order = await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id });

@@ -8,6 +8,9 @@ import {
   deleteServiceOrder,
   assignTechnician,
   updateServiceOrderStatus,
+  listAssignableTechnicians,
+  ServiceOrderDomainError,
+  type ServiceOrderActor,
 } from "../services/service-order.service.js";
 
 import {
@@ -16,12 +19,52 @@ import {
   assignTechnicianSchema,
   updateServiceOrderStatusSchema,
   listServiceOrdersQuerySchema,
+  serviceOrderIdSchema,
 } from "../schemas/service-order.schema.js";
 
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 
-import { prisma } from "../lib/prisma.js";
 import { mapPrismaError } from "../lib/prisma-errors.js";
+
+function authenticatedActor(
+  req: AuthenticatedRequest,
+  res: Response,
+): ServiceOrderActor | null {
+  if (!req.userId || !req.userRole) {
+    res.status(401).json({ error: "Usuário não autenticado" });
+    return null;
+  }
+  return { userId: req.userId, role: req.userRole };
+}
+
+function validServiceOrderId(rawId: string, res: Response): string | null {
+  const parsed = serviceOrderIdSchema.safeParse(rawId);
+  if (!parsed.success) {
+    res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    return null;
+  }
+  return parsed.data;
+}
+
+function respondToDomainError(error: unknown, res: Response): boolean {
+  if (!(error instanceof ServiceOrderDomainError)) return false;
+
+  const responses: Record<
+    ServiceOrderDomainError["code"],
+    { status: number; error: string }
+  > = {
+    CUSTOMER_NOT_FOUND: { status: 400, error: "Cliente informado não existe" },
+    SERVICE_ORDER_NOT_FOUND: { status: 404, error: "Ordem de serviço não encontrada" },
+    TECHNICIAN_INVALID: { status: 400, error: "Usuário informado não é um técnico" },
+    STATUS_FORBIDDEN: { status: 403, error: "Você não pode realizar esta alteração de status" },
+    INVALID_STATUS_TRANSITION: { status: 409, error: "Transição de status não permitida" },
+    STATUS_CONFLICT: { status: 409, error: "O status foi alterado por outra operação. Recarregue e tente novamente." },
+    ASSIGNMENT_CONFLICT: { status: 409, error: "A atribuição foi alterada por outra operação. Recarregue e tente novamente." },
+  };
+  const response = responses[error.code];
+  res.status(response.status).json({ error: response.error });
+  return true;
+}
 
 // =====================================================
 // CRIAR OS
@@ -42,19 +85,15 @@ export async function createServiceOrderController(
     return;
   }
 
-  if (!req.userId) {
-    res.status(401).json({
-      error: "Usuário não autenticado",
-    });
-
-    return;
-  }
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
 
   try {
-    const serviceOrder = await createServiceOrder(result.data, req.userId);
+    const serviceOrder = await createServiceOrder(result.data, actor.userId);
 
     res.status(201).json(serviceOrder);
   } catch (error) {
+    if (respondToDomainError(error, res)) return;
     const known = mapPrismaError(error);
 
     if (known) {
@@ -89,15 +128,11 @@ export async function listServiceOrdersController(
     return;
   }
 
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
+
   try {
-    // A technician works only on their assigned queue. The client-side
-    // "minhas ordens" filter is convenience UI, not an authorization
-    // boundary: without this override a technician could remove or replace
-    // technicianId in the URL and enumerate another technician's orders.
-    const serviceOrders = await listServiceOrders({
-      ...result.data,
-      technicianId: req.userRole === "TECHNICIAN" ? req.userId : result.data.technicianId,
-    });
+    const serviceOrders = await listServiceOrders(result.data, actor);
 
     res.json(serviceOrders);
   } catch (error) {
@@ -117,23 +152,19 @@ export async function getServiceOrderByIdController(
   req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
+
   try {
-    const serviceOrder = await getServiceOrderById(req.params.id);
+    const serviceOrder = await getServiceOrderById(serviceOrderId, actor);
 
     if (!serviceOrder) {
       res.status(404).json({
         error: "Ordem de serviço não encontrada",
       });
 
-      return;
-    }
-
-    // Do not reveal whether an order assigned to another technician exists.
-    if (
-      req.userRole === "TECHNICIAN" &&
-      serviceOrder.technicianId !== req.userId
-    ) {
-      res.status(404).json({ error: "Ordem de serviço não encontrada" });
       return;
     }
 
@@ -155,6 +186,8 @@ export async function updateServiceOrderController(
   req: Request<{ id: string }>,
   res: Response,
 ) {
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
   const result = updateServiceOrderSchema.safeParse(req.body);
 
   if (!result.success) {
@@ -167,7 +200,7 @@ export async function updateServiceOrderController(
   }
 
   try {
-    const serviceOrder = await getServiceOrderById(req.params.id);
+    const serviceOrder = await getServiceOrderById(serviceOrderId);
 
     if (!serviceOrder) {
       res.status(404).json({
@@ -178,7 +211,7 @@ export async function updateServiceOrderController(
     }
 
     const updatedServiceOrder = await updateServiceOrder(
-      req.params.id,
+      serviceOrderId,
       result.data,
     );
 
@@ -207,8 +240,10 @@ export async function deleteServiceOrderController(
   req: Request<{ id: string }>,
   res: Response,
 ) {
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
   try {
-    const serviceOrder = await getServiceOrderById(req.params.id);
+    const serviceOrder = await getServiceOrderById(serviceOrderId);
 
     if (!serviceOrder) {
       res.status(404).json({
@@ -218,7 +253,7 @@ export async function deleteServiceOrderController(
       return;
     }
 
-    await deleteServiceOrder(req.params.id);
+    await deleteServiceOrder(serviceOrderId);
 
     res.status(204).send();
   } catch (error) {
@@ -245,6 +280,8 @@ export async function assignTechnicianController(
   req: Request<{ id: string }>,
   res: Response,
 ) {
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
   const result = assignTechnicianSchema.safeParse(req.body);
 
   if (!result.success) {
@@ -257,39 +294,14 @@ export async function assignTechnicianController(
   }
 
   try {
-    const serviceOrder = await getServiceOrderById(req.params.id);
-
-    if (!serviceOrder) {
-      res.status(404).json({
-        error: "Ordem de serviço não encontrada",
-      });
-
-      return;
-    }
-
-    if (result.data.technicianId) {
-      const technician = await prisma.user.findUnique({
-        where: {
-          id: result.data.technicianId,
-        },
-      });
-
-      if (!technician || technician.role !== "TECHNICIAN") {
-        res.status(400).json({
-          error: "Usuário informado não é um técnico",
-        });
-
-        return;
-      }
-    }
-
     const updatedServiceOrder = await assignTechnician(
-      req.params.id,
+      serviceOrderId,
       result.data.technicianId,
     );
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    if (respondToDomainError(error, res)) return;
     const known = mapPrismaError(error);
 
     if (known) {
@@ -313,6 +325,10 @@ export async function updateServiceOrderStatusController(
   req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
   const result = updateServiceOrderStatusSchema.safeParse(req.body);
 
   if (!result.success) {
@@ -325,38 +341,15 @@ export async function updateServiceOrderStatusController(
   }
 
   try {
-    const serviceOrder = await getServiceOrderById(req.params.id);
-
-    if (!serviceOrder) {
-      res.status(404).json({
-        error: "Ordem de serviço não encontrada",
-      });
-
-      return;
-    }
-
-    // OS_UPDATE_STATUS lets a TECHNICIAN update status in general, but that
-    // must not extend to orders assigned to someone else — otherwise any
-    // technician could change the state of any order in the system just by
-    // knowing/guessing its id.
-    if (
-      req.userRole === "TECHNICIAN" &&
-      serviceOrder.technicianId !== req.userId
-    ) {
-      res.status(403).json({
-        error: "Você só pode atualizar o status de ordens atribuídas a você",
-      });
-
-      return;
-    }
-
     const updatedServiceOrder = await updateServiceOrderStatus(
-      req.params.id,
+      serviceOrderId,
       result.data.status,
+      actor,
     );
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    if (respondToDomainError(error, res)) return;
     const known = mapPrismaError(error);
 
     if (known) {
@@ -369,5 +362,17 @@ export async function updateServiceOrderStatusController(
     res.status(500).json({
       error: "Erro ao atualizar status da ordem de serviço",
     });
+  }
+}
+
+export async function listAssignableTechniciansController(
+  _req: Request,
+  res: Response,
+) {
+  try {
+    res.json(await listAssignableTechnicians());
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao listar técnicos disponíveis" });
   }
 }

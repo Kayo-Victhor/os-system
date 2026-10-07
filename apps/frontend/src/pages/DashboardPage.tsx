@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import * as customersApi from "../api/customers.ts";
-import * as usersApi from "../api/users.ts";
 import type { ServiceOrder } from "../api/types.ts";
 import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
@@ -33,7 +32,7 @@ export function DashboardPage() {
     const [ordersResult, customersResult, techniciansResult] = await Promise.allSettled([
       can("OS_READ") ? serviceOrdersApi.listServiceOrders({}, signal) : Promise.resolve([]),
       can("CUSTOMER_READ") ? customersApi.listCustomers(undefined, signal) : Promise.resolve([]),
-      can("OS_READ") ? usersApi.listUsers("TECHNICIAN", signal) : Promise.resolve([]),
+      can("OS_ASSIGN") ? serviceOrdersApi.listAssignableTechnicians(signal) : Promise.resolve([]),
     ]);
     if (!canCommit()) return;
     const failures = [ordersResult, customersResult, techniciansResult].filter((result) => result.status === "rejected");
@@ -101,10 +100,12 @@ export function DashboardPage() {
             <div className="stat-label">Clientes cadastrados</div>
           </div>
         )}
-        <div className="card stat-card">
-          <div className="stat-value">{data.technicianCount}</div>
-          <div className="stat-label">Técnicos</div>
-        </div>
+        {can("OS_ASSIGN") && (
+          <div className="card stat-card">
+            <div className="stat-value">{data.technicianCount}</div>
+            <div className="stat-label">Técnicos</div>
+          </div>
+        )}
       </div>
 
       {user?.role === "TECHNICIAN" && myOrders.length > 0 && (

@@ -3,6 +3,7 @@ import type {
   ServiceOrder,
   ServiceOrderPriority,
   ServiceOrderStatus,
+  ServiceOrderTechnician,
 } from "./types.ts";
 
 export interface ServiceOrderFilters {
@@ -35,6 +36,12 @@ export function listServiceOrders(filters: ServiceOrderFilters = {}, signal?: Ab
 
 export function getServiceOrder(id: string, signal?: AbortSignal) {
   return apiRequest<ServiceOrder>(`/service-orders/${id}`, { signal });
+}
+
+export function listAssignableTechnicians(signal?: AbortSignal) {
+  return apiRequest<ServiceOrderTechnician[]>("/service-orders/technicians", {
+    signal,
+  });
 }
 
 export function createServiceOrder(data: CreateServiceOrderInput) {

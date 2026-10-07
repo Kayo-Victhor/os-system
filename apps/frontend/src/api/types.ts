@@ -59,11 +59,16 @@ export interface ServiceOrder {
   customerId: string;
   technicianId: string | null;
   createdById: string;
-  customer: Customer;
-  technician: Pick<UserRecord, "id" | "name" | "email" | "role"> | null;
-  createdBy: Pick<UserRecord, "id" | "name" | "email" | "role">;
+  customer: Pick<Customer, "id" | "name" | "email" | "phone" | "address">;
+  technician: ServiceOrderTechnician | null;
+  createdBy: Pick<UserRecord, "id" | "name">;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ServiceOrderTechnician {
+  id: string;
+  name: string;
 }
 
 export interface CustomerServiceOrder {
@@ -84,6 +89,29 @@ export const SERVICE_ORDER_STATUSES: ServiceOrderStatus[] = [
   "COMPLETED",
   "CANCELLED",
 ];
+
+export const SERVICE_ORDER_STATUS_TRANSITIONS: Record<
+  ServiceOrderStatus,
+  readonly ServiceOrderStatus[]
+> = {
+  OPEN: ["IN_PROGRESS", "CANCELLED"],
+  IN_PROGRESS: ["WAITING", "COMPLETED", "CANCELLED"],
+  WAITING: ["IN_PROGRESS", "CANCELLED"],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+export function allowedStatusTransitions(
+  currentStatus: ServiceOrderStatus,
+  role: UserRole,
+): readonly ServiceOrderStatus[] {
+  const transitions = SERVICE_ORDER_STATUS_TRANSITIONS[currentStatus];
+  return role === "TECHNICIAN"
+    ? transitions.filter((status) => status !== "CANCELLED")
+    : role === "ADMIN"
+      ? transitions
+      : [];
+}
 
 export const SERVICE_ORDER_PRIORITIES: ServiceOrderPriority[] = [
   "LOW",

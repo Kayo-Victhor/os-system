@@ -23,7 +23,15 @@ export const PERMISSIONS = {
     "OS_ASSIGN",
     "OS_UPDATE_STATUS",
   ]),
-  ATTENDANT: new Set(["CUSTOMER_CREATE", "CUSTOMER_READ", "CUSTOMER_UPDATE", "OS_CREATE", "OS_READ"]),
+  ATTENDANT: new Set([
+    "CUSTOMER_CREATE",
+    "CUSTOMER_READ",
+    "CUSTOMER_UPDATE",
+    "OS_CREATE",
+    "OS_READ",
+    "OS_UPDATE",
+    "OS_ASSIGN",
+  ]),
   TECHNICIAN: new Set(["CUSTOMER_CREATE", "CUSTOMER_READ", "OS_READ", "OS_UPDATE_STATUS"]),
 } as const satisfies Record<UserRole, Set<string>>;
 

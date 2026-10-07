@@ -2,13 +2,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as serviceOrdersApi from "../api/service-orders.ts";
-import * as usersApi from "../api/users.ts";
-import type { ServiceOrder, ServiceOrderPriority, ServiceOrderStatus, UserRecord } from "../api/types.ts";
+import type { ServiceOrder, ServiceOrderPriority, ServiceOrderStatus, ServiceOrderTechnician } from "../api/types.ts";
 import {
-  SERVICE_ORDER_STATUSES,
   SERVICE_ORDER_PRIORITIES,
   STATUS_LABELS,
   PRIORITY_LABELS,
+  allowedStatusTransitions,
 } from "../api/types.ts";
 import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, ErrorBanner, SuccessBanner, ConfirmDialog } from "../components/States.tsx";
@@ -23,7 +22,7 @@ export function ServiceOrderDetailPage() {
   const { user, can } = useAuth();
 
   const [order, setOrder] = useState<ServiceOrder | null>(null);
-  const [technicians, setTechnicians] = useState<UserRecord[]>([]);
+  const [technicians, setTechnicians] = useState<ServiceOrderTechnician[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -58,7 +57,7 @@ export function ServiceOrderDetailPage() {
   useEffect(() => {
     if (!can("OS_ASSIGN")) return;
     const controller = new AbortController();
-    void usersApi.listUsers("TECHNICIAN", controller.signal)
+    void serviceOrdersApi.listAssignableTechnicians(controller.signal)
       .then((items) => { if (!controller.signal.aborted) setTechnicians(items); })
       .catch(() => { if (!controller.signal.aborted) setTechnicians([]); });
     return () => controller.abort();
@@ -67,8 +66,13 @@ export function ServiceOrderDetailPage() {
   if (loadError) return <ErrorState message={loadError} onRetry={load} />;
   if (!order) return <PageLoading label="Carregando ordem de serviço..." />;
 
+  const nextStatuses = user
+    ? allowedStatusTransitions(order.status, user.role)
+    : [];
   const canUpdateStatus =
-    can("OS_UPDATE_STATUS") && (user?.role === "ADMIN" || order.technicianId === user?.id);
+    can("OS_UPDATE_STATUS") &&
+    (user?.role === "ADMIN" || order.technicianId === user?.id) &&
+    nextStatuses.length > 0;
 
   async function handleStatusChange(status: ServiceOrderStatus) {
     if (!order) return;
@@ -283,9 +287,11 @@ export function ServiceOrderDetailPage() {
                   disabled={savingField === "status"}
                   onChange={(e) => handleStatusChange(e.target.value as ServiceOrderStatus)}
                 >
-                  {SERVICE_ORDER_STATUSES.map((s) => (
+                  {[order.status, ...nextStatuses].map((s) => (
                     <option key={s} value={s}>
-                      {STATUS_LABELS[s]}
+                      {s === order.status
+                        ? `${STATUS_LABELS[s]} (atual)`
+                        : STATUS_LABELS[s]}
                     </option>
                   ))}
                 </select>

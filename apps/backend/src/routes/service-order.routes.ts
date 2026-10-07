@@ -8,6 +8,7 @@ import {
   deleteServiceOrderController,
   assignTechnicianController,
   updateServiceOrderStatusController,
+  listAssignableTechniciansController,
 } from "../controllers/service-order.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -29,6 +30,13 @@ router.get(
   authMiddleware,
   requirePermission("OS_READ"),
   listServiceOrdersController,
+);
+
+router.get(
+  "/technicians",
+  authMiddleware,
+  requirePermission("OS_ASSIGN"),
+  listAssignableTechniciansController,
 );
 
 router.get(

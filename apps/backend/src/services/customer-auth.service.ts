@@ -309,9 +309,9 @@ export async function getCustomerAccountProfile(customerAccountId: string) {
   return loadPublicCustomerAccount(customerAccountId);
 }
 
-export async function listCustomerServiceOrders(customerAccountId: string) {
+export async function listCustomerServiceOrders(customerId: string) {
   return prisma.serviceOrder.findMany({
-    where: { customer: { customerAccount: { id: customerAccountId } } },
+    where: { customerId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -327,13 +327,13 @@ export async function listCustomerServiceOrders(customerAccountId: string) {
 }
 
 export async function getCustomerServiceOrder(
-  customerAccountId: string,
+  customerId: string,
   serviceOrderId: string,
 ) {
   return prisma.serviceOrder.findFirst({
     where: {
       id: serviceOrderId,
-      customer: { customerAccount: { id: customerAccountId } },
+      customerId,
     },
     select: {
       id: true,

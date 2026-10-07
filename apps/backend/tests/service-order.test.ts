@@ -10,18 +10,22 @@ import app from "../src/app.js";
 import { prismaMock, resetPrismaMock } from "./helpers/prisma-mock.js";
 import { authAs } from "./helpers/auth.js";
 
+const ORDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CUSTOMER_ID = "11111111-1111-4111-8111-111111111111";
+const TECHNICIAN_ID = "22222222-2222-4222-8222-222222222222";
+
 beforeEach(() => {
   resetPrismaMock();
 });
 
 function makeOrder(overrides: Record<string, unknown> = {}) {
   return {
-    id: "os-1",
+    id: ORDER_ID,
     title: "Consertar impressora",
     description: "Impressora não liga",
     status: "OPEN",
     priority: "MEDIUM",
-    customerId: "cust-1",
+    customerId: CUSTOMER_ID,
     technicianId: null,
     createdById: "staff-1",
     createdAt: new Date(),
@@ -35,7 +39,7 @@ describe("POST /service-orders", () => {
     const res = await request(app).post("/service-orders").send({
       title: "Consertar impressora",
       description: "Impressora não liga",
-      customerId: "cust-1",
+      customerId: CUSTOMER_ID,
     });
 
     expect(res.status).toBe(401);
@@ -44,6 +48,7 @@ describe("POST /service-orders", () => {
   it("creates an order with a valid session", async () => {
     const { cookie, csrfHeader } = authAs("staff-1", "ATTENDANT");
 
+    prismaMock.customer.findUnique.mockResolvedValueOnce({ id: CUSTOMER_ID });
     prismaMock.serviceOrder.create.mockResolvedValueOnce(makeOrder());
 
     const res = await request(app)
@@ -53,11 +58,11 @@ describe("POST /service-orders", () => {
       .send({
         title: "Consertar impressora",
         description: "Impressora não liga",
-        customerId: "11111111-1111-4111-8111-111111111111",
+        customerId: CUSTOMER_ID,
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.id).toBe("os-1");
+    expect(res.body.id).toBe(ORDER_ID);
   });
 
   it("rejects an invalid customerId format", async () => {
@@ -81,81 +86,73 @@ describe("PATCH /service-orders/:id/status — technician ownership", () => {
   it("allows a technician to update the status of their own order", async () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
 
-    prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-1" }),
-    );
-    prismaMock.serviceOrder.update.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-1", status: "IN_PROGRESS" }),
-    );
+    prismaMock.serviceOrder.findFirst
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-1" }))
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-1", status: "IN_PROGRESS" }));
+    prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const res = await request(app)
-      .patch("/service-orders/os-1/status")
+      .patch(`/service-orders/${ORDER_ID}/status`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.serviceOrder.update).toHaveBeenCalled();
+    expect(prismaMock.serviceOrder.updateMany).toHaveBeenCalled();
   });
 
   it("blocks a technician from updating an order assigned to someone else", async () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
 
-    prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-2" }),
-    );
+    prismaMock.serviceOrder.findFirst.mockResolvedValueOnce(null);
 
     const res = await request(app)
-      .patch("/service-orders/os-1/status")
+      .patch(`/service-orders/${ORDER_ID}/status`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ status: "IN_PROGRESS" });
 
-    expect(res.status).toBe(403);
-    expect(prismaMock.serviceOrder.update).not.toHaveBeenCalled();
+    expect(res.status).toBe(404);
+    expect(prismaMock.serviceOrder.updateMany).not.toHaveBeenCalled();
   });
 
   it("blocks a technician from updating an unassigned order", async () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
 
-    prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(
-      makeOrder({ technicianId: null }),
-    );
+    prismaMock.serviceOrder.findFirst.mockResolvedValueOnce(null);
 
     const res = await request(app)
-      .patch("/service-orders/os-1/status")
+      .patch(`/service-orders/${ORDER_ID}/status`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ status: "IN_PROGRESS" });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it("allows an ADMIN to update the status of any order", async () => {
     const { cookie, csrfHeader } = authAs("admin-1", "ADMIN");
 
-    prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-2" }),
-    );
-    prismaMock.serviceOrder.update.mockResolvedValueOnce(
-      makeOrder({ technicianId: "tech-2", status: "COMPLETED" }),
-    );
+    prismaMock.serviceOrder.findFirst
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-2" }))
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-2", status: "IN_PROGRESS" }));
+    prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const res = await request(app)
-      .patch("/service-orders/os-1/status")
+      .patch(`/service-orders/${ORDER_ID}/status`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
-      .send({ status: "COMPLETED" });
+      .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
   });
 
   it("returns 404 for a non-existent order", async () => {
     const { cookie, csrfHeader } = authAs("admin-1", "ADMIN");
-    prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(null);
+    prismaMock.serviceOrder.findFirst.mockResolvedValueOnce(null);
 
     const res = await request(app)
-      .patch("/service-orders/does-not-exist/status")
+      .patch(`/service-orders/${ORDER_ID}/status`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ status: "COMPLETED" });
@@ -169,7 +166,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
 
     const res = await request(app)
-      .patch("/service-orders/os-1/technician")
+      .patch(`/service-orders/${ORDER_ID}/technician`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ technicianId: "tech-1" });
@@ -182,18 +179,19 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
 
     prismaMock.serviceOrder.findUnique.mockResolvedValueOnce(makeOrder());
     prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "22222222-2222-4222-8222-222222222222",
+      id: TECHNICIAN_ID,
       role: "TECHNICIAN",
     });
-    prismaMock.serviceOrder.update.mockResolvedValueOnce(
-      makeOrder({ technicianId: "22222222-2222-4222-8222-222222222222" }),
+    prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.serviceOrder.findFirst.mockResolvedValueOnce(
+      makeOrder({ technicianId: TECHNICIAN_ID }),
     );
 
     const res = await request(app)
-      .patch("/service-orders/os-1/technician")
+      .patch(`/service-orders/${ORDER_ID}/technician`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
-      .send({ technicianId: "22222222-2222-4222-8222-222222222222" });
+      .send({ technicianId: TECHNICIAN_ID });
 
     expect(res.status).toBe(200);
   });
@@ -208,12 +206,12 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
     });
 
     const res = await request(app)
-      .patch("/service-orders/os-1/technician")
+      .patch(`/service-orders/${ORDER_ID}/technician`)
       .set("Cookie", cookie)
       .set("x-csrf-token", csrfHeader)
       .send({ technicianId: "33333333-3333-4333-8333-333333333333" });
 
     expect(res.status).toBe(400);
-    expect(prismaMock.serviceOrder.update).not.toHaveBeenCalled();
+    expect(prismaMock.serviceOrder.updateMany).not.toHaveBeenCalled();
   });
 });

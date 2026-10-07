@@ -807,11 +807,32 @@ registros neste momento.
 
 ## Operação de ordens por função
 
-- **ADMIN** cria, consulta, edita, exclui e atribui ordens; pode atribuir ou reatribuir somente usuários com a role `TECHNICIAN` e alterar qualquer status.
+- **ADMIN** cria, consulta, edita, prioriza, exclui e atribui ordens; pode atribuir ou reatribuir somente usuários com a role `TECHNICIAN` e executar qualquer transição válida de status.
+- **ATTENDANT** cria, consulta e edita dados operacionais das ordens, define prioridade e atribui ou reatribui técnicos. Não altera status nem exclui ordens.
 - **TECHNICIAN** cria cadastros de clientes sem criar uma conta de acesso, vê apenas Customers associados a ordens atribuídas a ele e opera somente o status das próprias ordens atribuídas. Não pode editar Customer, alterar o cliente da ordem, reatribuir técnico ou excluir ordens.
 - **Cliente autenticado por CustomerAccount** consulta somente o cadastro vinculado à própria sessão e suas ordens. Não pode criar ordens, alterar status, atribuir técnico ou acessar recursos administrativos.
 
-O backend impõe o escopo de `customerId` e `technicianId`; filtros e IDs enviados pelo navegador nunca concedem acesso adicional. As transições de status permanecem sem máquina de estados formal: ADMIN pode alterar qualquer status e TECHNICIAN pode alterar o status das ordens atribuídas a ele.
+`createdById` registra de forma imutável o usuário interno que criou a ordem,
+`customerId` identifica o cliente atendido e também é imutável, e
+`technicianId` identifica exclusivamente o `User(role=TECHNICIAN)` responsável
+pela execução. O backend deriva o autor da sessão, valida o cliente e o técnico
+e impõe os escopos de `customerId` e `technicianId`; filtros ou IDs enviados
+pelo navegador nunca concedem acesso adicional.
+
+A máquina de estados é:
+
+```text
+OPEN        -> IN_PROGRESS | CANCELLED
+IN_PROGRESS -> WAITING | COMPLETED | CANCELLED
+WAITING     -> IN_PROGRESS | CANCELLED
+COMPLETED   -> estado terminal
+CANCELLED   -> estado terminal
+```
+
+O ADMIN pode executar todas essas transições. O TECHNICIAN, somente em ordens
+atribuídas a ele, pode iniciar, aguardar, retomar e concluir; cancelamento é
+administrativo. Atualizações usam comparação otimista do estado/atribuição
+anterior para rejeitar operações concorrentes incompatíveis.
 
 ## Segurança de autenticação e verificação de e-mail
 
