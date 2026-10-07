@@ -7,6 +7,8 @@ import {
   getTestEmailOutbox,
 } from "../../src/services/email.service.js";
 import { createFixtureCustomer, createFixtureUser } from "../helpers/fixtures.js";
+import { FIXTURE_PASSWORD } from "../helpers/fixtures.js";
+import { loginAs } from "../helpers/integration-auth.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
 
 const registration = {
@@ -143,23 +145,55 @@ describe("POST /auth/customer/register/confirm", () => {
 
     const response = await confirm(token);
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({ error: "Não foi possível confirmar este cadastro." });
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Este link de confirmação é inválido ou expirou." });
     expect(await testPrisma.customer.count()).toBe(1);
     expect(await testPrisma.customerAccount.count()).toBe(1);
     expect(await testPrisma.pendingCustomerRegistration.count()).toBe(1);
   });
 
-  it("mantém User de mesmo e-mail independente e inalterado", async () => {
+  it("rejeita confirmação se o e-mail ganhou uma identidade interna", async () => {
     const token = await createPending();
     const { user } = await createFixtureUser("ATTENDANT", { email: registration.email });
 
     const response = await confirm(token);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     expect(await testPrisma.user.findUnique({ where: { id: user.id } })).toEqual(user);
     expect(await testPrisma.user.count()).toBe(1);
-    expect(await testPrisma.customerAccount.count()).toBe(1);
+    expect(await testPrisma.customerAccount.count()).toBe(0);
+    expect(await testPrisma.pendingCustomerRegistration.count()).toBe(1);
+  });
+
+  it("serializa confirmação e criação interna concorrentes para o mesmo e-mail", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+    const token = await createPending();
+
+    const [confirmation, internalCreation] = await Promise.all([
+      confirm(token),
+      request(app)
+        .post("/users")
+        .set("Cookie", session.cookie)
+        .set("x-csrf-token", session.csrfHeader)
+        .send({
+          name: "Atendente concorrente",
+          email: registration.email.toUpperCase(),
+          password: "senha123456",
+          role: "ATTENDANT",
+        }),
+    ]);
+
+    expect([[200, 409], [201, 400]])
+      .toContainEqual([confirmation.status, internalCreation.status].sort());
+    expect(
+      (await testPrisma.user.count({
+        where: { email: { equals: registration.email, mode: "insensitive" } },
+      })) +
+        (await testPrisma.customerAccount.count({
+          where: { email: { equals: registration.email, mode: "insensitive" } },
+        })),
+    ).toBe(1);
   });
 
   it("não reivindica Customer cadastralmente equivalente", async () => {
@@ -186,7 +220,7 @@ describe("POST /auth/customer/register/confirm", () => {
 
     const response = await confirm(token);
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(400);
     expect(await testPrisma.customer.count()).toBe(1);
     expect(await testPrisma.customer.findUnique({ where: { id: existing.id } })).not.toBeNull();
     expect(await testPrisma.customerAccount.count()).toBe(0);

@@ -1,30 +1,65 @@
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
+import { lockIdentityEmail } from "../lib/identity-email.js";
+import type { Prisma } from "../generated/prisma/client.js";
 import type { CreateUserInput, UpdateUserInput } from "../schemas/user.schema.js";
 
 export const INTERNAL_USER_ROLES = ["ADMIN", "ATTENDANT", "TECHNICIAN"] as const;
 export type InternalUserRole = (typeof INTERNAL_USER_ROLES)[number];
 
+export class IdentityEmailConflictError extends Error {
+  constructor() {
+    super("IDENTITY_EMAIL_CONFLICT");
+    this.name = "IdentityEmailConflictError";
+  }
+}
+
+async function assertIdentityEmailAvailable(
+  tx: Prisma.TransactionClient,
+  email: string,
+  excludingUserId?: string,
+) {
+  const [user, customerAccount] = await Promise.all([
+    tx.user.findFirst({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        ...(excludingUserId ? { id: { not: excludingUserId } } : {}),
+      },
+      select: { id: true },
+    }),
+    tx.customerAccount.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    }),
+  ]);
+
+  if (user || customerAccount) throw new IdentityEmailConflictError();
+}
+
 export async function createUser(data: CreateUserInput) {
   const passwordHash = await hashPassword(data.password);
+  return prisma.$transaction(async (tx) => {
+    const email = await lockIdentityEmail(tx, data.email);
+    await assertIdentityEmailAvailable(tx, email);
 
-  return prisma.user.create({
-    data: {
-      name: data.name,
-      email: data.email,
-      password: passwordHash,
-      role: data.role,
-      isPrimaryAdmin: false,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isPrimaryAdmin: true,
-      createdAt: true,
-      updatedAt: true
-    }
+    return tx.user.create({
+      data: {
+        name: data.name,
+        email,
+        password: passwordHash,
+        role: data.role,
+        isPrimaryAdmin: false,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isPrimaryAdmin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
   });
 }
 
@@ -68,18 +103,40 @@ export async function getUserById(id: string) {
 }
 
 export async function updateUser(id: string, data: UpdateUserInput) {
-  return prisma.user.update({
-    where: { id },
-    data,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isPrimaryAdmin: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+  const requestedEmail = data.email;
+  if (!requestedEmail) {
+    return prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isPrimaryAdmin: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const email = await lockIdentityEmail(tx, requestedEmail);
+    await assertIdentityEmailAvailable(tx, email, id);
+
+    return tx.user.update({
+      where: { id },
+      data: { ...data, email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isPrimaryAdmin: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   });
 }
 

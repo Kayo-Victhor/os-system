@@ -851,6 +851,11 @@ expira em 24 horas e possui uso único. Reenvios substituem o token anterior.
 Não existe fluxo de `User(CUSTOMER)` nem endpoint de verificação de e-mail para
 usuários internos.
 
+E-mails de identidade são normalizados e exclusivos entre os domínios
+`User` e `CustomerAccount`. Como essa unicidade atravessa duas tabelas, criação
+e alteração de usuário interno e confirmação de cliente usam o mesmo bloqueio
+transacional por e-mail e repetem a verificação imediatamente antes da escrita.
+
 Configure no backend, sem expor valores ao frontend:
 
 - `EMAIL_VERIFICATION_SECRET`: segredo exclusivo para HMAC dos links.

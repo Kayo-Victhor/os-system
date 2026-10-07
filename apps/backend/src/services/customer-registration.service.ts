@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { normalizeEmail } from "../lib/email.js";
 import { hashPassword } from "../lib/password.js";
+import { lockIdentityEmail } from "../lib/identity-email.js";
 import {
   generatePendingCustomerRegistrationToken,
   hashPendingCustomerRegistrationToken,
@@ -214,6 +215,25 @@ export async function confirmCustomerRegistration(
     ) {
       return "INVALID";
     }
+
+    const email = await lockIdentityEmail(tx, pending.email);
+    const [userConflict, accountConflict, documentConflict] = await Promise.all([
+      tx.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true },
+      }),
+      tx.customerAccount.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true },
+      }),
+      pending.document
+        ? tx.customer.findUnique({
+            where: { document: pending.document },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (userConflict || accountConflict || documentConflict) return "INVALID";
 
     const customer = await tx.customer.create({
       data: {

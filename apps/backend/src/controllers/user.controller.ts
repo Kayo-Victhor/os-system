@@ -11,6 +11,7 @@ import {
   INTERNAL_USER_ROLES,
   primaryAdminDeleteError,
   primaryAdminUpdateError,
+  IdentityEmailConflictError,
 } from "../services/user.service.js";
 
 import { createUserSchema, updateUserSchema } from "../schemas/user.schema.js";
@@ -37,6 +38,10 @@ export async function createUserController(
 
     res.status(201).json(user);
   } catch (error) {
+    if (error instanceof IdentityEmailConflictError) {
+      res.status(409).json({ error: "Este e-mail já pertence a outra identidade" });
+      return;
+    }
     const known = mapPrismaError(error);
 
     if (known) {
@@ -153,6 +158,10 @@ export async function updateUserController(
 
     res.json(user);
   } catch (error) {
+    if (error instanceof IdentityEmailConflictError) {
+      res.status(409).json({ error: "Este e-mail já pertence a outra identidade" });
+      return;
+    }
     const known = mapPrismaError(error);
 
     if (known) {

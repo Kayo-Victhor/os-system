@@ -3,7 +3,11 @@ import request from "supertest";
 
 import app from "../../src/app.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
-import { createFixtureUser, FIXTURE_PASSWORD } from "../helpers/fixtures.js";
+import {
+  createFixtureCustomer,
+  createFixtureUser,
+  FIXTURE_PASSWORD,
+} from "../helpers/fixtures.js";
 import { loginAs } from "../helpers/integration-auth.js";
 import { hashPassword, verifyPassword } from "../../src/lib/password.js";
 
@@ -91,6 +95,35 @@ describe("POST /users — creation (admin only)", () => {
       .send({ name: "Outro", email: "dup@example.com", password: "senha123456" });
 
     expect(res.status).toBe(409);
+  });
+
+  it("rejects an e-mail already used by a customer identity, ignoring case", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const customer = await createFixtureCustomer();
+    await testPrisma.customerAccount.create({
+      data: {
+        customerId: customer.id,
+        email: "cliente.identidade@example.com",
+        passwordHash: "hash-de-teste",
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .post("/users")
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({
+        name: "Identidade conflitante",
+        email: "CLIENTE.IDENTIDADE@example.com",
+        password: "senha123456",
+      });
+
+    expect(res.status).toBe(409);
+    expect(await testPrisma.user.count({
+      where: { email: { equals: "cliente.identidade@example.com", mode: "insensitive" } },
+    })).toBe(0);
   });
 
   it("rejects a password shorter than the minimum", async () => {
@@ -262,6 +295,31 @@ describe("PATCH /users/:id — update", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Nome Atualizado");
+  });
+
+  it("rejects changing a user to a customer identity e-mail", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: target } = await createFixtureUser("ATTENDANT");
+    const customer = await createFixtureCustomer();
+    await testPrisma.customerAccount.create({
+      data: {
+        customerId: customer.id,
+        email: "portal.cliente@example.com",
+        passwordHash: "hash-de-teste",
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .patch(`/users/${target.id}`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ email: "PORTAL.CLIENTE@example.com" });
+
+    expect(res.status).toBe(409);
+    expect((await testPrisma.user.findUniqueOrThrow({ where: { id: target.id } })).email)
+      .toBe(target.email);
   });
 
   it("blocks demoting the last remaining ADMIN", async () => {
