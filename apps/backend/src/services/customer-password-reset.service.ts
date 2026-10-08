@@ -6,7 +6,7 @@ import {
   generateCustomerAccountPasswordResetToken,
   hashCustomerAccountPasswordResetToken,
 } from "../lib/tokens.js";
-import { sendCustomerAccountPasswordResetEmail } from "./email.service.js";
+import { enqueueLinkEmail } from "./email-outbox.service.js";
 
 interface LockedCustomerPasswordReset {
   id: string;
@@ -50,14 +50,41 @@ export async function requestCustomerAccountPasswordReset(
     Date.now() + CUSTOMER_ACCOUNT_PASSWORD_RESET_TOKEN_TTL_SECONDS * 1000,
   );
 
-  await prisma.customerAccountPasswordResetToken.upsert({
-    where: { customerAccountId: account.id },
-    update: { tokenHash, expiresAt, usedAt: null, createdAt: new Date() },
-    create: { customerAccountId: account.id, tokenHash, expiresAt },
-  });
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT "id"
+      FROM "CustomerAccount"
+      WHERE "id" = ${account.id}
+      FOR UPDATE
+    `;
+    const currentAccount = await tx.customerAccount.findUnique({
+      where: { id: account.id },
+      select: { email: true, status: true, emailVerifiedAt: true },
+    });
+    if (
+      !currentAccount ||
+      currentAccount.status !== "ACTIVE" ||
+      !currentAccount.emailVerifiedAt
+    ) {
+      return false;
+    }
 
-  await sendCustomerAccountPasswordResetEmail({ to: account.email, token });
-  return true;
+    const resetToken = await tx.customerAccountPasswordResetToken.upsert({
+      where: { customerAccountId: account.id },
+      update: { tokenHash, expiresAt, usedAt: null, createdAt: new Date() },
+      create: { customerAccountId: account.id, tokenHash, expiresAt },
+      select: { id: true },
+    });
+    await enqueueLinkEmail({
+      tx,
+      type: "CUSTOMER_PASSWORD_RESET",
+      recipient: currentAccount.email,
+      token,
+      tokenHash,
+      relatedEntityId: resetToken.id,
+    });
+    return true;
+  });
 }
 
 export async function resetCustomerAccountPassword(

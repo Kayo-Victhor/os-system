@@ -9,6 +9,7 @@ import {
   clearTestEmailOutbox,
   getTestEmailOutbox,
 } from "../../src/services/email.service.js";
+import { processEmailOutboxBatch } from "../../src/services/email-outbox.worker.js";
 import {
   createFixtureCustomer,
   createFixtureServiceOrder,
@@ -60,6 +61,7 @@ async function customerLogin(email: string, password = CUSTOMER_PASSWORD) {
 
 async function requestCustomerResetToken(email: string) {
   await request(app).post("/auth/customer/forgot-password").send({ email });
+  await processEmailOutboxBatch();
   const resetUrl = getTestEmailOutbox().at(-1)?.customerPasswordResetUrl;
   const token = resetUrl ? new URL(resetUrl).searchParams.get("token") : null;
   if (!token) throw new Error("Token de reset de cliente ausente");

@@ -31,6 +31,7 @@ export function assertTestDatabase() {
 export async function resetDatabase() {
   assertTestDatabase();
 
+  await prisma.emailOutbox.deleteMany();
   await prisma.pendingCustomerRegistrationToken.deleteMany();
   await prisma.pendingCustomerRegistration.deleteMany();
   await prisma.customerAccountPasswordResetToken.deleteMany();

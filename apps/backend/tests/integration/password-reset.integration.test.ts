@@ -3,6 +3,7 @@ import request from "supertest";
 
 import app from "../../src/app.js";
 import { clearTestEmailOutbox, getTestEmailOutbox } from "../../src/services/email.service.js";
+import { processEmailOutboxBatch } from "../../src/services/email-outbox.worker.js";
 import { createFixtureUser, FIXTURE_PASSWORD } from "../helpers/fixtures.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
 
@@ -17,13 +18,19 @@ function latestResetToken() {
   return new URL(message!.passwordResetUrl!).searchParams.get("token")!;
 }
 
+async function forgot(email: string) {
+  const response = await request(app).post("/auth/forgot-password").send({ email });
+  await processEmailOutboxBatch();
+  return response;
+}
+
 describe("recuperação segura de senha", () => {
   it("permite recuperação para usuário interno", async () => {
     const { user } = await createFixtureUser("ATTENDANT", {
       email: "atendente-reset@example.com",
     });
 
-    const response = await request(app).post("/auth/forgot-password").send({ email: user.email });
+    const response = await forgot(user.email);
 
     expect(response.status).toBe(202);
     expect(getTestEmailOutbox()).toHaveLength(1);
@@ -33,9 +40,9 @@ describe("recuperação segura de senha", () => {
   it("mantém a resposta uniforme, persiste somente HMAC e substitui o link anterior", async () => {
     const { user } = await createFixtureUser("ATTENDANT", { email: "reset@example.com" });
 
-    const known = await request(app).post("/auth/forgot-password").send({ email: user.email });
+    const known = await forgot(user.email);
     const firstToken = latestResetToken();
-    const unknown = await request(app).post("/auth/forgot-password").send({ email: "ausente@example.com" });
+    const unknown = await forgot("ausente@example.com");
 
     expect(known.status).toBe(202);
     expect(unknown.status).toBe(202);
@@ -43,7 +50,7 @@ describe("recuperação segura de senha", () => {
     const stored = await testPrisma.passwordResetToken.findUniqueOrThrow({ where: { userId: user.id } });
     expect(stored.tokenHash).not.toContain(firstToken);
 
-    await request(app).post("/auth/forgot-password").send({ email: user.email });
+    await forgot(user.email);
     const secondToken = latestResetToken();
     expect(secondToken).not.toBe(firstToken);
 
@@ -57,7 +64,7 @@ describe("recuperação segura de senha", () => {
     expect(login.status).toBe(200);
     const cookies = login.headers["set-cookie"] as unknown as string[];
 
-    await request(app).post("/auth/forgot-password").send({ email: user.email });
+    await forgot(user.email);
     const token = latestResetToken();
     const reset = await request(app).post("/auth/reset-password").send({ token, password: "nova-senha123", passwordConfirmation: "nova-senha123" });
     expect(reset.status).toBe(200);
@@ -81,7 +88,7 @@ describe("recuperação segura de senha", () => {
 
   it("rejeita link expirado e valida senha e confirmação no backend", async () => {
     const { user } = await createFixtureUser("ATTENDANT", { email: "expirado-reset@example.com" });
-    await request(app).post("/auth/forgot-password").send({ email: user.email });
+    await forgot(user.email);
     const token = latestResetToken();
     await testPrisma.passwordResetToken.update({ where: { userId: user.id }, data: { expiresAt: new Date(Date.now() - 1_000) } });
 

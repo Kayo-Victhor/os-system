@@ -9,10 +9,7 @@ import {
   PENDING_CUSTOMER_REGISTRATION_TTL_SECONDS,
 } from "../lib/tokens.js";
 import type { RegisterInput } from "../schemas/user.schema.js";
-import {
-  EmailDeliveryError,
-  sendCustomerRegistrationVerificationEmail,
-} from "./email.service.js";
+import { enqueueLinkEmail } from "./email-outbox.service.js";
 
 export const CUSTOMER_REGISTRATION_MESSAGE =
   "Se os dados forem válidos, enviaremos um e-mail para confirmação.";
@@ -29,6 +26,11 @@ interface LockedPendingRegistration {
   address: string | null;
   pendingExpiresAt: Date;
   tokenExpiresAt: Date;
+}
+
+interface LockedPendingRegistrationForResend {
+  id: string;
+  email: string;
 }
 
 async function hasIdentityConflict(email: string, document?: string) {
@@ -49,15 +51,6 @@ async function hasIdentityConflict(email: string, document?: string) {
   return Boolean(user || customerAccount || customerWithDocument);
 }
 
-async function invalidateUndeliveredToken(
-  pendingRegistrationId: string,
-  tokenHash: string,
-) {
-  await prisma.pendingCustomerRegistrationToken.deleteMany({
-    where: { pendingRegistrationId, tokenHash },
-  });
-}
-
 export async function requestCustomerRegistration(data: RegisterInput): Promise<boolean> {
   const email = normalizeEmail(data.email);
   const [identityConflict, passwordHash] = await Promise.all([
@@ -74,7 +67,7 @@ export async function requestCustomerRegistration(data: RegisterInput): Promise<
     now + PENDING_CUSTOMER_REGISTRATION_TOKEN_TTL_SECONDS * 1000,
   );
 
-  const pending = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const registration = await tx.pendingCustomerRegistration.upsert({
       where: { email },
       update: {
@@ -97,7 +90,7 @@ export async function requestCustomerRegistration(data: RegisterInput): Promise<
       select: { id: true, email: true },
     });
 
-    await tx.pendingCustomerRegistrationToken.upsert({
+    const verificationToken = await tx.pendingCustomerRegistrationToken.upsert({
       where: { pendingRegistrationId: registration.id },
       update: { tokenHash, expiresAt: tokenExpiresAt, createdAt: new Date() },
       create: {
@@ -105,18 +98,18 @@ export async function requestCustomerRegistration(data: RegisterInput): Promise<
         tokenHash,
         expiresAt: tokenExpiresAt,
       },
+      select: { id: true },
     });
 
-    return registration;
+    await enqueueLinkEmail({
+      tx,
+      type: "CUSTOMER_REGISTRATION_VERIFICATION",
+      recipient: registration.email,
+      token,
+      tokenHash,
+      relatedEntityId: verificationToken.id,
+    });
   });
-
-  try {
-    await sendCustomerRegistrationVerificationEmail({ to: pending.email, token });
-  } catch (error) {
-    await invalidateUndeliveredToken(pending.id, tokenHash);
-    if (error instanceof EmailDeliveryError) throw error;
-    throw new EmailDeliveryError();
-  }
 
   return true;
 }
@@ -125,19 +118,21 @@ export async function resendCustomerRegistration(emailInput: string): Promise<bo
   const email = normalizeEmail(emailInput);
   if (await hasIdentityConflict(email)) return false;
 
-  const pending = await prisma.pendingCustomerRegistration.findFirst({
-    where: { email, expiresAt: { gt: new Date() } },
-    select: { id: true, email: true },
-  });
-  if (!pending) return false;
-
   const { token, tokenHash } = generatePendingCustomerRegistrationToken();
   const tokenExpiresAt = new Date(
     Date.now() + PENDING_CUSTOMER_REGISTRATION_TOKEN_TTL_SECONDS * 1000,
   );
 
-  await prisma.$transaction((tx) =>
-    tx.pendingCustomerRegistrationToken.upsert({
+  return prisma.$transaction(async (tx) => {
+    const [pending] = await tx.$queryRaw<LockedPendingRegistrationForResend[]>`
+      SELECT "id", "email"
+      FROM "PendingCustomerRegistration"
+      WHERE "email" = ${email} AND "expiresAt" > NOW()
+      FOR UPDATE
+    `;
+    if (!pending) return false;
+
+    const verificationToken = await tx.pendingCustomerRegistrationToken.upsert({
       where: { pendingRegistrationId: pending.id },
       update: { tokenHash, expiresAt: tokenExpiresAt, createdAt: new Date() },
       create: {
@@ -145,18 +140,19 @@ export async function resendCustomerRegistration(emailInput: string): Promise<bo
         tokenHash,
         expiresAt: tokenExpiresAt,
       },
-    }),
-  );
+      select: { id: true },
+    });
 
-  try {
-    await sendCustomerRegistrationVerificationEmail({ to: pending.email, token });
-  } catch (error) {
-    await invalidateUndeliveredToken(pending.id, tokenHash);
-    if (error instanceof EmailDeliveryError) throw error;
-    throw new EmailDeliveryError();
-  }
-
-  return true;
+    await enqueueLinkEmail({
+      tx,
+      type: "CUSTOMER_REGISTRATION_VERIFICATION",
+      recipient: pending.email,
+      token,
+      tokenHash,
+      relatedEntityId: verificationToken.id,
+    });
+    return true;
+  });
 }
 
 export async function isPendingCustomerRegistrationTokenValid(token: string) {

@@ -867,6 +867,13 @@ Configure no backend, sem expor valores ao frontend:
 
 Para ativar o envio, crie uma conta na Brevo, gere uma API key transacional com o menor privilégio disponível e autorize um remetente individual na própria Brevo. Configure as variáveis somente no ambiente do backend; em desenvolvimento, use um remetente autorizado e `APP_BASE_URL=http://localhost:5173`. Um domínio próprio é recomendado para produção, mas não é necessário para o primeiro teste com remetente autorizado.
 
+Cadastro, reenvio de confirmação e recuperação de senha gravam o estado e um
+evento na outbox PostgreSQL na mesma transação. O worker do backend entrega o
+evento posteriormente pela Brevo, com lote limitado e retry exponencial. Por
+isso, a resposta HTTP `202` confirma apenas que a solicitação foi aceita; ela
+não confirma que a mensagem já foi entregue. A coordenação entre instâncias é
+feita no banco com leases e `FOR UPDATE SKIP LOCKED`.
+
 A confirmação de cliente usa `POST /auth/customer/register/confirm` e o reenvio
 genérico usa `POST /auth/customer/register/resend`. Recuperação de senha interna
 usa `POST /auth/forgot-password` e `POST /auth/reset-password`; a recuperação de

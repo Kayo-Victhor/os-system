@@ -15,7 +15,6 @@ import {
   requestCustomerRegistration,
   resendCustomerRegistration,
 } from "../services/customer-registration.service.js";
-import { EmailDeliveryError } from "../services/email.service.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { prisma } from "../lib/prisma.js";
 import { generateCsrfToken } from "../lib/tokens.js";
@@ -59,10 +58,6 @@ export async function registerController(req: AuthenticatedRequest, res: Respons
     await requestCustomerRegistration(result.data);
     res.status(202).json({ message: CUSTOMER_REGISTRATION_MESSAGE });
   } catch (error) {
-    if (error instanceof EmailDeliveryError) {
-      res.status(503).json({ error: "Não foi possível enviar o e-mail de confirmação. Tente reenviar em alguns minutos." });
-      return;
-    }
     console.error(error);
     res.status(500).json({ error: "Não foi possível processar o cadastro" });
   }
@@ -82,10 +77,6 @@ export async function resendCustomerRegistrationController(
     await resendCustomerRegistration(result.data.email);
     res.status(202).json({ message: CUSTOMER_REGISTRATION_MESSAGE });
   } catch (error) {
-    if (error instanceof EmailDeliveryError) {
-      res.status(503).json({ error: "Não foi possível enviar o e-mail de confirmação. Tente novamente em alguns minutos." });
-      return;
-    }
     console.error("Falha ao reenviar cadastro de cliente", error instanceof Error ? error.name : "erro desconhecido");
     res.status(500).json({ error: "Não foi possível processar o reenvio" });
   }

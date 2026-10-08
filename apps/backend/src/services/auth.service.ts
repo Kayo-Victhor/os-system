@@ -11,7 +11,7 @@ import {
   generatePasswordResetToken,
   hashPasswordResetToken,
 } from "../lib/tokens.js";
-import { sendPasswordResetEmail } from "./email.service.js";
+import { enqueueLinkEmail } from "./email-outbox.service.js";
 
 export interface SessionResult {
   accessToken: string;
@@ -162,17 +162,6 @@ export async function revokeRefreshToken(presentedToken: string) {
   });
 }
 
-async function replacePasswordResetToken(userId: string) {
-  const { token, tokenHash } = generatePasswordResetToken();
-  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_SECONDS * 1000);
-  await prisma.passwordResetToken.upsert({
-    where: { userId },
-    update: { tokenHash, expiresAt, usedAt: null },
-    create: { tokenHash, userId, expiresAt },
-  });
-  return token;
-}
-
 /** Returns false for absent accounts. The controller always gives
  * the same accepted response, so this result can never enumerate users. */
 export async function requestPasswordReset(email: string): Promise<boolean> {
@@ -181,9 +170,38 @@ export async function requestPasswordReset(email: string): Promise<boolean> {
     select: { id: true, email: true },
   });
   if (!user) return false;
-  const token = await replacePasswordResetToken(user.id);
-  await sendPasswordResetEmail({ to: user.email, token });
-  return true;
+  const { token, tokenHash } = generatePasswordResetToken();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_SECONDS * 1000);
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT "id"
+      FROM "User"
+      WHERE "id" = ${user.id}
+      FOR UPDATE
+    `;
+    const currentUser = await tx.user.findUnique({
+      where: { id: user.id },
+      select: { email: true },
+    });
+    if (!currentUser) return false;
+
+    const resetToken = await tx.passwordResetToken.upsert({
+      where: { userId: user.id },
+      update: { tokenHash, expiresAt, usedAt: null },
+      create: { tokenHash, userId: user.id, expiresAt },
+      select: { id: true },
+    });
+    await enqueueLinkEmail({
+      tx,
+      type: "INTERNAL_PASSWORD_RESET",
+      recipient: currentUser.email,
+      token,
+      tokenHash,
+      relatedEntityId: resetToken.id,
+    });
+    return true;
+  });
 }
 
 /** Atomically consumes the link, replaces the Argon2id hash, and invalidates

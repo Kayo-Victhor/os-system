@@ -18,6 +18,19 @@ enum CustomerAccountStatus {
   SUSPENDED
 }
 
+enum EmailOutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum EmailOutboxType {
+  CUSTOMER_REGISTRATION_VERIFICATION
+  CUSTOMER_PASSWORD_RESET
+  INTERNAL_PASSWORD_RESET
+}
+
 enum ServiceOrderStatus {
   OPEN
   IN_PROGRESS
@@ -181,6 +194,30 @@ model PendingCustomerRegistrationToken {
   pendingRegistration   PendingCustomerRegistration @relation(fields: [pendingRegistrationId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+// Transactional e-mail is persisted with the business state and delivered by
+// a background worker. Delivery is at-least-once: a provider call that succeeds
+// immediately before a process crash can be repeated on lease recovery.
+model EmailOutbox {
+  id                String            @id @default(uuid())
+  type              EmailOutboxType
+  recipient         String
+  payload           Json
+  status            EmailOutboxStatus @default(PENDING)
+  attempts          Int               @default(0)
+  availableAt       DateTime          @default(now())
+  claimedAt         DateTime?
+  sentAt            DateTime?
+  providerMessageId String?
+  lastError         String?
+  deduplicationKey  String            @unique
+  relatedEntityId   String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([status, availableAt])
+  @@index([type, relatedEntityId])
 }
 
 model ServiceOrder {

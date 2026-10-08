@@ -22,9 +22,13 @@ describe("serviço de e-mail da Brevo", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ messageId: "id" }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendPasswordResetEmail({ to: "cliente@example.com", token: "token-seguro" });
+    const delivery = await sendPasswordResetEmail({
+      to: "cliente@example.com",
+      token: "token-seguro",
+    });
 
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(delivery.providerMessageId).toBe("id");
     expect(payload.subject).toBe("Redefina sua senha no OS System");
     expect(payload.htmlContent).toContain("60 minutos");
     expect(payload.htmlContent).toContain("http://localhost:5173/resetar-senha?token=token-seguro");
@@ -78,6 +82,22 @@ describe("serviço de e-mail da Brevo", () => {
     await expect(sendCustomerRegistrationVerificationEmail({ to: "cliente@example.com", token: "token-seguro" })).rejects.toEqual(
       expect.objectContaining({ name: "EmailDeliveryError", message: "Não foi possível enviar o e-mail de verificação" }),
     );
+  });
+
+  it.each([
+    { status: 400, retryable: false },
+    { status: 429, retryable: true },
+    { status: 503, retryable: true },
+  ])("classifica retry do provider para HTTP $status", async ({ status, retryable }) => {
+    configureBrevo();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
+
+    await expect(
+      sendCustomerRegistrationVerificationEmail({
+        to: "cliente@example.com",
+        token: "token-seguro",
+      }),
+    ).rejects.toEqual(expect.objectContaining({ retryable }));
   });
 
   it.each([new Error("network unavailable"), new DOMException("Request aborted", "AbortError")])(

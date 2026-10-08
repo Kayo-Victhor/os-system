@@ -6,6 +6,7 @@ import {
   clearTestEmailOutbox,
   getTestEmailOutbox,
 } from "../../src/services/email.service.js";
+import { processEmailOutboxBatch } from "../../src/services/email-outbox.worker.js";
 import { createFixtureCustomer, createFixtureUser } from "../helpers/fixtures.js";
 import { FIXTURE_PASSWORD } from "../helpers/fixtures.js";
 import { loginAs } from "../helpers/integration-auth.js";
@@ -30,6 +31,7 @@ async function createPending(overrides: Record<string, unknown> = {}) {
     .post("/auth/customer/register")
     .send({ ...registration, ...overrides });
   expect(response.status).toBe(202);
+  await processEmailOutboxBatch();
 
   const url = getTestEmailOutbox().at(-1)?.customerRegistrationUrl;
   if (!url) throw new Error("Link de confirmação não foi criado no outbox de teste");

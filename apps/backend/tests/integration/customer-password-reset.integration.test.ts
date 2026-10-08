@@ -7,6 +7,7 @@ import {
   clearTestEmailOutbox,
   getTestEmailOutbox,
 } from "../../src/services/email.service.js";
+import { processEmailOutboxBatch } from "../../src/services/email-outbox.worker.js";
 import { createFixtureCustomer, createFixtureUser } from "../helpers/fixtures.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
 
@@ -47,8 +48,10 @@ function latestCustomerResetToken() {
   return token;
 }
 
-function forgot(email: string) {
-  return request(app).post("/auth/customer/forgot-password").send({ email });
+async function forgot(email: string) {
+  const response = await request(app).post("/auth/customer/forgot-password").send({ email });
+  await processEmailOutboxBatch();
+  return response;
 }
 
 function reset(token: string, password = NEW_PASSWORD) {

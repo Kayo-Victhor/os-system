@@ -6,10 +6,9 @@ import { verifyPassword } from "../../src/lib/password.js";
 import { isPendingCustomerRegistrationTokenValid } from "../../src/services/customer-registration.service.js";
 import {
   clearTestEmailOutbox,
-  EmailDeliveryError,
   getTestEmailOutbox,
 } from "../../src/services/email.service.js";
-import * as emailService from "../../src/services/email.service.js";
+import { processEmailOutboxBatch } from "../../src/services/email-outbox.worker.js";
 import { resetDatabase, testPrisma } from "../helpers/test-db.js";
 import { createFixtureCustomer, createFixtureUser } from "../helpers/fixtures.js";
 
@@ -66,6 +65,7 @@ describe("POST /auth/customer/register — cadastro público pendente", () => {
     expect(pending.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(pending.verificationToken?.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
+    await processEmailOutboxBatch();
     const rawToken = tokenFromLatestCustomerRegistrationEmail();
     expect(rawToken.length).toBeGreaterThanOrEqual(40);
     expect(pending.verificationToken?.tokenHash).not.toBe(rawToken);
@@ -79,11 +79,13 @@ describe("POST /auth/customer/register — cadastro público pendente", () => {
 
   it("mantém um pending e somente o token mais recente válido", async () => {
     await request(app).post("/auth/customer/register").send(registrationData());
+    await processEmailOutboxBatch();
     const oldToken = tokenFromLatestCustomerRegistrationEmail();
 
     await request(app).post("/auth/customer/register").send(
       registrationData({ name: "João Atualizado", password: "nova-senha-123" }),
     );
+    await processEmailOutboxBatch();
     const newToken = tokenFromLatestCustomerRegistrationEmail();
 
     expect(await testPrisma.pendingCustomerRegistration.count()).toBe(1);
@@ -177,11 +179,13 @@ describe("Cadastro pendente — conflitos sem enumeração", () => {
 describe("POST /auth/customer/register/resend", () => {
   it("rotaciona o token e mantém resposta genérica", async () => {
     await request(app).post("/auth/customer/register").send(registrationData());
+    await processEmailOutboxBatch();
     const oldToken = tokenFromLatestCustomerRegistrationEmail();
 
     const response = await request(app)
       .post("/auth/customer/register/resend")
       .send({ email: " JOAO.CLIENTE@example.com " });
+    await processEmailOutboxBatch();
     const newToken = tokenFromLatestCustomerRegistrationEmail();
 
     expect(response.status).toBe(202);
@@ -204,6 +208,7 @@ describe("POST /auth/customer/register/resend", () => {
 
   it("não renova pending expirado e considera token expirado inválido", async () => {
     await request(app).post("/auth/customer/register").send(registrationData());
+    await processEmailOutboxBatch();
     const token = tokenFromLatestCustomerRegistrationEmail();
     const pending = await testPrisma.pendingCustomerRegistration.findUniqueOrThrow({
       where: { email: "joao.cliente@example.com" },
@@ -222,19 +227,39 @@ describe("POST /auth/customer/register/resend", () => {
     expect(await isPendingCustomerRegistrationTokenValid(token)).toBe(false);
   });
 
-  it("preserva o pending e invalida o token quando o provider falha", async () => {
-    vi.spyOn(emailService, "sendCustomerRegistrationVerificationEmail")
-      .mockRejectedValueOnce(new EmailDeliveryError());
-
+  it("responde antes da Brevo e mantém token/outbox para retry em falha transitória", async () => {
     const response = await request(app)
       .post("/auth/customer/register")
       .send(registrationData());
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(202);
     const pending = await testPrisma.pendingCustomerRegistration.findUnique({
       where: { email: "joao.cliente@example.com" },
     });
     expect(pending).not.toBeNull();
-    expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(0);
+    expect(await testPrisma.pendingCustomerRegistrationToken.count()).toBe(1);
+    expect(await testPrisma.emailOutbox.count({ where: { status: "PENDING" } })).toBe(1);
+
+    process.env.NODE_ENV = "development";
+    process.env.EMAIL_PROVIDER = "brevo";
+    process.env.BREVO_API_KEY = "chave-de-teste";
+    process.env.EMAIL_FROM = "remetente@example.com";
+    process.env.EMAIL_OUTBOX_BACKOFF_BASE_MS = "1";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+    try {
+      const batch = await processEmailOutboxBatch();
+      expect(batch.retried).toBe(1);
+      expect(await testPrisma.emailOutbox.findFirst()).toEqual(
+        expect.objectContaining({
+          status: "PENDING",
+          attempts: 1,
+          lastError: "BREVO_HTTP_500",
+        }),
+      );
+    } finally {
+      process.env.NODE_ENV = "test";
+      delete process.env.EMAIL_OUTBOX_BACKOFF_BASE_MS;
+      vi.unstubAllGlobals();
+    }
   });
 });

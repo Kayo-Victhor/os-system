@@ -1,13 +1,17 @@
 import { URL } from "node:url";
 
 export class EmailDeliveryError extends Error {
-  constructor() {
+  constructor(
+    public readonly retryable = false,
+    public readonly code = "EMAIL_DELIVERY_FAILED",
+  ) {
     super("Não foi possível enviar o e-mail de verificação");
     this.name = "EmailDeliveryError";
   }
 }
 
 interface LinkEmail { to: string; token: string; }
+export interface EmailDeliveryResult { providerMessageId?: string; }
 interface TestEmail {
   to: string;
   passwordResetUrl?: string;
@@ -27,12 +31,20 @@ function linkUrl(path: string, token: string) {
   return url.toString();
 }
 
-async function deliverEmail(to: string, subject: string, htmlContent: string) {
-  if (process.env.NODE_ENV === "test") return;
-  if (process.env.EMAIL_PROVIDER !== "brevo") throw new EmailDeliveryError();
+async function deliverEmail(
+  to: string,
+  subject: string,
+  htmlContent: string,
+): Promise<EmailDeliveryResult> {
+  if (process.env.NODE_ENV === "test") return {};
+  if (process.env.EMAIL_PROVIDER !== "brevo") {
+    throw new EmailDeliveryError(false, "EMAIL_PROVIDER_CONFIGURATION");
+  }
   const apiKey = process.env.BREVO_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from || !isEmailAddress(from)) throw new EmailDeliveryError();
+  if (!apiKey || !from || !isEmailAddress(from)) {
+    throw new EmailDeliveryError(false, "EMAIL_PROVIDER_CONFIGURATION");
+  }
   try {
     const response = await fetch(BREVO_SEND_EMAIL_URL, {
       method: "POST",
@@ -40,17 +52,28 @@ async function deliverEmail(to: string, subject: string, htmlContent: string) {
       body: JSON.stringify({ sender: { name: "OS System", email: from }, to: [{ email: to }], subject, htmlContent }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new EmailDeliveryError();
+    if (!response.ok) {
+      const retryable = response.status === 429 || response.status >= 500;
+      throw new EmailDeliveryError(retryable, `BREVO_HTTP_${response.status}`);
+    }
+    const body = await response.json().catch(() => null) as { messageId?: unknown } | null;
+    return {
+      providerMessageId:
+        typeof body?.messageId === "string" ? body.messageId : undefined,
+    };
   } catch (error) {
     if (error instanceof EmailDeliveryError) throw error;
-    throw new EmailDeliveryError();
+    throw new EmailDeliveryError(true, "EMAIL_PROVIDER_NETWORK");
   }
 }
 
 export async function sendPasswordResetEmail({ to, token }: LinkEmail) {
   const url = linkUrl("/resetar-senha", token);
-  if (process.env.NODE_ENV === "test") { testOutbox.push({ to, passwordResetUrl: url }); return; }
-  await deliverEmail(to, "Redefina sua senha no OS System", '<p>Recebemos uma solicitação para redefinir sua senha no OS System.</p><p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p><p>Se você não solicitou esta alteração, ignore esta mensagem.</p>');
+  if (process.env.NODE_ENV === "test") {
+    testOutbox.push({ to, passwordResetUrl: url });
+    return {};
+  }
+  return deliverEmail(to, "Redefina sua senha no OS System", '<p>Recebemos uma solicitação para redefinir sua senha no OS System.</p><p>Este link é válido por 60 minutos: <a href="' + url + '">Redefinir senha</a>.</p><p>Se você não solicitou esta alteração, ignore esta mensagem.</p>');
 }
 
 export async function sendCustomerAccountPasswordResetEmail({ to, token }: LinkEmail) {
@@ -60,10 +83,10 @@ export async function sendCustomerAccountPasswordResetEmail({ to, token }: LinkE
       to,
       customerPasswordResetUrl: url,
     });
-    return;
+    return {};
   }
 
-  await deliverEmail(
+  return deliverEmail(
     to,
     "Redefinição de senha da conta do cliente",
     '<h1>Redefina sua senha</h1>' +
@@ -77,10 +100,10 @@ export async function sendCustomerRegistrationVerificationEmail({ to, token }: L
   const url = linkUrl("/confirmar-cadastro", token);
   if (process.env.NODE_ENV === "test") {
     testOutbox.push({ to, customerRegistrationUrl: url });
-    return;
+    return {};
   }
 
-  await deliverEmail(
+  return deliverEmail(
     to,
     "Confirme seu cadastro de cliente no OS System",
     '<h1>Confirme seu cadastro</h1>' +
