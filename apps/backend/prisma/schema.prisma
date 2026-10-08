@@ -75,6 +75,8 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
 }
 
 model PasswordResetToken {
@@ -85,6 +87,9 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([usedAt])
 }
 
 model Customer {
@@ -135,6 +140,7 @@ model CustomerSession {
   @@index([customerAccountId])
   @@index([expiresAt])
   @@index([customerAccountId, revokedAt])
+  @@index([revokedAt])
 }
 
 model CustomerSessionRefreshToken {
@@ -148,6 +154,7 @@ model CustomerSessionRefreshToken {
 
   @@index([customerSessionId])
   @@index([expiresAt])
+  @@index([consumedAt])
 }
 
 // Password recovery for CustomerAccount is intentionally independent from
@@ -162,6 +169,7 @@ model CustomerAccountPasswordResetToken {
   customerAccount   CustomerAccount @relation(fields: [customerAccountId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+  @@index([usedAt])
 }
 
 // Public customer registration remains isolated here until e-mail ownership

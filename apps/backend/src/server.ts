@@ -5,12 +5,17 @@ import {
   startEmailOutboxWorker,
   stopEmailOutboxWorker,
 } from "./services/email-outbox.worker.js";
+import {
+  startRetentionCleanupWorker,
+  stopRetentionCleanupWorker,
+} from "./services/retention-cleanup.worker.js";
 
 const PORT = 3333;
 
 const server = app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   startEmailOutboxWorker();
+  startRetentionCleanupWorker();
 });
 
 let shuttingDown = false;
@@ -26,6 +31,7 @@ async function shutdown(signal: NodeJS.Signals) {
   try {
     await Promise.all([
       stopEmailOutboxWorker(),
+      stopRetentionCleanupWorker(),
       new Promise<void>((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
       }),

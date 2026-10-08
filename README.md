@@ -801,9 +801,16 @@ técnico e apaga e-mail, telefone, documento e endereço, mantendo o ID do
 permitido quando não existe nenhuma ordem vinculada; quando há histórico, a API
 retorna conflito e orienta o uso da anonimização.
 
-Registros expirados de `PendingCustomerRegistration` permanecem isolados de
-clientes confirmados. Não existe cleanup automático ou cron para esses
-registros neste momento.
+Um worker no mesmo processo do backend remove dados temporários expirados em
+lotes limitados, coordenados no PostgreSQL com `FOR UPDATE SKIP LOCKED`. O
+intervalo (`CLEANUP_POLL_INTERVAL_MS`, padrão de uma hora) e o tamanho do lote
+(`CLEANUP_BATCH_SIZE`, padrão 100) são configuráveis. Solicitações pendentes e
+tokens de confirmação permanecem por uma hora após expirar; tokens de
+redefinição usados ou expirados permanecem por 24 horas. Sessões e famílias de
+refresh tokens permanecem por 24 horas após o fim da validade; uma sessão
+revogada ainda é preservada até sua validade original terminar, mantendo a
+detecção de reutilização de tokens. A outbox de e-mail possui ciclo de vida
+próprio e não participa dessa limpeza.
 
 ## Operação de ordens por função
 
