@@ -2,6 +2,8 @@ import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
 
 const API_PREFIX = "/api";
+const PROXY_FUNCTION_PATH = "/api/proxy";
+const REWRITE_PATH_PARAMETER = "__os_proxy_path";
 const CLIENT_IP_HEADER = "x-os-system-client-ip";
 const TIMESTAMP_HEADER = "x-os-system-proxy-timestamp";
 const SIGNATURE_HEADER = "x-os-system-proxy-signature";
@@ -39,6 +41,81 @@ export interface ProxyEnvironment {
 }
 
 type FetchImplementation = typeof fetch;
+
+function decodeRewritePath(rawValue: string): string | null {
+  try {
+    const value = decodeURIComponent(rawValue.replace(/\+/g, "%20"));
+    const hasUnsafeSegment = value
+      .split("/")
+      .some((segment) => segment === "" || segment === "." || segment === "..");
+    if (
+      !value
+      || value.startsWith("/")
+      || value.includes("\\")
+      || value.includes("\0")
+      || value.includes("?")
+      || value.includes("#")
+      || hasUnsafeSegment
+    ) {
+      return null;
+    }
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Vercel rewrites /api/:proxyPath* to the stable /api/proxy Function and
+ * injects the captured path as the first query parameter. Remove only that
+ * internal parameter while leaving every byte of the browser query intact;
+ * the exact same path/query is then used both for fetch and for the HMAC.
+ */
+export function resolveUpstreamPathAndQuery(requestUrl: string): string | null {
+  const incomingUrl = new URL(requestUrl);
+
+  if (incomingUrl.pathname === PROXY_FUNCTION_PATH) {
+    const rawParameters = incomingUrl.search.length > 1
+      ? incomingUrl.search.slice(1).split("&")
+      : [];
+    const forwardedParameters: string[] = [];
+    let rewrittenPath: string | null = null;
+
+    for (const rawParameter of rawParameters) {
+      const separatorIndex = rawParameter.indexOf("=");
+      const rawName = separatorIndex === -1
+        ? rawParameter
+        : rawParameter.slice(0, separatorIndex);
+      const rawValue = separatorIndex === -1
+        ? ""
+        : rawParameter.slice(separatorIndex + 1);
+
+      let name: string;
+      try {
+        name = decodeURIComponent(rawName.replace(/\+/g, "%20"));
+      } catch {
+        return null;
+      }
+
+      if (rewrittenPath === null && name === REWRITE_PATH_PARAMETER) {
+        rewrittenPath = decodeRewritePath(rawValue);
+        if (rewrittenPath === null) return null;
+        continue;
+      }
+
+      forwardedParameters.push(rawParameter);
+    }
+
+    if (rewrittenPath === null) return null;
+    const query = forwardedParameters.length > 0
+      ? `?${forwardedParameters.join("&")}`
+      : "";
+    return `/${rewrittenPath}${query}`;
+  }
+
+  if (!incomingUrl.pathname.startsWith(`${API_PREFIX}/`)) return null;
+  return `${incomingUrl.pathname.slice(API_PREFIX.length)}${incomingUrl.search}`;
+}
 
 export function normalizeProxyIp(rawValue: string | null): string | null {
   if (!rawValue) return null;
@@ -163,8 +240,8 @@ export async function proxyApiRequest(
 ): Promise<Response> {
   try {
     const { targetOrigin, secret } = readProxyConfiguration(environment);
-    const incomingUrl = new URL(request.url);
-    if (!incomingUrl.pathname.startsWith(`${API_PREFIX}/`)) {
+    const upstreamPathAndQuery = resolveUpstreamPathAndQuery(request.url);
+    if (!upstreamPathAndQuery) {
       return Response.json({ error: "Rota não encontrada" }, { status: 404 });
     }
 
@@ -176,7 +253,6 @@ export async function proxyApiRequest(
       return Response.json({ error: "Não foi possível processar a requisição" }, { status: 400 });
     }
 
-    const upstreamPathAndQuery = `${incomingUrl.pathname.slice(API_PREFIX.length)}${incomingUrl.search}`;
     const timestamp = String(now());
     const headers = signedRequestHeaders(
       request,

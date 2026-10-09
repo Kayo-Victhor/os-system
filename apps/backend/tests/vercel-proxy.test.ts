@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   normalizeProxyIp,
   proxyApiRequest,
+  resolveUpstreamPathAndQuery,
 } from "../../frontend/api/_proxy.js";
 import {
   createProxySignature,
@@ -17,43 +18,59 @@ const environment = {
 };
 
 describe("proxy server-side da Vercel", () => {
-  it("reserva /api para a Function antes do fallback da SPA", () => {
+  it("roteia /api para uma Function estável antes do fallback da SPA", () => {
     const config = JSON.parse(
       readFileSync(new URL("../../frontend/vercel.json", import.meta.url), "utf8"),
     ) as { rewrites: Array<{ source: string; destination: string }> };
-    const spaRewrite = config.rewrites.find(
-      ({ destination }) => destination === "/index.html",
-    );
 
-    expect(spaRewrite).toBeDefined();
-    const spaMatcher = new RegExp(`^${spaRewrite!.source}$`);
+    expect(config.rewrites[0]).toEqual({
+      source: "/api/:proxyPath*",
+      destination: "/api/proxy?__os_proxy_path=:proxyPath*",
+    });
+    expect(config.rewrites[1]).toEqual({
+      source: "/(.*)",
+      destination: "/index.html",
+    });
+
+    const spaMatcher = new RegExp(`^${config.rewrites[1].source}$`);
     expect(spaMatcher.test("/login")).toBe(true);
     expect(spaMatcher.test("/customer/login")).toBe(true);
     expect(spaMatcher.test("/customer/area")).toBe(true);
-    expect(spaMatcher.test("/api/auth/login")).toBe(false);
-    expect(spaMatcher.test("/api/auth/customer/login")).toBe(false);
-    expect(spaMatcher.test("/api/auth/refresh")).toBe(false);
-    expect(spaMatcher.test("/api/auth/customer/refresh")).toBe(false);
+  });
+
+  it("remove somente o parâmetro interno e preserva a query sem reserializar", () => {
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Flogin&next=%2Fpainel&filter=a+b&encoded=%252F",
+    )).toBe("/auth/login?next=%2Fpainel&filter=a+b&encoded=%252F");
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Fcustomer%2Flogin",
+    )).toBe("/auth/customer/login");
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=..%2Finterno",
+    )).toBeNull();
   });
 
   it("encaminha método, caminho, query, body e headers com assinatura válida", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => (
       Response.json({ ok: true }, { status: 201 })
     ));
-    const request = new Request("https://frontend.example.com/api/auth/login?next=%2Fpainel", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        cookie: "csrf_token=abc",
-        "x-csrf-token": "abc",
-        "x-vercel-forwarded-for": "203.0.113.42",
-        "x-forwarded-for": "198.51.100.99",
-        "x-real-ip": "192.0.2.99",
-        [PROXY_CLIENT_IP_HEADER]: "192.0.2.1",
-        [PROXY_SIGNATURE_HEADER]: "a".repeat(64),
+    const request = new Request(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Flogin&next=%2Fpainel",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "csrf_token=abc",
+          "x-csrf-token": "abc",
+          "x-vercel-forwarded-for": "203.0.113.42",
+          "x-forwarded-for": "198.51.100.99",
+          "x-real-ip": "192.0.2.99",
+          [PROXY_CLIENT_IP_HEADER]: "192.0.2.1",
+          [PROXY_SIGNATURE_HEADER]: "a".repeat(64),
+        },
+        body: JSON.stringify({ email: "teste@example.com" }),
       },
-      body: JSON.stringify({ email: "teste@example.com" }),
-    });
+    );
 
     const response = await proxyApiRequest(request, environment, fetchMock, () => 1_800_000_000_000);
 
@@ -106,6 +123,26 @@ describe("proxy server-side da Vercel", () => {
       "csrf_token=two; Path=/; Secure",
     ]);
     await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
+  it("repassa o 404 do backend sem transformá-lo em NOT_FOUND da Vercel", async () => {
+    const fetchMock = vi.fn(async () => Response.json(
+      { error: "Rota não encontrada" },
+      { status: 404 },
+    ));
+    const request = new Request(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=rota%2Finexistente&source=teste%2Fapi",
+      { headers: { "x-vercel-forwarded-for": "203.0.113.42" } },
+    );
+
+    const response = await proxyApiRequest(request, environment, fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "https://backend.example.com/rota/inexistente?source=teste%2Fapi",
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "Rota não encontrada" });
   });
 
   it("rejeita IP ausente, lista de IPs e rota fora de /api", async () => {
