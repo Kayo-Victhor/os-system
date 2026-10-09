@@ -38,10 +38,10 @@ describe("proxy server-side da Vercel", () => {
     expect(spaMatcher.test("/customer/area")).toBe(true);
   });
 
-  it("remove somente o parâmetro interno e preserva a query sem reserializar", () => {
+  it("remove todos os parâmetros internos e preserva os filtros legítimos", () => {
     expect(resolveUpstreamPathAndQuery(
-      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Flogin&next=%2Fpainel&filter=a+b&encoded=%252F",
-    )).toBe("/auth/login?next=%2Fpainel&filter=a+b&encoded=%252F");
+      "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
+    )).toBe("/service-orders?status=OPEN");
     expect(resolveUpstreamPathAndQuery(
       "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Fcustomer%2Flogin",
     )).toBe("/auth/customer/login");
@@ -50,12 +50,35 @@ describe("proxy server-side da Vercel", () => {
     )).toBeNull();
   });
 
+  it("remove ocorrências repetidas e idênticas do caminho interno", () => {
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&status=OPEN&__os_proxy_path=service-orders&proxyPath=service-orders&status=WAITING",
+    )).toBe("/service-orders?status=OPEN&status=WAITING");
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=service%2Dorders&__os_proxy_path=service-orders",
+    )).toBe("/service-orders");
+  });
+
+  it("rejeita ocorrências conflitantes do caminho interno", () => {
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&__os_proxy_path=customers",
+    )).toBeNull();
+  });
+
+  it("preserva exatamente a codificação, a ordem e os parâmetros legítimos repetidos", () => {
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&status=OPEN&tag=a+b&encoded=%252F&status=WAITING&empty=&flag&proxyPath=service-orders",
+    )).toBe(
+      "/service-orders?status=OPEN&tag=a+b&encoded=%252F&status=WAITING&empty=&flag",
+    );
+  });
+
   it("encaminha método, caminho, query, body e headers com assinatura válida", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => (
       Response.json({ ok: true }, { status: 201 })
     ));
     const request = new Request(
-      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Flogin&next=%2Fpainel",
+      "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Flogin&proxyPath=auth%2Flogin&__os_proxy_path=auth%2Flogin&next=%2Fpainel",
       {
         method: "POST",
         headers: {
@@ -100,6 +123,37 @@ describe("proxy server-side da Vercel", () => {
         clientIp: "203.0.113.42",
       },
     ));
+  });
+
+  it.each([
+    {
+      name: "sem filtros",
+      requestUrl: "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders",
+      expectedTarget: "https://backend.example.com/service-orders",
+    },
+    {
+      name: "com filtros válidos",
+      requestUrl: "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
+      expectedTarget: "https://backend.example.com/service-orders?status=OPEN",
+    },
+  ])("encaminha a listagem de ordens $name sem parâmetros internos", async ({
+    requestUrl,
+    expectedTarget,
+  }) => {
+    const fetchMock = vi.fn(async () => Response.json([], { status: 200 }));
+    const response = await proxyApiRequest(
+      new Request(requestUrl, {
+        headers: { "x-vercel-forwarded-for": "203.0.113.42" },
+      }),
+      environment,
+      fetchMock,
+      () => 1_800_000_000_000,
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toBe(expectedTarget);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([]);
   });
 
   it("preserva status, headers e múltiplos Set-Cookie", async () => {

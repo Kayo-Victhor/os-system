@@ -4,6 +4,7 @@ import { isIP } from "node:net";
 const API_PREFIX = "/api";
 const PROXY_FUNCTION_PATH = "/api/proxy";
 const REWRITE_PATH_PARAMETER = "__os_proxy_path";
+const VERCEL_CAPTURE_PARAMETER = "proxyPath";
 const CLIENT_IP_HEADER = "x-os-system-client-ip";
 const TIMESTAMP_HEADER = "x-os-system-proxy-timestamp";
 const SIGNATURE_HEADER = "x-os-system-proxy-signature";
@@ -67,9 +68,9 @@ function decodeRewritePath(rawValue: string): string | null {
 
 /**
  * Vercel rewrites /api/:proxyPath* to the stable /api/proxy Function and
- * injects the captured path as the first query parameter. Remove only that
- * internal parameter while leaving every byte of the browser query intact;
- * the exact same path/query is then used both for fetch and for the HMAC.
+ * injects reserved routing parameters into the query. Remove every occurrence
+ * of those internal parameters while leaving every byte of the browser query
+ * intact; the exact same path/query is then used both for fetch and the HMAC.
  */
 export function resolveUpstreamPathAndQuery(requestUrl: string): string | null {
   const incomingUrl = new URL(requestUrl);
@@ -97,9 +98,15 @@ export function resolveUpstreamPathAndQuery(requestUrl: string): string | null {
         return null;
       }
 
-      if (rewrittenPath === null && name === REWRITE_PATH_PARAMETER) {
-        rewrittenPath = decodeRewritePath(rawValue);
-        if (rewrittenPath === null) return null;
+      if (name === REWRITE_PATH_PARAMETER) {
+        const candidatePath = decodeRewritePath(rawValue);
+        if (candidatePath === null) return null;
+        if (rewrittenPath !== null && candidatePath !== rewrittenPath) return null;
+        rewrittenPath = candidatePath;
+        continue;
+      }
+
+      if (name === VERCEL_CAPTURE_PARAMETER) {
         continue;
       }
 
