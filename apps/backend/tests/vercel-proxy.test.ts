@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   normalizeProxyIp,
   proxyApiRequest,
@@ -16,6 +17,25 @@ const environment = {
 };
 
 describe("proxy server-side da Vercel", () => {
+  it("reserva /api para a Function antes do fallback da SPA", () => {
+    const config = JSON.parse(
+      readFileSync(new URL("../../frontend/vercel.json", import.meta.url), "utf8"),
+    ) as { rewrites: Array<{ source: string; destination: string }> };
+    const spaRewrite = config.rewrites.find(
+      ({ destination }) => destination === "/index.html",
+    );
+
+    expect(spaRewrite).toBeDefined();
+    const spaMatcher = new RegExp(`^${spaRewrite!.source}$`);
+    expect(spaMatcher.test("/login")).toBe(true);
+    expect(spaMatcher.test("/customer/login")).toBe(true);
+    expect(spaMatcher.test("/customer/area")).toBe(true);
+    expect(spaMatcher.test("/api/auth/login")).toBe(false);
+    expect(spaMatcher.test("/api/auth/customer/login")).toBe(false);
+    expect(spaMatcher.test("/api/auth/refresh")).toBe(false);
+    expect(spaMatcher.test("/api/auth/customer/refresh")).toBe(false);
+  });
+
   it("encaminha método, caminho, query, body e headers com assinatura válida", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => (
       Response.json({ ok: true }, { status: 201 })
