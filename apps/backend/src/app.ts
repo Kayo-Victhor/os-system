@@ -11,9 +11,13 @@ import healthRoutes from "./routes/health.routes.js";
 
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 import { csrfProtectionForSession } from "./middlewares/csrf.middleware.js";
+import {
+  trustedProxyMiddleware,
+  validateTrustedProxyConfiguration,
+} from "./middlewares/trusted-proxy.middleware.js";
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", false);
 
 const isProduction = process.env.NODE_ENV === "production";
 const corsOrigin = process.env.CORS_ORIGIN;
@@ -22,16 +26,15 @@ if (!corsOrigin && isProduction) {
   throw new Error("CORS_ORIGIN precisa estar configurado em produção");
 }
 
+validateTrustedProxyConfiguration();
+
 app.use(helmet({ referrerPolicy: { policy: "no-referrer" } }));
 
 // localhost:5173 (the Vite dev server) is only ever a valid CORS origin in
-// development. In production, the browser talks to the Vercel origin,
-// which proxies /api/* to this backend (see apps/frontend/vercel.json) —
-// that path is same-origin from the browser's perspective and never goes
-// through this CORS check at all. CORS here only matters for direct,
-// non-proxied access to this backend (e.g. hitting the Render URL
-// directly), so the only origin that should ever be allowed in
-// production is CORS_ORIGIN itself — never an unconditional dev URL.
+// development. In production, the browser talks to the Vercel origin and
+// the server-side proxy preserves that Origin when it calls this backend.
+// Direct access to the Render URL is still public at the network layer, so
+// production must allow only CORS_ORIGIN — never an unconditional dev URL.
 const allowedOrigins = [
   corsOrigin,
   ...(isProduction ? [] : ["http://localhost:5173"]),
@@ -48,6 +51,9 @@ app.use(
       callback(new Error("Origin não permitido pelo CORS"));
     },
     credentials: true,
+    // Let signed API preflights reach trustedProxyMiddleware. /health remains
+    // outside that boundary while retaining its existing CORS behavior.
+    preflightContinue: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "x-csrf-token"],
   }),
@@ -58,6 +64,7 @@ app.use(cookieParser());
 
 app.use("/health", healthRoutes);
 
+app.use(trustedProxyMiddleware);
 app.use(apiRateLimiter);
 
 // Public authentication flows do not require an existing CSRF token. They

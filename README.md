@@ -549,7 +549,8 @@ Frontend
       │
       ▼
 Vercel
-      │
+      │ /api/* — função server-side
+      │ HMAC(timestamp + método + caminho/query + IP)
       ▼
 Backend
       │
@@ -563,6 +564,29 @@ Prisma
 Supabase PostgreSQL
 via Supavisor / Session Pooler
 ```
+
+O navegador não acessa uma rewrite externa direta. Uma Vercel Function recebe
+`/api/*`, obtém o IP público pelo header `x-vercel-forwarded-for` definido pela
+plataforma, normaliza o endereço e assina os dados de encaminhamento. O Render
+valida essa assinatura antes de autenticação e rate limiting. Em produção,
+somente `/health` permanece acessível sem assinatura; os limiters usam
+exclusivamente o IP validado, nunca `X-Forwarded-For` ou `X-Real-IP` enviados
+pelo cliente.
+
+Variáveis exclusivamente server-side:
+
+- Vercel: `API_PROXY_TARGET` (origem HTTPS do Render) e
+  `INTERNAL_PROXY_SECRET`;
+- Render: o mesmo `INTERNAL_PROXY_SECRET`;
+- desenvolvimento/testes locais: `ALLOW_DIRECT_API_REQUESTS=true` permite o
+  acesso direto ao Express e usa somente o endereço do socket. Essa opção é
+  ignorada em produção.
+
+O segredo deve ser aleatório, independente, ter pelo menos 32 bytes e nunca
+usar o prefixo `VITE_`. Para evitar indisponibilidade no rollout, configure o
+mesmo segredo nos dois provedores, publique primeiro o proxy Vercel (o backend
+antigo ignora os novos headers) e somente depois publique o backend que exige a
+assinatura. Não troque o segredo em apenas um lado.
 
 ---
 

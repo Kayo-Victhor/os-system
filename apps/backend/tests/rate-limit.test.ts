@@ -40,6 +40,25 @@ describe("Rate limit de autenticação", () => {
     expect(blocked.body.error).toContain("Muitas tentativas");
   });
 
+  it("ignores forged forwarding headers when direct local access is explicitly enabled", async () => {
+    const { default: app } = await import("../src/app.js");
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await request(app)
+        .post("/auth/forgot-password")
+        .set("X-Forwarded-For", `198.51.100.${attempt + 1}`)
+        .set("X-Real-IP", `192.0.2.${attempt + 1}`)
+        .send({ email: "limite-forwarded@example.com" });
+      expect(response.status).not.toBe(429);
+    }
+
+    const blocked = await request(app)
+      .post("/auth/forgot-password")
+      .set("X-Forwarded-For", "198.51.100.250")
+      .set("X-Real-IP", "192.0.2.250")
+      .send({ email: "limite-forwarded@example.com" });
+    expect(blocked.status).toBe(429);
+  });
+
   it("blocks the sixth pending customer registration for the same IP and e-mail", async () => {
     const { default: app } = await import("../src/app.js");
     for (let attempt = 0; attempt < 5; attempt += 1) {

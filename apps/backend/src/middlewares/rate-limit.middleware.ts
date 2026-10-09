@@ -2,18 +2,24 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 import { createHash } from "node:crypto";
 import { normalizeEmail } from "../lib/email.js";
+import { getTrustedClientIp } from "./trusted-proxy.middleware.js";
+
+function trustedIpKey(req: Request): string {
+  return ipKeyGenerator(getTrustedClientIp(req) ?? "unknown");
+}
 
 function customerRegistrationKey(prefix: string) {
   return (req: Request) => {
     const rawEmail = typeof req.body?.email === "string" ? req.body.email : "invalid-email";
     const emailDigest = createHash("sha256").update(normalizeEmail(rawEmail)).digest("hex");
-    return `${prefix}:${ipKeyGenerator(req.ip ?? "")}:${emailDigest}`;
+    return `${prefix}:${trustedIpKey(req)}:${emailDigest}`;
   };
 }
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -25,6 +31,7 @@ export const authRateLimiter = rateLimit({
 export const customerAuthRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -34,6 +41,7 @@ export const customerAuthRateLimiter = rateLimit({
 export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -45,6 +53,7 @@ export const apiRateLimiter = rateLimit({
 export const writeRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 40,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -55,6 +64,7 @@ export const writeRateLimiter = rateLimit({
 export const passwordResetRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -64,6 +74,7 @@ export const passwordResetRateLimiter = rateLimit({
 export const customerPasswordResetRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -86,6 +97,7 @@ export const customerRegistrationRateLimiter = rateLimit({
 export const customerRegistrationIpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -105,6 +117,7 @@ export const customerRegistrationResendRateLimiter = rateLimit({
 export const customerRegistrationResendIpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",
@@ -114,6 +127,7 @@ export const customerRegistrationResendIpRateLimiter = rateLimit({
 export const customerRegistrationConfirmationRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: trustedIpKey,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === "test",

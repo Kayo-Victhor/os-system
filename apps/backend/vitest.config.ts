@@ -34,6 +34,8 @@ export default defineConfig({
       JWT_REFRESH_SECRET: "test-refresh-secret-not-for-real-use",
       EMAIL_VERIFICATION_SECRET: "test-email-verification-secret-not-for-real-use",
       PASSWORD_RESET_SECRET: "test-password-reset-secret-not-for-real-use",
+      INTERNAL_PROXY_SECRET: "test-internal-proxy-secret-with-at-least-32-bytes",
+      ALLOW_DIRECT_API_REQUESTS: "true",
       NODE_ENV: "test",
       CORS_ORIGIN: "http://localhost:5173"
     }
