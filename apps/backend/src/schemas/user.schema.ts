@@ -4,15 +4,20 @@ import { normalizeEmail } from "../lib/email.js";
 export const passwordSchema = z.string().min(8, "A senha deve ter pelo menos 8 caracteres").max(128);
 
 export const createUserSchema = z.object({
-  name: z.string().min(2).max(100),
-  email: z.string().email(),
+  name: z.string()
+    .min(2, "O nome deve ter pelo menos 2 caracteres")
+    .max(100, "O nome deve ter no máximo 100 caracteres"),
+  email: z.string().email("Informe um e-mail válido"),
   password: passwordSchema,
   role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).default("ATTENDANT")
 });
 
 export const updateUserSchema = z.object({
-  name: z.string().min(2).max(100).optional(),
-  email: z.string().email().optional(),
+  name: z.string()
+    .min(2, "O nome deve ter pelo menos 2 caracteres")
+    .max(100, "O nome deve ter no máximo 100 caracteres")
+    .optional(),
+  email: z.string().email("Informe um e-mail válido").optional(),
   role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).optional(),
 });
 

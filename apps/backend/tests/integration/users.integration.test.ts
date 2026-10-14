@@ -42,30 +42,34 @@ describe("Initial admin (seed equivalent)", () => {
 });
 
 describe("POST /users — creation (admin only)", () => {
-  it("an ADMIN can create a TECHNICIAN account", async () => {
-    const { user: admin } = await createFixtureUser("ADMIN");
-    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+  it.each(["ATTENDANT", "TECHNICIAN"] as const)(
+    "an ADMIN can create a %s account with persisted credentials",
+    async (role) => {
+      const { user: admin } = await createFixtureUser("ADMIN");
+      const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
 
-    const res = await request(app)
-      .post("/users")
-      .set("Cookie", session.cookie)
-      .set("x-csrf-token", session.csrfHeader)
-      .send({
-        name: "Técnico Novo",
-        email: "tecnico-novo@example.com",
-        password: "senha123456",
-        role: "TECHNICIAN",
+      const res = await request(app)
+        .post("/users")
+        .set("Cookie", session.cookie)
+        .set("x-csrf-token", session.csrfHeader)
+        .send({
+          name: "Usuário Novo",
+          email: `${role.toLowerCase()}-novo@example.com`,
+          password: "senha123456",
+          role,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.role).toBe(role);
+      expect(res.body.password).toBeUndefined();
+
+      const stored = await testPrisma.user.findUniqueOrThrow({
+        where: { email: `${role.toLowerCase()}-novo@example.com` },
       });
-
-    expect(res.status).toBe(201);
-    expect(res.body.role).toBe("TECHNICIAN");
-
-    const stored = await testPrisma.user.findUniqueOrThrow({
-      where: { email: "tecnico-novo@example.com" },
-    });
-    expect(stored.role).toBe("TECHNICIAN");
-    expect(await verifyPassword(stored.password, "senha123456")).toBe(true);
-  });
+      expect(stored.role).toBe(role);
+      expect(await verifyPassword(stored.password, "senha123456")).toBe(true);
+    },
+  );
 
   it.each(["ATTENDANT", "TECHNICIAN"] as const)(
     "a %s cannot create users (403)",
@@ -137,6 +141,29 @@ describe("POST /users — creation (admin only)", () => {
       .send({ name: "X", email: "curta@example.com", password: "123" });
 
     expect(res.status).toBe(400);
+  });
+
+  it.each([
+    ["e-mail inválido", { name: "Usuário", email: "email-inválido", password: "senha123456" }],
+    ["nome ausente", { email: "sem-nome@example.com", password: "senha123456" }],
+    ["senha ausente", { name: "Sem senha", email: "sem-senha@example.com" }],
+  ])("rejects %s without persisting a user", async (scenario, payload) => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const before = await testPrisma.user.count();
+    const res = await request(app)
+      .post("/users")
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send(payload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Dados inválidos");
+    if (scenario === "e-mail inválido") {
+      expect(res.body.details.fieldErrors.email).toContain("Informe um e-mail válido");
+    }
+    expect(await testPrisma.user.count()).toBe(before);
   });
 
   it("an ADMIN can create another ADMIN account", async () => {
@@ -247,6 +274,37 @@ describe("GET /users — query (admin only)", () => {
       expect(res.status).toBe(403);
     },
   );
+
+  it("an ADMIN can read one user without exposing the password", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: target } = await createFixtureUser("ATTENDANT");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app).get(`/users/${target.id}`).set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      id: target.id,
+      name: target.name,
+      email: target.email,
+      role: "ATTENDANT",
+    }));
+    expect(res.body.password).toBeUndefined();
+  });
+
+  it("returns 404 for an unknown user and keeps non-admin access forbidden", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: attendant } = await createFixtureUser("ATTENDANT");
+    const adminSession = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+    const attendantSession = await loginAs(app, attendant.email, FIXTURE_PASSWORD);
+    const unknownId = "00000000-0000-0000-0000-000000000000";
+
+    const missing = await request(app).get(`/users/${unknownId}`).set("Cookie", adminSession.cookie);
+    const forbidden = await request(app).get(`/users/${admin.id}`).set("Cookie", attendantSession.cookie);
+
+    expect(missing.status).toBe(404);
+    expect(forbidden.status).toBe(403);
+  });
 });
 
 describe("PATCH /users/:id — update", () => {
@@ -295,6 +353,8 @@ describe("PATCH /users/:id — update", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Nome Atualizado");
+    expect((await testPrisma.user.findUniqueOrThrow({ where: { id: target.id } })).name)
+      .toBe("Nome Atualizado");
   });
 
   it("rejects changing a user to a customer identity e-mail", async () => {
