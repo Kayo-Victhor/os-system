@@ -170,6 +170,18 @@ describe("GET /service-orders/:id — nonexistent resource", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it("returns 404 for a malformed identifier without querying a different order", async () => {
+    const { user } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .get("/service-orders/id-invalido")
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("Ordem de serviço não encontrada");
+  });
 });
 
 describe("TECHNICIAN ownership — service order reads", () => {
@@ -373,6 +385,17 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
 });
 
 describe("GET /service-orders — filtering and technician-scoped queries", () => {
+  it("returns an empty collection when no service orders exist", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app).get("/service-orders").set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+    expect(await testPrisma.serviceOrder.count()).toBe(0);
+  });
+
   it("a technician can find the orders assigned to them via technicianId filter", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const { user: tech1 } = await createFixtureUser("TECHNICIAN");
@@ -410,6 +433,41 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].status).toBe("COMPLETED");
+  });
+
+  it("filters by priority, customer and case-insensitive text search", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const customerA = await createFixtureCustomer({ name: "Cliente Alfa" });
+    const customerB = await createFixtureCustomer({ name: "Cliente Beta" });
+    const urgent = await createFixtureServiceOrder({
+      customerId: customerA.id,
+      createdById: admin.id,
+      priority: "URGENT",
+      title: "Falha crítica na rede",
+      description: "Conectividade indisponível no escritório",
+    });
+    const other = await createFixtureServiceOrder({
+      customerId: customerB.id,
+      createdById: admin.id,
+      priority: "LOW",
+      title: "Troca de periférico",
+      description: "Substituir mouse da recepção",
+    });
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const priority = await request(app).get("/service-orders")
+      .query({ priority: "URGENT" }).set("Cookie", session.cookie);
+    const customer = await request(app).get("/service-orders")
+      .query({ customerId: customerB.id }).set("Cookie", session.cookie);
+    const search = await request(app).get("/service-orders")
+      .query({ search: "CONECTIVIDADE" }).set("Cookie", session.cookie);
+
+    expect(priority.status).toBe(200);
+    expect(priority.body.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
+    expect(customer.status).toBe(200);
+    expect(customer.body.map((order: { id: string }) => order.id)).toEqual([other.id]);
+    expect(search.status).toBe(200);
+    expect(search.body.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
   });
 
   it("rejects an invalid status filter value", async () => {

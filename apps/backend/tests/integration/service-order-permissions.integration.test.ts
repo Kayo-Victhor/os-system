@@ -191,12 +191,17 @@ describe("matriz de permissões de ServiceOrder", () => {
     const technicianAttempt = await request(app).patch(`/service-orders/${order.id}/technician`)
       .set("Cookie", techSession.cookie).set("x-csrf-token", techSession.csrfHeader)
       .send({ technicianId: techA.id });
+    const unassigned = await request(app).patch(`/service-orders/${order.id}/technician`)
+      .set("Cookie", attendantSession.cookie).set("x-csrf-token", attendantSession.csrfHeader)
+      .send({ technicianId: null });
 
     expect(assigned.status).toBe(200);
     expect(reassigned.status).toBe(200);
     expect(invalidRole.status).toBe(400);
     expect(technicianAttempt.status).toBe(403);
-    expect((await testPrisma.serviceOrder.findUniqueOrThrow({ where: { id: order.id } })).technicianId).toBe(techB.id);
+    expect(unassigned.status).toBe(200);
+    expect(unassigned.body.technicianId).toBeNull();
+    expect((await testPrisma.serviceOrder.findUniqueOrThrow({ where: { id: order.id } })).technicianId).toBeNull();
 
     const candidates = await request(app).get("/service-orders/technicians").set("Cookie", attendantSession.cookie);
     expect(candidates.status).toBe(200);
