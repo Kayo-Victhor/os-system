@@ -43,6 +43,9 @@ describe("proxy server-side da Vercel", () => {
       "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
     )).toBe("/service-orders?status=OPEN");
     expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
+    )).toBe("/service-orders?status=OPEN");
+    expect(resolveUpstreamPathAndQuery(
       "https://frontend.example.com/api/proxy?__os_proxy_path=auth%2Fcustomer%2Flogin",
     )).toBe("/auth/customer/login");
     expect(resolveUpstreamPathAndQuery(
@@ -57,11 +60,20 @@ describe("proxy server-side da Vercel", () => {
     expect(resolveUpstreamPathAndQuery(
       "https://frontend.example.com/api/proxy?__os_proxy_path=service%2Dorders&__os_proxy_path=service-orders",
     )).toBe("/service-orders");
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/service-orders?proxyPath=service-orders&__os_proxy_path=service-orders&proxyPath=service%2Dorders",
+    )).toBe("/service-orders");
   });
 
   it("rejeita ocorrências conflitantes do caminho interno", () => {
     expect(resolveUpstreamPathAndQuery(
       "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&__os_proxy_path=customers",
+    )).toBeNull();
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/service-orders?__os_proxy_path=customers&proxyPath=service-orders",
+    )).toBeNull();
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=customers",
     )).toBeNull();
   });
 
@@ -71,6 +83,31 @@ describe("proxy server-side da Vercel", () => {
     )).toBe(
       "/service-orders?status=OPEN&tag=a+b&encoded=%252F&status=WAITING&empty=&flag",
     );
+    expect(resolveUpstreamPathAndQuery(
+      "https://frontend.example.com/api/service-orders?status=OPEN&__os_proxy_path=service-orders&tag=a+b&proxyPath=service-orders&encoded=%252F&status=WAITING&empty=&flag",
+    )).toBe(
+      "/service-orders?status=OPEN&tag=a+b&encoded=%252F&status=WAITING&empty=&flag",
+    );
+  });
+
+  it.each([
+    [
+      "login interno",
+      "https://frontend.example.com/api/auth/login?__os_proxy_path=auth%2Flogin&proxyPath=auth%2Flogin",
+      "/auth/login",
+    ],
+    [
+      "refresh interno",
+      "https://frontend.example.com/api/auth/refresh?proxyPath=auth%2Frefresh&__os_proxy_path=auth%2Frefresh",
+      "/auth/refresh",
+    ],
+    [
+      "ordens de serviço",
+      "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders",
+      "/service-orders",
+    ],
+  ])("preserva a rota de %s no formato de caminho original", (_name, requestUrl, expected) => {
+    expect(resolveUpstreamPathAndQuery(requestUrl)).toBe(expected);
   });
 
   it("encaminha método, caminho, query, body e headers com assinatura válida", async () => {
@@ -125,6 +162,49 @@ describe("proxy server-side da Vercel", () => {
     ));
   });
 
+  it("assina o caminho original com a query legítima já sanitizada", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    const request = new Request(
+      "https://frontend.example.com/api/auth/refresh?next=%2Fpainel&__os_proxy_path=auth%2Frefresh&tag=a+b&proxyPath=auth%2Frefresh&tag=%252F",
+      {
+        method: "POST",
+        headers: {
+          cookie: "refresh_token=abc; csrf_token=def",
+          "x-csrf-token": "def",
+          "x-vercel-forwarded-for": "203.0.113.42",
+        },
+      },
+    );
+
+    const response = await proxyApiRequest(
+      request,
+      environment,
+      fetchMock,
+      () => 1_800_000_000_000,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [target, init] = fetchMock.mock.calls[0];
+    expect(String(target)).toBe(
+      "https://backend.example.com/auth/refresh?next=%2Fpainel&tag=a+b&tag=%252F",
+    );
+
+    const headers = init?.headers as Headers;
+    const timestamp = headers.get(PROXY_TIMESTAMP_HEADER)!;
+    expect(headers.get("cookie")).toBe("refresh_token=abc; csrf_token=def");
+    expect(headers.get("x-csrf-token")).toBe("def");
+    expect(headers.get(PROXY_SIGNATURE_HEADER)).toBe(createProxySignature(
+      environment.INTERNAL_PROXY_SECRET,
+      {
+        timestamp,
+        method: "POST",
+        pathAndQuery: "/auth/refresh?next=%2Fpainel&tag=a+b&tag=%252F",
+        clientIp: "203.0.113.42",
+      },
+    ));
+  });
+
   it.each([
     {
       name: "sem filtros",
@@ -134,6 +214,16 @@ describe("proxy server-side da Vercel", () => {
     {
       name: "com filtros válidos",
       requestUrl: "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
+      expectedTarget: "https://backend.example.com/service-orders?status=OPEN",
+    },
+    {
+      name: "sem filtros no caminho original",
+      requestUrl: "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders",
+      expectedTarget: "https://backend.example.com/service-orders",
+    },
+    {
+      name: "com filtros válidos no caminho original",
+      requestUrl: "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
       expectedTarget: "https://backend.example.com/service-orders?status=OPEN",
     },
   ])("encaminha a listagem de ordens $name sem parâmetros internos", async ({

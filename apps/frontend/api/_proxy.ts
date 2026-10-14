@@ -43,9 +43,9 @@ export interface ProxyEnvironment {
 
 type FetchImplementation = typeof fetch;
 
-function decodeRewritePath(rawValue: string): string | null {
+function decodeAndValidatePath(rawValue: string, plusAsSpace: boolean): string | null {
   try {
-    const value = decodeURIComponent(rawValue.replace(/\+/g, "%20"));
+    const value = decodeURIComponent(plusAsSpace ? rawValue.replace(/\+/g, "%20") : rawValue);
     const hasUnsafeSegment = value
       .split("/")
       .some((segment) => segment === "" || segment === "." || segment === "..");
@@ -66,62 +66,86 @@ function decodeRewritePath(rawValue: string): string | null {
   }
 }
 
+interface ParsedProxyQuery {
+  forwardedQuery: string;
+  rewritePath: string | null;
+  capturePath: string | null;
+}
+
+function parseProxyQuery(rawSearch: string): ParsedProxyQuery | null {
+  const rawParameters = rawSearch.length > 1 ? rawSearch.slice(1).split("&") : [];
+  const forwardedParameters: string[] = [];
+  let rewritePath: string | null = null;
+  let capturePath: string | null = null;
+
+  for (const rawParameter of rawParameters) {
+    const separatorIndex = rawParameter.indexOf("=");
+    const rawName = separatorIndex === -1
+      ? rawParameter
+      : rawParameter.slice(0, separatorIndex);
+    const rawValue = separatorIndex === -1
+      ? ""
+      : rawParameter.slice(separatorIndex + 1);
+
+    let name: string;
+    try {
+      name = decodeURIComponent(rawName.replace(/\+/g, "%20"));
+    } catch {
+      return null;
+    }
+
+    if (name === REWRITE_PATH_PARAMETER || name === VERCEL_CAPTURE_PARAMETER) {
+      const candidatePath = decodeAndValidatePath(rawValue, true);
+      if (candidatePath === null) return null;
+
+      const currentPath: string | null = name === REWRITE_PATH_PARAMETER
+        ? rewritePath
+        : capturePath;
+      if (currentPath !== null && candidatePath !== currentPath) return null;
+
+      if (name === REWRITE_PATH_PARAMETER) rewritePath = candidatePath;
+      else capturePath = candidatePath;
+      continue;
+    }
+
+    forwardedParameters.push(rawParameter);
+  }
+
+  if (rewritePath !== null && capturePath !== null && rewritePath !== capturePath) return null;
+
+  return {
+    forwardedQuery: forwardedParameters.length > 0
+      ? `?${forwardedParameters.join("&")}`
+      : "",
+    rewritePath,
+    capturePath,
+  };
+}
+
 /**
- * Vercel rewrites /api/:proxyPath* to the stable /api/proxy Function and
- * injects reserved routing parameters into the query. Remove every occurrence
- * of those internal parameters while leaving every byte of the browser query
- * intact; the exact same path/query is then used both for fetch and the HMAC.
+ * Vercel may expose either the stable /api/proxy destination or the original
+ * /api/:proxyPath* URL to the Function. Strip and validate routing metadata in
+ * both cases while leaving every byte of the browser query intact; the exact
+ * same path/query is then used both for fetch and the HMAC.
  */
 export function resolveUpstreamPathAndQuery(requestUrl: string): string | null {
   const incomingUrl = new URL(requestUrl);
+  const parsedQuery = parseProxyQuery(incomingUrl.search);
+  if (parsedQuery === null) return null;
 
   if (incomingUrl.pathname === PROXY_FUNCTION_PATH) {
-    const rawParameters = incomingUrl.search.length > 1
-      ? incomingUrl.search.slice(1).split("&")
-      : [];
-    const forwardedParameters: string[] = [];
-    let rewrittenPath: string | null = null;
-
-    for (const rawParameter of rawParameters) {
-      const separatorIndex = rawParameter.indexOf("=");
-      const rawName = separatorIndex === -1
-        ? rawParameter
-        : rawParameter.slice(0, separatorIndex);
-      const rawValue = separatorIndex === -1
-        ? ""
-        : rawParameter.slice(separatorIndex + 1);
-
-      let name: string;
-      try {
-        name = decodeURIComponent(rawName.replace(/\+/g, "%20"));
-      } catch {
-        return null;
-      }
-
-      if (name === REWRITE_PATH_PARAMETER) {
-        const candidatePath = decodeRewritePath(rawValue);
-        if (candidatePath === null) return null;
-        if (rewrittenPath !== null && candidatePath !== rewrittenPath) return null;
-        rewrittenPath = candidatePath;
-        continue;
-      }
-
-      if (name === VERCEL_CAPTURE_PARAMETER) {
-        continue;
-      }
-
-      forwardedParameters.push(rawParameter);
-    }
-
-    if (rewrittenPath === null) return null;
-    const query = forwardedParameters.length > 0
-      ? `?${forwardedParameters.join("&")}`
-      : "";
-    return `/${rewrittenPath}${query}`;
+    if (parsedQuery.rewritePath === null) return null;
+    return `/${parsedQuery.rewritePath}${parsedQuery.forwardedQuery}`;
   }
 
   if (!incomingUrl.pathname.startsWith(`${API_PREFIX}/`)) return null;
-  return `${incomingUrl.pathname.slice(API_PREFIX.length)}${incomingUrl.search}`;
+  const rawOriginalPath = incomingUrl.pathname.slice(API_PREFIX.length + 1);
+  const originalPath = decodeAndValidatePath(rawOriginalPath, false);
+  if (originalPath === null) return null;
+  if (parsedQuery.rewritePath !== null && parsedQuery.rewritePath !== originalPath) return null;
+  if (parsedQuery.capturePath !== null && parsedQuery.capturePath !== originalPath) return null;
+
+  return `/${rawOriginalPath}${parsedQuery.forwardedQuery}`;
 }
 
 export function normalizeProxyIp(rawValue: string | null): string | null {
