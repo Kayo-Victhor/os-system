@@ -141,6 +141,8 @@ export async function createServiceOrder(
 }
 
 export interface ListServiceOrdersFilters {
+  page: number;
+  limit: number;
   status?: ServiceOrderStatus;
   priority?: ServiceOrderPriority;
   customerId?: string;
@@ -149,7 +151,7 @@ export interface ListServiceOrdersFilters {
 }
 
 export async function listServiceOrders(
-  filters: ListServiceOrdersFilters = {},
+  filters: ListServiceOrdersFilters,
   actor?: ServiceOrderActor,
 ) {
   const where: Prisma.ServiceOrderWhereInput = {
@@ -169,11 +171,29 @@ export async function listServiceOrders(
       : {}),
   };
 
-  return prisma.serviceOrder.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    select: serviceOrderSelect,
-  });
+  const [items, total] = await prisma.$transaction([
+    prisma.serviceOrder.findMany({
+      where,
+      skip: (filters.page - 1) * filters.limit,
+      take: filters.limit,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: serviceOrderSelect,
+    }),
+    prisma.serviceOrder.count({ where }),
+  ]);
+  const totalPages = Math.ceil(total / filters.limit);
+
+  return {
+    items,
+    pagination: {
+      page: filters.page,
+      limit: filters.limit,
+      total,
+      totalPages,
+      hasPreviousPage: filters.page > 1,
+      hasNextPage: filters.page < totalPages,
+    },
+  };
 }
 
 export async function getServiceOrderById(

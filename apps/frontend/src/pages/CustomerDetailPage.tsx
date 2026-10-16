@@ -84,8 +84,8 @@ export function CustomerDetailPage() {
     const [customerResult, ordersResult] = await Promise.allSettled([
       customersApi.getCustomer(id, signal),
       can("OS_READ")
-        ? serviceOrdersApi.listServiceOrders({ customerId: id }, signal)
-        : Promise.resolve([] as ServiceOrder[]),
+        ? serviceOrdersApi.listAllServiceOrders({ customerId: id }, signal)
+        : Promise.resolve(null),
     ]);
 
     if (!canCommit()) return;
@@ -97,7 +97,7 @@ export function CustomerDetailPage() {
     setCustomer(customerResult.value);
     if (!can("OS_READ")) return;
     if (ordersResult.status === "fulfilled") {
-      setOrders(ordersResult.value);
+      if (ordersResult.value) setOrders(ordersResult.value);
     } else {
       setOrderHistoryError(ordersResult.reason instanceof ApiError ? ordersResult.reason.message : "Não foi possível carregar o histórico de ordens.");
     }

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import * as customersApi from "../api/customers.ts";
-import type { ServiceOrder } from "../api/types.ts";
+import { SERVICE_ORDER_STATUSES, type ServiceOrder, type ServiceOrderStatus } from "../api/types.ts";
 import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
@@ -12,6 +12,7 @@ import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 interface DashboardData {
   orders: ServiceOrder[];
+  ordersByStatus: Record<ServiceOrderStatus, number>;
   customerCount: number;
   technicianCount: number;
 }
@@ -29,21 +30,37 @@ export function DashboardPage() {
     const canCommit = () => isActive() && requestId === latestLoadRef.current;
     setLoading(true);
     setError(null);
-    const [ordersResult, customersResult, techniciansResult] = await Promise.allSettled([
-      can("OS_READ") ? serviceOrdersApi.listServiceOrders({}, signal) : Promise.resolve([]),
-      can("CUSTOMER_READ") ? customersApi.listCustomers(undefined, signal) : Promise.resolve([]),
-      can("OS_ASSIGN") ? serviceOrdersApi.listAssignableTechnicians(signal) : Promise.resolve([]),
+    const [orderResults, auxiliaryResults] = await Promise.all([
+      Promise.allSettled(SERVICE_ORDER_STATUSES.map((status) => (
+        can("OS_READ")
+          ? serviceOrdersApi.listServiceOrders({ status, limit: 8 }, signal)
+          : Promise.resolve(null)
+      ))),
+      Promise.allSettled([
+        can("CUSTOMER_READ") ? customersApi.listCustomers(undefined, signal) : Promise.resolve([]),
+        can("OS_ASSIGN") ? serviceOrdersApi.listAssignableTechnicians(signal) : Promise.resolve([]),
+      ]),
     ]);
+    const [customersResult, techniciansResult] = auxiliaryResults;
     if (!canCommit()) return;
-    const failures = [ordersResult, customersResult, techniciansResult].filter((result) => result.status === "rejected");
-    if (failures.length === 3) {
+    const failures = [...orderResults, customersResult, techniciansResult]
+      .filter((result) => result.status === "rejected");
+    if (failures.length === orderResults.length + 2) {
       const first = failures[0] as PromiseRejectedResult;
       setError(first.reason instanceof ApiError ? first.reason.message : "Não foi possível carregar o painel.");
       setLoading(false);
       return;
     }
+    const fulfilledOrders = orderResults.flatMap((result) => (
+      result.status === "fulfilled" && result.value ? result.value.items : []
+    ));
+    const ordersByStatus = Object.fromEntries(SERVICE_ORDER_STATUSES.map((status, index) => {
+      const result = orderResults[index];
+      return [status, result.status === "fulfilled" && result.value ? result.value.pagination.total : 0];
+    })) as Record<ServiceOrderStatus, number>;
     setData({
-      orders: ordersResult.status === "fulfilled" ? ordersResult.value : [],
+      orders: fulfilledOrders,
+      ordersByStatus,
       customerCount: customersResult.status === "fulfilled" ? customersResult.value.length : 0,
       technicianCount: techniciansResult.status === "fulfilled" ? techniciansResult.value.length : 0,
     });
@@ -55,17 +72,23 @@ export function DashboardPage() {
   if (loading) return <PageLoading label="Carregando painel..." />;
   if (error || !data) return <ErrorState message={error ?? "Erro desconhecido"} onRetry={load} />;
 
-  const openOrders = data.orders.filter((o) => o.status === "OPEN").length;
-  const inProgressOrders = data.orders.filter((o) => o.status === "IN_PROGRESS").length;
-  const waitingOrders = data.orders.filter((o) => o.status === "WAITING").length;
-  const completedOrders = data.orders.filter((o) => o.status === "COMPLETED").length;
+  const openOrders = data.ordersByStatus.OPEN;
+  const inProgressOrders = data.ordersByStatus.IN_PROGRESS;
+  const waitingOrders = data.ordersByStatus.WAITING;
+  const completedOrders = data.ordersByStatus.COMPLETED;
 
   const myOrders = user
-    ? data.orders.filter((o) => o.technicianId === user.id && o.status !== "COMPLETED" && o.status !== "CANCELLED")
+    ? data.orders
+      .filter((o) => o.technicianId === user.id && o.status !== "COMPLETED" && o.status !== "CANCELLED")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8)
     : [];
+  const myOrdersTotal = user?.role === "TECHNICIAN"
+    ? openOrders + inProgressOrders
+    : myOrders.length;
 
   const recentOrders = [...data.orders]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
 
   return (
@@ -110,13 +133,13 @@ export function DashboardPage() {
 
       {user?.role === "TECHNICIAN" && myOrders.length > 0 && (
         <div className="card detail-section" style={{ marginBottom: 16 }}>
-          <div className="section-heading"><div><h2>Minha fila</h2><p>Ordens atribuídas que ainda precisam de acompanhamento.</p></div><span className="section-count">{myOrders.length}</span></div>
+          <div className="section-heading"><div><h2>Minha fila</h2><p>Ordens atribuídas que ainda precisam de acompanhamento.</p></div><span className="section-count">{myOrdersTotal}</span></div>
           <OrdersMiniTable orders={myOrders} />
         </div>
       )}
 
       <div className="card detail-section">
-        <div className="section-heading"><div><h2>Ordens recentes</h2><p>Atualizações mais recentes na central de serviços.</p></div><Link className="btn btn-secondary btn-sm" to="/service-orders">Ver todas</Link></div>
+        <div className="section-heading"><div><h2>Ordens recentes</h2><p>Ordens registradas mais recentemente na central de serviços.</p></div><Link className="btn btn-secondary btn-sm" to="/service-orders">Ver todas</Link></div>
         {recentOrders.length === 0 ? (
           <p className="page-subtitle">Nenhuma ordem de serviço registrada ainda.</p>
         ) : (

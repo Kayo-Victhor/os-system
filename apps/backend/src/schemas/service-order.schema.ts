@@ -47,6 +47,15 @@ export const assignTechnicianSchema = z.object({
 }).strict();
 
 export const listServiceOrdersQuerySchema = z.object({
+  page: z.coerce.number({ error: "Página inválida" })
+    .int("A página deve ser um número inteiro")
+    .min(1, "A página deve ser maior ou igual a 1")
+    .default(1),
+  limit: z.coerce.number({ error: "Limite inválido" })
+    .int("O limite deve ser um número inteiro")
+    .min(1, "O limite deve ser maior ou igual a 1")
+    .max(100, "O limite deve ser menor ou igual a 100")
+    .default(20),
   status: z
     .enum(["OPEN", "IN_PROGRESS", "WAITING", "COMPLETED", "CANCELLED"], {
       error: "Status inválido",

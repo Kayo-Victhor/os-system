@@ -8,11 +8,27 @@ import type {
 } from "./types.ts";
 
 export interface ServiceOrderFilters {
+  page?: number;
+  limit?: number;
   status?: ServiceOrderStatus;
   priority?: ServiceOrderPriority;
   customerId?: string;
   technicianId?: string;
   search?: string;
+}
+
+export interface ServiceOrdersPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface PaginatedServiceOrders {
+  items: ServiceOrder[];
+  pagination: ServiceOrdersPagination;
 }
 
 export interface CreateServiceOrderInput {
@@ -29,10 +45,29 @@ export interface UpdateServiceOrderInput {
 }
 
 export function listServiceOrders(filters: ServiceOrderFilters = {}, signal?: AbortSignal) {
-  return apiRequest<ServiceOrder[]>("/service-orders", {
-    query: { ...filters },
+  return apiRequest<PaginatedServiceOrders>("/service-orders", {
+    query: {
+      ...filters,
+      page: filters.page?.toString(),
+      limit: filters.limit?.toString(),
+    },
     signal,
   });
+}
+
+export async function listAllServiceOrders(
+  filters: Omit<ServiceOrderFilters, "page" | "limit"> = {},
+  signal?: AbortSignal,
+) {
+  const firstPage = await listServiceOrders({ ...filters, page: 1, limit: 100 }, signal);
+  if (firstPage.pagination.totalPages <= 1) return firstPage.items;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) => (
+      listServiceOrders({ ...filters, page: index + 2, limit: 100 }, signal)
+    )),
+  );
+  return [...firstPage.items, ...remainingPages.flatMap((page) => page.items)];
 }
 
 export function getServiceOrder(id: string, signal?: AbortSignal) {

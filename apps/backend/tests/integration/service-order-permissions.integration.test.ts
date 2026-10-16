@@ -114,13 +114,14 @@ describe("matriz de permissões de ServiceOrder", () => {
     const techSession = await loginAs(app, techA.email, FIXTURE_PASSWORD);
     const customerCookie = await createCustomerAccess(customerA.id, "owner-a@example.com");
 
-    expect((await request(app).get("/service-orders").set("Cookie", adminSession.cookie)).body).toHaveLength(3);
-    expect((await request(app).get("/service-orders").set("Cookie", attendantSession.cookie)).body).toHaveLength(3);
+    expect((await request(app).get("/service-orders").set("Cookie", adminSession.cookie)).body.items).toHaveLength(3);
+    expect((await request(app).get("/service-orders").set("Cookie", attendantSession.cookie)).body.items).toHaveLength(3);
 
     const techList = await request(app).get("/service-orders")
       .query({ technicianId: techB.id }).set("Cookie", techSession.cookie);
     expect(techList.status).toBe(200);
-    expect(techList.body.map((order: { id: string }) => order.id)).toEqual([orderA.id]);
+    expect(techList.body.items.map((order: { id: string }) => order.id)).toEqual([orderA.id]);
+    expect(techList.body.pagination.total).toBe(1);
     expect((await request(app).get(`/service-orders/${orderA.id}`).set("Cookie", techSession.cookie)).status).toBe(200);
     expect((await request(app).get(`/service-orders/${orderB.id}`).set("Cookie", techSession.cookie)).status).toBe(404);
     expect((await request(app).get(`/service-orders/${unassigned.id}`).set("Cookie", techSession.cookie)).status).toBe(404);

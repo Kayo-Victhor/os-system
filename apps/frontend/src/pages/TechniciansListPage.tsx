@@ -22,7 +22,7 @@ export function TechniciansListPage() {
     setError(null);
     const [techResult, ordersResult] = await Promise.allSettled([
       usersApi.listUsers("TECHNICIAN", signal),
-      serviceOrdersApi.listServiceOrders({}, signal),
+      serviceOrdersApi.listAllServiceOrders({}, signal),
     ]);
     if (!canCommit()) return;
     if (techResult.status === "fulfilled") setTechnicians(techResult.value);

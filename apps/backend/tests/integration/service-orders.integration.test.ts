@@ -225,8 +225,9 @@ describe("TECHNICIAN ownership — service order reads", () => {
       .set("Cookie", session.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].technicianId).toBe(tech1.id);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].technicianId).toBe(tech1.id);
+    expect(res.body.pagination.total).toBe(1);
   });
 
   it("does not disclose an order assigned to another technician by id", async () => {
@@ -427,7 +428,80 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
   });
 });
 
-describe("GET /service-orders — filtering and technician-scoped queries", () => {
+describe("GET /service-orders — pagination, filtering and technician-scoped queries", () => {
+  it("returns deterministic pages and pagination metadata without loading the full collection", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const customer = await createFixtureCustomer();
+    const created = await Promise.all(Array.from({ length: 25 }, (_, index) => (
+      createFixtureServiceOrder({
+        customerId: customer.id,
+        createdById: admin.id,
+        title: `Ordem paginada ${index + 1}`,
+      })
+    )));
+    const sameTimestamp = new Date("2026-10-16T12:00:00.000Z");
+    await Promise.all(created.map((order) => testPrisma.serviceOrder.update({
+      where: { id: order.id },
+      data: { createdAt: sameTimestamp },
+    })));
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const firstPage = await request(app).get("/service-orders")
+      .query({ limit: 10 }).set("Cookie", session.cookie);
+    const middlePage = await request(app).get("/service-orders")
+      .query({ page: 2, limit: 10 }).set("Cookie", session.cookie);
+    const lastPage = await request(app).get("/service-orders")
+      .query({ page: 3, limit: 10 }).set("Cookie", session.cookie);
+    const beyondLastPage = await request(app).get("/service-orders")
+      .query({ page: 4, limit: 10 }).set("Cookie", session.cookie);
+
+    const expectedIds = created.map((order) => order.id).sort().reverse();
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.items.map((order: { id: string }) => order.id)).toEqual(expectedIds.slice(0, 10));
+    expect(firstPage.body.pagination).toEqual({
+      page: 1,
+      limit: 10,
+      total: 25,
+      totalPages: 3,
+      hasPreviousPage: false,
+      hasNextPage: true,
+    });
+    expect(middlePage.body.items.map((order: { id: string }) => order.id)).toEqual(expectedIds.slice(10, 20));
+    expect(middlePage.body.pagination).toMatchObject({ page: 2, total: 25, hasPreviousPage: true, hasNextPage: true });
+    expect(lastPage.body.items.map((order: { id: string }) => order.id)).toEqual(expectedIds.slice(20));
+    expect(lastPage.body.pagination).toMatchObject({ page: 3, totalPages: 3, hasNextPage: false });
+    expect(beyondLastPage.body).toMatchObject({
+      items: [],
+      pagination: { page: 4, total: 25, totalPages: 3, hasPreviousPage: true, hasNextPage: false },
+    });
+  });
+
+  it("uses the default and maximum limits, and rejects invalid pagination parameters", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const customer = await createFixtureCustomer();
+    await Promise.all(Array.from({ length: 21 }, () => createFixtureServiceOrder({
+      customerId: customer.id,
+      createdById: admin.id,
+    })));
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const defaultLimit = await request(app).get("/service-orders").set("Cookie", session.cookie);
+    const maximumLimit = await request(app).get("/service-orders")
+      .query({ limit: 100 }).set("Cookie", session.cookie);
+    expect(defaultLimit.body).toMatchObject({ items: expect.any(Array), pagination: { limit: 20, total: 21, totalPages: 2 } });
+    expect(defaultLimit.body.items).toHaveLength(20);
+    expect(maximumLimit.body).toMatchObject({ pagination: { limit: 100, total: 21, totalPages: 1 } });
+    expect(maximumLimit.body.items).toHaveLength(21);
+
+    for (const query of [
+      { page: 0 }, { page: -1 }, { page: "1.5" }, { page: "abc" }, { limit: 0 }, { limit: -1 }, { limit: "1.5" }, { limit: 101 },
+    ]) {
+      const response = await request(app).get("/service-orders").query(query).set("Cookie", session.cookie);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Filtros inválidos");
+    }
+  });
+
   it("returns an empty collection when no service orders exist", async () => {
     const { user: admin } = await createFixtureUser("ADMIN");
     const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
@@ -435,7 +509,17 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
     const res = await request(app).get("/service-orders").set("Cookie", session.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body).toMatchObject({
+      items: [],
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      },
+    });
     expect(await testPrisma.serviceOrder.count()).toBe(0);
   });
 
@@ -457,8 +541,9 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
       .set("Cookie", session.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
-    expect(res.body.every((o: { technicianId: string }) => o.technicianId === tech1.id)).toBe(true);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items.every((o: { technicianId: string }) => o.technicianId === tech1.id)).toBe(true);
+    expect(res.body.pagination.total).toBe(2);
   });
 
   it("filters by status", async () => {
@@ -474,8 +559,9 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
       .set("Cookie", session.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].status).toBe("COMPLETED");
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].status).toBe("COMPLETED");
+    expect(res.body.pagination.total).toBe(1);
   });
 
   it("filters by priority, customer and case-insensitive text search", async () => {
@@ -506,11 +592,11 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
       .query({ search: "CONECTIVIDADE" }).set("Cookie", session.cookie);
 
     expect(priority.status).toBe(200);
-    expect(priority.body.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
+    expect(priority.body.items.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
     expect(customer.status).toBe(200);
-    expect(customer.body.map((order: { id: string }) => order.id)).toEqual([other.id]);
+    expect(customer.body.items.map((order: { id: string }) => order.id)).toEqual([other.id]);
     expect(search.status).toBe(200);
-    expect(search.body.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
+    expect(search.body.items.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
   });
 
   it("combines every supported filter without broadening the result", async () => {
@@ -557,7 +643,8 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
       .set("Cookie", session.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body.map((order: { id: string }) => order.id)).toEqual([matching.id]);
+    expect(res.body.items.map((order: { id: string }) => order.id)).toEqual([matching.id]);
+    expect(res.body.pagination).toMatchObject({ total: 1, totalPages: 1, page: 1 });
   });
 
   it("rejects an invalid status filter value", async () => {

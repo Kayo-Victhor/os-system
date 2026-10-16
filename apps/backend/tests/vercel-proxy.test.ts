@@ -213,8 +213,8 @@ describe("proxy server-side da Vercel", () => {
     },
     {
       name: "com filtros válidos",
-      requestUrl: "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
-      expectedTarget: "https://backend.example.com/service-orders?status=OPEN",
+      requestUrl: "https://frontend.example.com/api/proxy?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN&page=2&limit=20",
+      expectedTarget: "https://backend.example.com/service-orders?status=OPEN&page=2&limit=20",
     },
     {
       name: "sem filtros no caminho original",
@@ -223,8 +223,8 @@ describe("proxy server-side da Vercel", () => {
     },
     {
       name: "com filtros válidos no caminho original",
-      requestUrl: "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN",
-      expectedTarget: "https://backend.example.com/service-orders?status=OPEN",
+      requestUrl: "https://frontend.example.com/api/service-orders?__os_proxy_path=service-orders&proxyPath=service-orders&status=OPEN&page=2&limit=20",
+      expectedTarget: "https://backend.example.com/service-orders?status=OPEN&page=2&limit=20",
     },
   ])("encaminha a listagem de ordens $name sem parâmetros internos", async ({
     requestUrl,

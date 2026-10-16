@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import * as serviceOrdersApi from "../api/service-orders.ts";
-import type { ServiceOrder, ServiceOrderPriority, ServiceOrderStatus } from "../api/types.ts";
+import type { ServiceOrderPriority, ServiceOrderStatus } from "../api/types.ts";
 import { SERVICE_ORDER_STATUSES, SERVICE_ORDER_PRIORITIES, STATUS_LABELS, PRIORITY_LABELS } from "../api/types.ts";
 import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
@@ -11,12 +11,12 @@ import { IconPlus, IconSearch } from "../components/icons.tsx";
 
 export function ServiceOrdersListPage() {
   const { can, user } = useAuth();
-  const [orders, setOrders] = useState<ServiceOrder[] | null>(null);
+  const [orders, setOrders] = useState<serviceOrdersApi.PaginatedServiceOrders | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ServiceOrderStatus | "">("");
   const [priority, setPriority] = useState<ServiceOrderPriority | "">("");
-  const [sort, setSort] = useState<"updated" | "created" | "priority">("updated");
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
@@ -26,7 +26,7 @@ export function ServiceOrdersListPage() {
         status: status || undefined,
         priority: priority || undefined,
         search: search.trim() || undefined,
-        technicianId: user?.role === "TECHNICIAN" ? user.id : undefined,
+        page,
       }, signal);
 
       setOrders(data);
@@ -34,7 +34,7 @@ export function ServiceOrdersListPage() {
       if (signal?.aborted) return;
       setError("Não foi possível carregar as ordens de serviço.");
     }
-  }, [status, priority, search, user]);
+  }, [page, priority, search, status]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,19 +42,12 @@ export function ServiceOrdersListPage() {
     return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [load, search]);
 
-  const sortedOrders = useMemo(() => orders ? [...orders].sort((first, second) => {
-    if (sort === "priority") {
-      const weights = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
-      return weights[second.priority] - weights[first.priority];
-    }
-    const field = sort === "created" ? "createdAt" : "updatedAt";
-    return new Date(second[field]).getTime() - new Date(first[field]).getTime();
-  }) : null, [orders, sort]);
-
   function clearFilters() {
+    setOrders(null);
     setSearch("");
     setStatus("");
     setPriority("");
+    setPage(1);
   }
 
   const filtersActive = Boolean(search || status || priority);
@@ -87,7 +80,11 @@ export function ServiceOrdersListPage() {
             placeholder="Buscar por título ou descrição"
             style={{ paddingLeft: 30 }}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setOrders(null);
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             aria-label="Buscar ordens de serviço"
           />
         </div>
@@ -95,7 +92,11 @@ export function ServiceOrdersListPage() {
         <select
           className="input"
           value={status}
-          onChange={(e) => setStatus(e.target.value as ServiceOrderStatus | "")}
+          onChange={(e) => {
+            setOrders(null);
+            setStatus(e.target.value as ServiceOrderStatus | "");
+            setPage(1);
+          }}
           aria-label="Filtrar por status"
         >
           <option value="">Todos os status</option>
@@ -106,16 +107,14 @@ export function ServiceOrdersListPage() {
           ))}
         </select>
 
-        <select className="input" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Ordenar ordens">
-          <option value="updated">Atualização mais recente</option>
-          <option value="created">Criação mais recente</option>
-          <option value="priority">Maior prioridade</option>
-        </select>
-
         <select
           className="input"
           value={priority}
-          onChange={(e) => setPriority(e.target.value as ServiceOrderPriority | "")}
+          onChange={(e) => {
+            setOrders(null);
+            setPriority(e.target.value as ServiceOrderPriority | "");
+            setPage(1);
+          }}
           aria-label="Filtrar por prioridade"
         >
           <option value="">Todas as prioridades</option>
@@ -135,7 +134,7 @@ export function ServiceOrdersListPage() {
       {orders === null && !error && <PageLoading />}
       {error && <ErrorState message={error} onRetry={load} />}
 
-      {sortedOrders && sortedOrders.length === 0 && (
+      {orders && orders.items.length === 0 && (
         <EmptyState
           title="Não há ordens de serviço cadastradas."
           description={
@@ -146,7 +145,7 @@ export function ServiceOrdersListPage() {
         />
       )}
 
-      {sortedOrders && sortedOrders.length > 0 && (
+      {orders && orders.items.length > 0 && (
         <div className="card table-wrap">
           <table className="data-table">
             <thead>
@@ -160,7 +159,7 @@ export function ServiceOrdersListPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedOrders.map((order) => (
+              {orders.items.map((order) => (
                 <tr key={order.id}>
                   <td className="wrap">
                     <Link to={`/service-orders/${order.id}`} className="row-link">
@@ -182,6 +181,32 @@ export function ServiceOrdersListPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {orders && orders.pagination.total > 0 && (
+        <nav className="pagination" aria-label="Paginação das ordens de serviço">
+          <p aria-live="polite">
+            Página {orders.pagination.page} de {orders.pagination.totalPages} · {orders.pagination.total} ordem(ns)
+          </p>
+          <div className="pagination-actions">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!orders.pagination.hasPreviousPage}
+              onClick={() => setPage((currentPage) => currentPage - 1)}
+            >
+              Página anterior
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!orders.pagination.hasNextPage}
+              onClick={() => setPage((currentPage) => currentPage + 1)}
+            >
+              Próxima página
+            </button>
+          </div>
+        </nav>
       )}
     </div>
   );

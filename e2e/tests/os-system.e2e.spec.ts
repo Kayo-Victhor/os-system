@@ -321,6 +321,47 @@ test("listagem exibe e filtra ordens por status", async ({
   await expect(page.getByText(openOrder.title, { exact: true })).toHaveCount(0);
 });
 
+test("listagem pagina as ordens e preserva os filtros ativos", async ({
+  page,
+  admin,
+  runId,
+}) => {
+  const customer = await createE2ECustomer(runId);
+  const searchTerm = `Página E2E ${runId}`;
+  await Promise.all(Array.from({ length: 21 }, (_, index) => (
+    createE2EServiceOrder({
+      customerId: customer.id,
+      createdById: admin.id,
+      title: `${searchTerm} ${index + 1}`,
+      status: "OPEN",
+      runId,
+    })
+  )));
+
+  await login(page, admin);
+  await page.goto("/service-orders");
+  const search = page.getByRole("searchbox", { name: "Buscar ordens de serviço" });
+  await search.fill(searchTerm);
+  await page.getByLabel("Filtrar por status").selectOption("OPEN");
+
+  await expect(page.getByText("Página 1 de 2 · 21 ordem(ns)")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: searchTerm })).toHaveCount(20);
+  const firstPageTitle = await page.getByRole("row")
+    .filter({ hasText: searchTerm })
+    .first()
+    .locator(".order-title")
+    .textContent();
+  await expect(page.getByRole("button", { name: "Página anterior" })).toBeDisabled();
+  await page.getByRole("button", { name: "Próxima página" }).click();
+
+  await expect(page.getByText("Página 2 de 2 · 21 ordem(ns)")).toBeVisible();
+  await expect(search).toHaveValue(searchTerm);
+  await expect(page.getByLabel("Filtrar por status")).toHaveValue("OPEN");
+  await expect(page.getByText(firstPageTitle!, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: searchTerm })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
+});
+
 test("atendente não acessa a gestão administrativa de usuários", async ({
   page,
   runId,

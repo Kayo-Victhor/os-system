@@ -447,6 +447,28 @@ textarea.input {
   width: auto;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* ---------- Empty / loading / error states ---------- */
 
 .state-block {
