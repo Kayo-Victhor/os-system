@@ -1,0 +1,338 @@
+import type { Response } from "@playwright/test";
+
+import { expect, test, type Page } from "../support/fixtures.js";
+import {
+  createE2ECustomer,
+  createE2EServiceOrder,
+  createE2EUser,
+  verifyStoredPassword,
+  type E2EUser,
+  type InternalUserRole,
+} from "../support/database.js";
+
+async function login(page: Page, user: Pick<E2EUser, "email" | "password" | "name">) {
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "OS System" })).toBeVisible();
+  await page.getByRole("textbox", { name: "E-mail *" }).fill(user.email);
+  await page.getByRole("textbox", { name: "Senha *" }).fill(user.password);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
+  await expect(page.getByLabel("Usuário conectado")).toContainText(user.name);
+}
+
+async function logout(page: Page) {
+  await page.getByRole("button", { name: "Sair da conta" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
+}
+
+async function waitForWriteResponse(
+  page: Page,
+  method: string,
+  pathname: string,
+): Promise<Response> {
+  return page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === method && url.pathname === pathname;
+  });
+}
+
+async function createInternalUserThroughUI(
+  page: Page,
+  user: {
+    name: string;
+    email: string;
+    password: string;
+    role: InternalUserRole;
+  },
+) {
+  await page.goto("/users");
+  await page.getByRole("link", { name: "Novo usuário" }).click();
+  await page.getByRole("textbox", { name: "Nome *" }).fill(user.name);
+  await page.getByRole("textbox", { name: "E-mail *" }).fill(user.email);
+  await page
+    .getByRole("textbox", { name: "Senha temporária *" })
+    .fill(user.password);
+  await page.getByLabel("Papel *").selectOption(user.role);
+
+  const responsePromise = waitForWriteResponse(page, "POST", "/users");
+  await page.getByRole("button", { name: "Criar usuário" }).click();
+  const response = await responsePromise;
+
+  expect(response.status()).toBe(201);
+  const body = await response.json();
+  expect(body).not.toHaveProperty("password");
+  expect(body).toMatchObject({ name: user.name, email: user.email, role: user.role });
+
+  await expect(page).toHaveURL(/\/users$/);
+  const row = page.getByRole("row").filter({ hasText: user.email });
+  await expect(row).toContainText(user.name);
+  await expect(row).toContainText(
+    user.role === "ATTENDANT" ? "Atendente" : "Técnico",
+  );
+  await expect(page.getByText(user.password, { exact: true })).toHaveCount(0);
+}
+
+test("ciclo completo de equipe, cliente e ordem de serviço", async ({
+  page,
+  admin,
+  database,
+  runId,
+}) => {
+  const attendant = {
+    name: `Atendente E2E ${runId}`,
+    email: `attendant-${runId}@example.test`,
+    password: `E2e-Attendant-${runId}-Aa1!`,
+    role: "ATTENDANT" as const,
+  };
+  const technician = {
+    name: `Técnico E2E ${runId}`,
+    email: `technician-${runId}@example.test`,
+    password: `E2e-Technician-${runId}-Aa1!`,
+    role: "TECHNICIAN" as const,
+  };
+  const customerName = `Cliente E2E ${runId}`;
+  const customerEmail = `customer-${runId}@example.test`;
+  const orderTitle = `Ordem principal E2E ${runId}`;
+
+  await test.step("autentica o administrador pela interface", async () => {
+    await login(page, admin);
+    await expect(page.getByRole("heading", { name: /Olá, Administrador/ })).toBeVisible();
+  });
+
+  await test.step("cria atendente e técnico pela gestão de usuários", async () => {
+    await createInternalUserThroughUI(page, attendant);
+    await createInternalUserThroughUI(page, technician);
+
+    const storedAttendant = await database.user.findUnique({
+      where: { email: attendant.email },
+    });
+    const storedTechnician = await database.user.findUnique({
+      where: { email: technician.email },
+    });
+
+    expect(storedAttendant).toMatchObject({
+      name: attendant.name,
+      role: "ATTENDANT",
+    });
+    expect(storedTechnician).toMatchObject({
+      name: technician.name,
+      role: "TECHNICIAN",
+    });
+    expect(storedAttendant?.password).not.toBe(attendant.password);
+    expect(storedTechnician?.password).not.toBe(technician.password);
+    expect(
+      await verifyStoredPassword(storedAttendant!.password, attendant.password),
+    ).toBe(true);
+    expect(
+      await verifyStoredPassword(storedTechnician!.password, technician.password),
+    ).toBe(true);
+  });
+
+  const customerId = await test.step("cria e lista o cliente", async () => {
+    await page.goto("/customers/new");
+    await page.getByRole("textbox", { name: "Nome *" }).fill(customerName);
+    await page.getByRole("textbox", { name: "E-mail" }).fill(customerEmail);
+    await page.getByRole("textbox", { name: "Telefone" }).fill("(11) 99999-0000");
+    await page.getByRole("textbox", { name: "Endereço" }).fill("Rua E2E, 123");
+
+    const responsePromise = waitForWriteResponse(page, "POST", "/customers");
+    await page.getByRole("button", { name: "Criar cliente" }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+
+    await expect(page.getByRole("heading", { name: customerName })).toBeVisible();
+    await page.getByRole("link", { name: "Clientes" }).click();
+    await expect(page.getByRole("row").filter({ hasText: customerEmail })).toContainText(
+      customerName,
+    );
+
+    const stored = await database.customer.findUnique({ where: { id: body.id } });
+    expect(stored).toMatchObject({ name: customerName, email: customerEmail });
+    return body.id as string;
+  });
+
+  const orderId = await test.step("cria a ordem e confirma os relacionamentos", async () => {
+    await page.goto("/service-orders/new");
+    await page.getByRole("textbox", { name: "Título *" }).fill(orderTitle);
+    await page
+      .getByRole("textbox", { name: "Descrição *" })
+      .fill("Falha de conectividade validada pelo Playwright Test.");
+    await page.getByLabel("Cliente *").selectOption({ label: customerName });
+    await page.getByLabel("Prioridade *").selectOption("HIGH");
+
+    const responsePromise = waitForWriteResponse(page, "POST", "/service-orders");
+    await page.getByRole("button", { name: "Criar ordem" }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+
+    await expect(page.getByRole("heading", { name: orderTitle })).toBeVisible();
+    await expect(page.getByText("Alta", { exact: true })).toBeVisible();
+    await expect(page.getByText(customerName, { exact: true })).toBeVisible();
+
+    const stored = await database.serviceOrder.findUnique({ where: { id: body.id } });
+    expect(stored).toMatchObject({
+      title: orderTitle,
+      customerId,
+      createdById: admin.id,
+      status: "OPEN",
+      priority: "HIGH",
+    });
+    return body.id as string;
+  });
+
+  const storedTechnician = await database.user.findUniqueOrThrow({
+    where: { email: technician.email },
+  });
+  const otherTechnician = await createE2EUser("TECHNICIAN", runId, {
+    name: `Outro técnico E2E ${runId}`,
+  });
+  const otherOrder = await createE2EServiceOrder({
+    customerId,
+    createdById: admin.id,
+    technicianId: otherTechnician.id,
+    title: `Ordem de outro técnico ${runId}`,
+    runId,
+  });
+  const unassignedOrder = await createE2EServiceOrder({
+    customerId,
+    createdById: admin.id,
+    title: `Ordem sem atribuição ${runId}`,
+    runId,
+  });
+
+  await test.step("atribui o técnico pela página de detalhes", async () => {
+    await page.goto(`/service-orders/${orderId}`);
+    await page
+      .getByLabel("Atribuir técnico")
+      .selectOption({ label: technician.name });
+    await expect(page.getByRole("status")).toContainText("Técnico atualizado.");
+    await expect(page.getByLabel("Atribuir técnico")).toHaveValue(
+      storedTechnician.id,
+    );
+    expect(
+      await database.serviceOrder.findUniqueOrThrow({ where: { id: orderId } }),
+    ).toMatchObject({ technicianId: storedTechnician.id });
+  });
+
+  await test.step("técnico acessa somente a fila atribuída", async () => {
+    await logout(page);
+    await login(page, technician);
+    await expect(page.getByRole("link", { name: "Usuários" })).toHaveCount(0);
+
+    await page.goto("/service-orders");
+    await expect(page.getByText("Sua fila atribuída")).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(orderTitle) })).toBeVisible();
+    await expect(page.getByText(otherOrder.title, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(unassignedOrder.title, { exact: true })).toHaveCount(0);
+  });
+
+  await test.step("executa todas as transições válidas do técnico", async () => {
+    await page.getByRole("link", { name: new RegExp(orderTitle) }).click();
+    const status = page.getByLabel("Alterar status");
+
+    for (const [value, label] of [
+      ["IN_PROGRESS", "Em andamento"],
+      ["WAITING", "Aguardando"],
+      ["IN_PROGRESS", "Em andamento"],
+    ] as const) {
+      await status.selectOption(value);
+      await expect(status).toHaveValue(value);
+      await expect(page.getByRole("status")).toContainText("Status atualizado.");
+      await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+    }
+
+    await status.selectOption("COMPLETED");
+    await expect(page.getByText("Concluída", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Alterar status")).toHaveCount(0);
+
+    const stored = await database.serviceOrder.findUniqueOrThrow({
+      where: { id: orderId },
+    });
+    expect(stored).toMatchObject({
+      status: "COMPLETED",
+      technicianId: storedTechnician.id,
+    });
+  });
+
+  await logout(page);
+});
+
+test("rota interna sem sessão redireciona para o login", async ({ page }) => {
+  await page.goto("/users");
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
+});
+
+test("login inválido apresenta erro visível", async ({ page, runId }) => {
+  await page.goto("/login");
+  await page
+    .getByRole("textbox", { name: "E-mail *" })
+    .fill(`inexistente-${runId}@example.test`);
+  await page.getByRole("textbox", { name: "Senha *" }).fill("senha-incorreta");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByRole("alert")).toContainText("Credenciais inválidas");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("listagem vazia informa que não existem ordens", async ({ page, admin }) => {
+  await login(page, admin);
+  await page.goto("/service-orders");
+  await expect(
+    page.getByRole("heading", { name: "Não há ordens de serviço cadastradas." }),
+  ).toBeVisible();
+  await expect(page.getByText("Quando uma ordem for criada, ela aparecerá aqui.")).toBeVisible();
+});
+
+test("listagem exibe e filtra ordens por status", async ({
+  page,
+  admin,
+  runId,
+}) => {
+  const customer = await createE2ECustomer(runId);
+  const openOrder = await createE2EServiceOrder({
+    customerId: customer.id,
+    createdById: admin.id,
+    title: `Ordem aberta ${runId}`,
+    status: "OPEN",
+    runId,
+  });
+  const completedOrder = await createE2EServiceOrder({
+    customerId: customer.id,
+    createdById: admin.id,
+    title: `Ordem concluída ${runId}`,
+    status: "COMPLETED",
+    runId,
+  });
+
+  await login(page, admin);
+  await page.goto("/service-orders");
+  await expect(page.getByText(openOrder.title, { exact: true })).toBeVisible();
+  await expect(page.getByText(completedOrder.title, { exact: true })).toBeVisible();
+
+  await page.getByLabel("Filtrar por status").selectOption("COMPLETED");
+  await expect(page.getByText(completedOrder.title, { exact: true })).toBeVisible();
+  await expect(page.getByText(openOrder.title, { exact: true })).toHaveCount(0);
+});
+
+test("atendente não acessa a gestão administrativa de usuários", async ({
+  page,
+  runId,
+}) => {
+  const attendant = await createE2EUser("ATTENDANT", runId);
+  await login(page, attendant);
+  await expect(page.getByRole("link", { name: "Usuários" })).toHaveCount(0);
+
+  let usersEndpointRequested = false;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.origin === "http://127.0.0.1:3333" && url.pathname === "/users") {
+      usersEndpointRequested = true;
+    }
+  });
+  await page.goto("/users");
+  await expect(page.getByRole("heading", { name: "Acesso não permitido" })).toBeVisible();
+  expect(usersEndpointRequested).toBe(false);
+});

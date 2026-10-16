@@ -41,6 +41,10 @@ pnpm-debug.log*
 # Test coverage
 coverage/
 
+# Playwright E2E artifacts
+playwright-report/
+test-results/
+
 # Prisma
 prisma/*.db
 prisma/*.db-journal

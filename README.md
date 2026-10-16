@@ -462,7 +462,7 @@ pnpm --filter frontend dev
 
 # 🧪 Testes
 
-O projeto possui uma suíte de testes automatizados no backend.
+O projeto possui testes automatizados do backend e uma suíte E2E local com Playwright.
 
 ### Preparar o banco de testes e executar os testes
 
@@ -483,6 +483,31 @@ os_system_test
 ```
 
 e nunca o banco de produção.
+
+### Executar os testes E2E
+
+Configure `apps/backend/.env.test` para o PostgreSQL local. A suíte recusa hosts remotos e bancos cujo nome não termine em `_test`, verifica se as portas `3333` e `5173` estão livres e inicia backend e frontend automaticamente.
+
+Na primeira execução da máquina, instale o Chromium fixado pelo Playwright do projeto:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Depois, execute:
+
+```bash
+pnpm test:e2e
+```
+
+Para depurar com a interface do Playwright ou abrir o último relatório HTML:
+
+```bash
+pnpm test:e2e:ui
+pnpm test:e2e:report
+```
+
+Os testes E2E usam exclusivamente `localhost:5432/os_system_test`, são serializados e limpam o banco descartável antes e depois de cada cenário. Não execute outra suíte contra esse banco ao mesmo tempo.
 
 Resultados específicos de testes devem ser considerados válidos somente quando executados no ambiente correspondente.
 
