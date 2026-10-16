@@ -9,6 +9,7 @@ import {
   assignTechnicianController,
   updateServiceOrderStatusController,
   listAssignableTechniciansController,
+  listServiceOrderEventsController,
 } from "../controllers/service-order.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -44,6 +45,13 @@ router.get(
   authMiddleware,
   requirePermission("OS_READ"),
   getServiceOrderByIdController,
+);
+
+router.get(
+  "/:id/events",
+  authMiddleware,
+  requirePermission("OS_READ"),
+  listServiceOrderEventsController,
 );
 
 router.patch(

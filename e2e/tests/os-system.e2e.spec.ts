@@ -171,6 +171,8 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
     await expect(page.getByRole("heading", { name: orderTitle })).toBeVisible();
     await expect(page.getByText("Alta", { exact: true })).toBeVisible();
     await expect(page.getByText(customerName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Histórico operacional" })).toBeVisible();
+    await expect(page.getByText("Ordem de serviço criada", { exact: true })).toBeVisible();
 
     const stored = await database.serviceOrder.findUnique({ where: { id: body.id } });
     expect(stored).toMatchObject({
@@ -212,6 +214,7 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
     await expect(page.getByLabel("Atribuir técnico")).toHaveValue(
       storedTechnician.id,
     );
+    await expect(page.getByText(`Técnico atribuído: ${technician.name}`, { exact: true })).toBeVisible();
     expect(
       await database.serviceOrder.findUniqueOrThrow({ where: { id: orderId } }),
     ).toMatchObject({ technicianId: storedTechnician.id });
@@ -247,6 +250,7 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
     await status.selectOption("COMPLETED");
     await expect(page.getByText("Concluída", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Alterar status")).toHaveCount(0);
+    await expect(page.getByText("Status alterado de Em andamento para Concluída", { exact: true })).toBeVisible();
 
     const stored = await database.serviceOrder.findUniqueOrThrow({
       where: { id: orderId },

@@ -347,3 +347,57 @@ export async function getCustomerServiceOrder(
     },
   });
 }
+
+const CUSTOMER_VISIBLE_EVENT_TYPES = [
+  "CREATED",
+  "STATUS_CHANGED",
+  "TECHNICIAN_ASSIGNED",
+  "TECHNICIAN_REASSIGNED",
+  "TECHNICIAN_UNASSIGNED",
+] as const;
+
+export async function listCustomerServiceOrderEvents(
+  customerId: string,
+  serviceOrderId: string,
+) {
+  const order = await prisma.serviceOrder.findFirst({
+    where: { id: serviceOrderId, customerId },
+    select: { id: true },
+  });
+  if (!order) return null;
+
+  const events = await prisma.serviceOrderEvent.findMany({
+    where: {
+      serviceOrderId,
+      type: { in: [...CUSTOMER_VISIBLE_EVENT_TYPES] },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      type: true,
+      previousStatus: true,
+      newStatus: true,
+      newTechnicianId: true,
+      createdAt: true,
+    },
+  });
+  const technicianIds = [...new Set(events
+    .map((event) => event.newTechnicianId)
+    .filter((id): id is string => Boolean(id)))];
+  const technicians = await prisma.user.findMany({
+    where: { id: { in: technicianIds } },
+    select: { id: true, name: true },
+  });
+  const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]));
+
+  return events.map((event) => ({
+    id: event.id,
+    type: event.type,
+    previousStatus: event.previousStatus,
+    newStatus: event.newStatus,
+    technicianName: event.newTechnicianId
+      ? technicianNames.get(event.newTechnicianId) ?? "Técnico indisponível"
+      : null,
+    createdAt: event.createdAt,
+  }));
+}

@@ -46,19 +46,29 @@ enum ServiceOrderPriority {
   URGENT
 }
 
+enum ServiceOrderEventType {
+  CREATED
+  OPERATIONAL_UPDATED
+  STATUS_CHANGED
+  TECHNICIAN_ASSIGNED
+  TECHNICIAN_REASSIGNED
+  TECHNICIAN_UNASSIGNED
+}
+
 model User {
-  id                     String                  @id @default(uuid())
-  name                   String
-  email                  String                  @unique
-  password               String
-  role                   UserRole                @default(ATTENDANT)
-  isPrimaryAdmin         Boolean                 @default(false)
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  createdOrders          ServiceOrder[]          @relation("CreatedOrders")
-  technicianOrders       ServiceOrder[]          @relation("TechnicianOrders")
-  refreshTokens          RefreshToken[]
-  passwordResetToken     PasswordResetToken?
+  id                 String              @id @default(uuid())
+  name               String
+  email              String              @unique
+  password           String
+  role               UserRole            @default(ATTENDANT)
+  isPrimaryAdmin     Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  createdOrders      ServiceOrder[]      @relation("CreatedOrders")
+  technicianOrders   ServiceOrder[]      @relation("TechnicianOrders")
+  serviceOrderEvents ServiceOrderEvent[] @relation("ServiceOrderEventActor")
+  refreshTokens      RefreshToken[]
+  passwordResetToken PasswordResetToken?
 }
 
 // Refresh tokens are stored as a hash (never the raw token) so a database
@@ -239,13 +249,35 @@ model ServiceOrder {
   technicianId String?
   createdById  String
 
-  customer   Customer @relation(fields: [customerId], references: [id])
-  technician User?    @relation("TechnicianOrders", fields: [technicianId], references: [id])
-  createdBy  User     @relation("CreatedOrders", fields: [createdById], references: [id])
+  customer   Customer            @relation(fields: [customerId], references: [id])
+  technician User?               @relation("TechnicianOrders", fields: [technicianId], references: [id])
+  createdBy  User                @relation("CreatedOrders", fields: [createdById], references: [id])
+  events     ServiceOrderEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([technicianId, createdAt(sort: Desc)])
+}
+
+model ServiceOrderEvent {
+  id                   String                @id @default(uuid())
+  serviceOrderId       String
+  actorId              String?
+  type                 ServiceOrderEventType
+  changedFields        String[]              @default([])
+  previousStatus       ServiceOrderStatus?
+  newStatus            ServiceOrderStatus?
+  previousPriority     ServiceOrderPriority?
+  newPriority          ServiceOrderPriority?
+  previousTechnicianId String?
+  newTechnicianId      String?
+  createdAt            DateTime              @default(now())
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("ServiceOrderEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([serviceOrderId, createdAt, id])
+  @@index([actorId])
 }

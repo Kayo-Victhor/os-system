@@ -1,15 +1,18 @@
 import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { getOwnCustomerServiceOrder } from "../api/customer-auth.ts";
-import type { CustomerServiceOrder } from "../api/types.ts";
+import { getOwnCustomerServiceOrder, listOwnCustomerServiceOrderEvents } from "../api/customer-auth.ts";
+import type { CustomerServiceOrder, CustomerServiceOrderEvent } from "../api/types.ts";
 import { PriorityBadge, StatusBadge } from "../components/Badges.tsx";
 import { ErrorState, PageLoading } from "../components/States.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { CustomerServiceOrderTimeline } from "../components/ServiceOrderTimeline.tsx";
 
 export function CustomerServiceOrderDetailPage() {
   const { id = "" } = useParams();
   const [order, setOrder] = useState<CustomerServiceOrder | null>(null);
+  const [timeline, setTimeline] = useState<CustomerServiceOrderEvent[] | null>(null);
+  const [timelineError, setTimelineError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(
     async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
@@ -17,6 +20,15 @@ export function CustomerServiceOrderDetailPage() {
         setError(null);
         const result = await getOwnCustomerServiceOrder(id, signal);
         if (isActive()) setOrder(result);
+        try {
+          const events = await listOwnCustomerServiceOrderEvents(id, signal);
+          if (isActive()) {
+            setTimeline(events);
+            setTimelineError(false);
+          }
+        } catch {
+          if (isActive() && !signal?.aborted) setTimelineError(true);
+        }
       } catch {
         if (signal?.aborted || !isActive()) return;
         setError("Não foi possível carregar esta ordem de serviço.");
@@ -42,6 +54,16 @@ export function CustomerServiceOrderDetailPage() {
       <section className="card detail-section">
         <h2>Descrição</h2>
         <p>{order.description}</p>
+      </section>
+      <section className="card detail-section">
+        <h2>Histórico do atendimento</h2>
+        {timelineError ? (
+          <p className="timeline-empty">Não foi possível carregar o histórico do atendimento.</p>
+        ) : timeline === null ? (
+          <p className="timeline-empty">Carregando histórico...</p>
+        ) : (
+          <CustomerServiceOrderTimeline events={timeline} />
+        )}
       </section>
       <section className="card detail-section">
         <h2>Atendimento</h2>

@@ -11,6 +11,14 @@ export type ServiceOrderStatus =
 
 export type ServiceOrderPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
+export type ServiceOrderEventType =
+  | "CREATED"
+  | "OPERATIONAL_UPDATED"
+  | "STATUS_CHANGED"
+  | "TECHNICIAN_ASSIGNED"
+  | "TECHNICIAN_REASSIGNED"
+  | "TECHNICIAN_UNASSIGNED";
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -80,6 +88,31 @@ export interface CustomerServiceOrder {
   technician: { name: string } | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ServiceOrderEvent {
+  id: string;
+  type: ServiceOrderEventType;
+  changedFields: Array<"title" | "description" | "priority">;
+  previousStatus: ServiceOrderStatus | null;
+  newStatus: ServiceOrderStatus | null;
+  previousPriority: ServiceOrderPriority | null;
+  newPriority: ServiceOrderPriority | null;
+  previousTechnicianId: string | null;
+  newTechnicianId: string | null;
+  previousTechnician: ServiceOrderTechnician | null;
+  newTechnician: ServiceOrderTechnician | null;
+  actor: Pick<UserRecord, "id" | "name"> | null;
+  createdAt: string;
+}
+
+export interface CustomerServiceOrderEvent {
+  id: string;
+  type: Exclude<ServiceOrderEventType, "OPERATIONAL_UPDATED">;
+  previousStatus: ServiceOrderStatus | null;
+  newStatus: ServiceOrderStatus | null;
+  technicianName: string | null;
+  createdAt: string;
 }
 
 export const SERVICE_ORDER_STATUSES: ServiceOrderStatus[] = [

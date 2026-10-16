@@ -9,6 +9,7 @@ import {
   assignTechnician,
   updateServiceOrderStatus,
   listAssignableTechnicians,
+  listServiceOrderEvents,
   ServiceOrderDomainError,
   type ServiceOrderActor,
 } from "../services/service-order.service.js";
@@ -183,9 +184,11 @@ export async function getServiceOrderByIdController(
 // =====================================================
 
 export async function updateServiceOrderController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
   const serviceOrderId = validServiceOrderId(req.params.id, res);
   if (!serviceOrderId) return;
   const result = updateServiceOrderSchema.safeParse(req.body);
@@ -213,10 +216,12 @@ export async function updateServiceOrderController(
     const updatedServiceOrder = await updateServiceOrder(
       serviceOrderId,
       result.data,
+      actor.userId,
     );
 
     res.json(updatedServiceOrder);
   } catch (error) {
+    if (respondToDomainError(error, res)) return;
     const known = mapPrismaError(error);
 
     if (known) {
@@ -277,9 +282,11 @@ export async function deleteServiceOrderController(
 // =====================================================
 
 export async function assignTechnicianController(
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
 ) {
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
   const serviceOrderId = validServiceOrderId(req.params.id, res);
   if (!serviceOrderId) return;
   const result = assignTechnicianSchema.safeParse(req.body);
@@ -297,6 +304,7 @@ export async function assignTechnicianController(
     const updatedServiceOrder = await assignTechnician(
       serviceOrderId,
       result.data.technicianId,
+      actor.userId,
     );
 
     res.json(updatedServiceOrder);
@@ -314,6 +322,24 @@ export async function assignTechnicianController(
     res.status(500).json({
       error: "Erro ao atribuir técnico",
     });
+  }
+}
+
+export async function listServiceOrderEventsController(
+  req: AuthenticatedRequest & Request<{ id: string }>,
+  res: Response,
+) {
+  const actor = authenticatedActor(req, res);
+  if (!actor) return;
+  const serviceOrderId = validServiceOrderId(req.params.id, res);
+  if (!serviceOrderId) return;
+
+  try {
+    res.json(await listServiceOrderEvents(serviceOrderId, actor));
+  } catch (error) {
+    if (respondToDomainError(error, res)) return;
+    console.error(error);
+    res.status(500).json({ error: "Erro ao carregar histórico da ordem de serviço" });
   }
 }
 

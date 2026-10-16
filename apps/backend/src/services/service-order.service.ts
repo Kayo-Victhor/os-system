@@ -65,6 +65,20 @@ export type ServiceOrderDomainErrorCode =
   | "STATUS_CONFLICT"
   | "ASSIGNMENT_CONFLICT";
 
+const internalEventSelect = {
+  id: true,
+  type: true,
+  changedFields: true,
+  previousStatus: true,
+  newStatus: true,
+  previousPriority: true,
+  newPriority: true,
+  previousTechnicianId: true,
+  newTechnicianId: true,
+  createdAt: true,
+  actor: { select: { id: true, name: true } },
+} satisfies Prisma.ServiceOrderEventSelect;
+
 export class ServiceOrderDomainError extends Error {
   constructor(public readonly code: ServiceOrderDomainErrorCode) {
     super(code);
@@ -95,22 +109,34 @@ export async function createServiceOrder(
   data: CreateServiceOrderInput,
   createdById: string,
 ) {
-  const customer = await prisma.customer.findUnique({
-    where: { id: data.customerId },
-    select: { id: true },
-  });
-  if (!customer) throw new ServiceOrderDomainError("CUSTOMER_NOT_FOUND");
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findUnique({
+      where: { id: data.customerId },
+      select: { id: true },
+    });
+    if (!customer) throw new ServiceOrderDomainError("CUSTOMER_NOT_FOUND");
 
-  return prisma.serviceOrder.create({
-    data: {
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      customerId: customer.id,
-      createdById,
-      status: "OPEN",
-    },
-    select: serviceOrderSelect,
+    const order = await tx.serviceOrder.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        customerId: customer.id,
+        createdById,
+        status: "OPEN",
+      },
+      select: serviceOrderSelect,
+    });
+    await tx.serviceOrderEvent.create({
+      data: {
+        serviceOrderId: order.id,
+        actorId: createdById,
+        type: "CREATED",
+        newStatus: "OPEN",
+        newPriority: data.priority,
+      },
+    });
+    return order;
   });
 }
 
@@ -163,11 +189,37 @@ export async function getServiceOrderById(
 export async function updateServiceOrder(
   id: string,
   data: UpdateServiceOrderInput,
+  actorId: string,
 ) {
-  return prisma.serviceOrder.update({
-    where: { id },
-    data,
-    select: serviceOrderSelect,
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.serviceOrder.findUnique({
+      where: { id },
+      select: { id: true, title: true, description: true, priority: true },
+    });
+    if (!current) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
+
+    const changedFields = (Object.keys(data) as Array<keyof UpdateServiceOrderInput>)
+      .filter((field) => data[field] !== current[field]);
+    if (changedFields.length === 0) {
+      return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+    }
+
+    const updated = await tx.serviceOrder.update({
+      where: { id },
+      data,
+      select: serviceOrderSelect,
+    });
+    await tx.serviceOrderEvent.create({
+      data: {
+        serviceOrderId: id,
+        actorId,
+        type: "OPERATIONAL_UPDATED",
+        changedFields,
+        previousPriority: changedFields.includes("priority") ? current.priority : null,
+        newPriority: changedFields.includes("priority") ? updated.priority : null,
+      },
+    });
+    return updated;
   });
 }
 
@@ -186,34 +238,52 @@ export async function listAssignableTechnicians() {
 export async function assignTechnician(
   id: string,
   technicianId: string | null,
+  actorId: string,
 ) {
-  const order = await prisma.serviceOrder.findUnique({
-    where: { id },
-    select: { id: true, technicianId: true },
-  });
-  if (!order) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
-
-  if (technicianId) {
-    const technician = await prisma.user.findUnique({
-      where: { id: technicianId },
-      select: { id: true, role: true },
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.serviceOrder.findUnique({
+      where: { id },
+      select: { id: true, technicianId: true },
     });
-    if (!technician || technician.role !== "TECHNICIAN") {
-      throw new ServiceOrderDomainError("TECHNICIAN_INVALID");
+    if (!order) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
+
+    if (technicianId) {
+      const technician = await tx.user.findUnique({
+        where: { id: technicianId },
+        select: { id: true, role: true },
+      });
+      if (!technician || technician.role !== "TECHNICIAN") {
+        throw new ServiceOrderDomainError("TECHNICIAN_INVALID");
+      }
     }
-  }
 
-  const updated = await prisma.serviceOrder.updateMany({
-    where: { id, technicianId: order.technicianId },
-    data: { technicianId },
+    if (order.technicianId === technicianId) {
+      return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+    }
+
+    const updated = await tx.serviceOrder.updateMany({
+      where: { id, technicianId: order.technicianId },
+      data: { technicianId },
+    });
+    if (updated.count !== 1) {
+      throw new ServiceOrderDomainError("ASSIGNMENT_CONFLICT");
+    }
+
+    await tx.serviceOrderEvent.create({
+      data: {
+        serviceOrderId: id,
+        actorId,
+        type: order.technicianId === null
+          ? "TECHNICIAN_ASSIGNED"
+          : technicianId === null
+            ? "TECHNICIAN_UNASSIGNED"
+            : "TECHNICIAN_REASSIGNED",
+        previousTechnicianId: order.technicianId,
+        newTechnicianId: technicianId,
+      },
+    });
+    return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
   });
-  if (updated.count !== 1) {
-    throw new ServiceOrderDomainError("ASSIGNMENT_CONFLICT");
-  }
-
-  const result = await getServiceOrderById(id);
-  if (!result) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
-  return result;
 }
 
 export async function updateServiceOrderStatus(
@@ -221,40 +291,82 @@ export async function updateServiceOrderStatus(
   status: ServiceOrderStatus,
   actor: ServiceOrderActor,
 ) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.serviceOrder.findFirst({
+      where: { id, ...technicianScope(actor) },
+      select: { id: true, status: true },
+    });
+    if (!order) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
+
+    if (actor.role !== "ADMIN" && actor.role !== "TECHNICIAN") {
+      throw new ServiceOrderDomainError("STATUS_FORBIDDEN");
+    }
+
+    if (!canTransitionServiceOrderStatus(actor.role, order.status, status)) {
+      const isValidForAdmin = (
+        SERVICE_ORDER_STATUS_TRANSITIONS[order.status] as readonly ServiceOrderStatus[]
+      ).includes(status);
+      throw new ServiceOrderDomainError(
+        actor.role === "TECHNICIAN" && isValidForAdmin
+          ? "STATUS_FORBIDDEN"
+          : "INVALID_STATUS_TRANSITION",
+      );
+    }
+
+    const updated = await tx.serviceOrder.updateMany({
+      where: { id, status: order.status, ...technicianScope(actor) },
+      data: { status },
+    });
+    if (updated.count !== 1) throw new ServiceOrderDomainError("STATUS_CONFLICT");
+
+    await tx.serviceOrderEvent.create({
+      data: {
+        serviceOrderId: id,
+        actorId: actor.userId,
+        type: "STATUS_CHANGED",
+        previousStatus: order.status,
+        newStatus: status,
+      },
+    });
+    return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+  });
+}
+
+function technicianIdsFromEvents(events: Array<{
+  previousTechnicianId: string | null;
+  newTechnicianId: string | null;
+}>) {
+  return [...new Set(events.flatMap((event) => [
+    event.previousTechnicianId,
+    event.newTechnicianId,
+  ]).filter((id): id is string => Boolean(id)))];
+}
+
+export async function listServiceOrderEvents(id: string, actor: ServiceOrderActor) {
   const order = await prisma.serviceOrder.findFirst({
     where: { id, ...technicianScope(actor) },
-    select: { id: true, status: true },
+    select: { id: true },
   });
   if (!order) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
 
-  if (actor.role !== "ADMIN" && actor.role !== "TECHNICIAN") {
-    throw new ServiceOrderDomainError("STATUS_FORBIDDEN");
-  }
-
-  if (!canTransitionServiceOrderStatus(actor.role, order.status, status)) {
-    const isValidForAdmin = (
-      SERVICE_ORDER_STATUS_TRANSITIONS[order.status] as readonly ServiceOrderStatus[]
-    ).includes(status);
-    throw new ServiceOrderDomainError(
-      actor.role === "TECHNICIAN" && isValidForAdmin
-        ? "STATUS_FORBIDDEN"
-        : "INVALID_STATUS_TRANSITION",
-    );
-  }
-
-  const updated = await prisma.serviceOrder.updateMany({
-    where: {
-      id,
-      status: order.status,
-      ...technicianScope(actor),
-    },
-    data: { status },
+  const events = await prisma.serviceOrderEvent.findMany({
+    where: { serviceOrderId: id },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: internalEventSelect,
   });
-  if (updated.count !== 1) {
-    throw new ServiceOrderDomainError("STATUS_CONFLICT");
-  }
+  const technicians = await prisma.user.findMany({
+    where: { id: { in: technicianIdsFromEvents(events) } },
+    select: { id: true, name: true },
+  });
+  const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]));
 
-  const result = await getServiceOrderById(id, actor);
-  if (!result) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
-  return result;
+  return events.map((event) => ({
+    ...event,
+    previousTechnician: event.previousTechnicianId
+      ? { id: event.previousTechnicianId, name: technicianNames.get(event.previousTechnicianId) ?? "Técnico removido" }
+      : null,
+    newTechnician: event.newTechnicianId
+      ? { id: event.newTechnicianId, name: technicianNames.get(event.newTechnicianId) ?? "Técnico removido" }
+      : null,
+  }));
 }

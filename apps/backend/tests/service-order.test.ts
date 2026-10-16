@@ -87,9 +87,11 @@ describe("PATCH /service-orders/:id/status — technician ownership", () => {
     const { cookie, csrfHeader } = authAs("tech-1", "TECHNICIAN");
 
     prismaMock.serviceOrder.findFirst
-      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-1" }))
-      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-1", status: "IN_PROGRESS" }));
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-1" }));
     prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.serviceOrder.findUniqueOrThrow.mockResolvedValueOnce(
+      makeOrder({ technicianId: "tech-1", status: "IN_PROGRESS" }),
+    );
 
     const res = await request(app)
       .patch(`/service-orders/${ORDER_ID}/status`)
@@ -134,9 +136,11 @@ describe("PATCH /service-orders/:id/status — technician ownership", () => {
     const { cookie, csrfHeader } = authAs("admin-1", "ADMIN");
 
     prismaMock.serviceOrder.findFirst
-      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-2" }))
-      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-2", status: "IN_PROGRESS" }));
+      .mockResolvedValueOnce(makeOrder({ technicianId: "tech-2" }));
     prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.serviceOrder.findUniqueOrThrow.mockResolvedValueOnce(
+      makeOrder({ technicianId: "tech-2", status: "IN_PROGRESS" }),
+    );
 
     const res = await request(app)
       .patch(`/service-orders/${ORDER_ID}/status`)
@@ -183,7 +187,7 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
       role: "TECHNICIAN",
     });
     prismaMock.serviceOrder.updateMany.mockResolvedValueOnce({ count: 1 });
-    prismaMock.serviceOrder.findFirst.mockResolvedValueOnce(
+    prismaMock.serviceOrder.findUniqueOrThrow.mockResolvedValueOnce(
       makeOrder({ technicianId: TECHNICIAN_ID }),
     );
 

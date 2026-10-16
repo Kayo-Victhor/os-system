@@ -52,6 +52,7 @@ export const prismaMock = {
   },
   serviceOrder: {
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
@@ -59,6 +60,10 @@ export const prismaMock = {
     updateMany: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
+  },
+  serviceOrderEvent: {
+    findMany: vi.fn(),
+    create: vi.fn(),
   },
   passwordResetToken: {
     findUnique: vi.fn(),
@@ -88,4 +93,5 @@ export function resetPrismaMock() {
   prismaMock.$transaction.mockImplementation(
     async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock),
   );
+  prismaMock.serviceOrderEvent.create.mockResolvedValue({});
 }

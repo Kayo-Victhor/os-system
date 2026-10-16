@@ -1,5 +1,5 @@
 import { customerApiRequest } from "./client.ts";
-import type { CustomerAccountProfile, CustomerServiceOrder } from "./types.ts";
+import type { CustomerAccountProfile, CustomerServiceOrder, CustomerServiceOrderEvent } from "./types.ts";
 
 export function loginCustomer(email: string, password: string) {
   return customerApiRequest<{ customerAccount: CustomerAccountProfile }>(
@@ -28,4 +28,11 @@ export function getOwnCustomerServiceOrder(id: string, signal?: AbortSignal) {
   return customerApiRequest<CustomerServiceOrder>(`/auth/customer/service-orders/${id}`, {
     signal,
   });
+}
+
+export function listOwnCustomerServiceOrderEvents(id: string, signal?: AbortSignal) {
+  return customerApiRequest<CustomerServiceOrderEvent[]>(
+    `/auth/customer/service-orders/${id}/events`,
+    { signal },
+  );
 }

@@ -18,6 +18,7 @@ import {
   getCustomerAccountProfile,
   getCustomerServiceOrder,
   listCustomerServiceOrders,
+  listCustomerServiceOrderEvents,
   loginCustomerAccount,
   refreshCustomerSession,
   revokeCustomerSession,
@@ -188,4 +189,26 @@ export async function customerServiceOrderController(
     return;
   }
   res.json(serviceOrder);
+}
+
+export async function customerServiceOrderEventsController(
+  req: CustomerAuthenticatedRequest,
+  res: Response,
+) {
+  if (!req.customerId) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  const requestedId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const serviceOrderId = z.string().uuid().safeParse(requestedId);
+  if (!serviceOrderId.success) {
+    res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    return;
+  }
+  const events = await listCustomerServiceOrderEvents(req.customerId, serviceOrderId.data);
+  if (!events) {
+    res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    return;
+  }
+  res.json(events);
 }

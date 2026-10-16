@@ -597,6 +597,14 @@ textarea.input {
   margin-bottom: 14px;
 }
 
+.timeline-list { list-style: none; margin: 0; padding: 0; }
+.timeline-item { position: relative; display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding-bottom: 18px; }
+.timeline-item:not(:last-child)::before { content: ""; position: absolute; left: 5px; top: 12px; bottom: 0; width: 1px; background: var(--color-border); }
+.timeline-marker { width: 11px; height: 11px; margin-top: 3px; border: 2px solid var(--color-accent); border-radius: 50%; background: var(--color-surface); z-index: 1; }
+.timeline-item strong { display: block; font-size: 13px; }
+.timeline-item span, .timeline-item time { display: block; margin-top: 3px; color: var(--color-text-muted); font-size: 12px; }
+.timeline-empty { color: var(--color-text-muted); font-size: 13px; }
+
 .kv-list {
   display: grid;
   gap: 10px;

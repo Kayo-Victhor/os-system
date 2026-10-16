@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as serviceOrdersApi from "../api/service-orders.ts";
-import type { ServiceOrder, ServiceOrderPriority, ServiceOrderStatus, ServiceOrderTechnician } from "../api/types.ts";
+import type { ServiceOrder, ServiceOrderEvent, ServiceOrderPriority, ServiceOrderStatus, ServiceOrderTechnician } from "../api/types.ts";
 import {
   SERVICE_ORDER_PRIORITIES,
   STATUS_LABELS,
@@ -15,6 +15,7 @@ import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconArrowLeft } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { InternalServiceOrderTimeline } from "../components/ServiceOrderTimeline.tsx";
 
 export function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,8 @@ export function ServiceOrderDetailPage() {
 
   const [order, setOrder] = useState<ServiceOrder | null>(null);
   const [technicians, setTechnicians] = useState<ServiceOrderTechnician[]>([]);
+  const [timeline, setTimeline] = useState<ServiceOrderEvent[] | null>(null);
+  const [timelineError, setTimelineError] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -47,12 +50,28 @@ export function ServiceOrderDetailPage() {
       setEditTitle(data.title);
       setEditDescription(data.description);
       setEditPriority(data.priority);
+      try {
+        setTimeline(await serviceOrdersApi.listServiceOrderEvents(id, signal));
+        setTimelineError(false);
+      } catch {
+        if (canCommit()) setTimelineError(true);
+      }
     } catch (err) {
       if (canCommit()) setLoadError(err instanceof ApiError && err.status === 404 ? "Ordem de serviço não encontrada." : "Não foi possível carregar a ordem de serviço.");
     }
   }, [id]);
 
   useInitialAsyncLoad(load);
+
+  const refreshTimeline = useCallback(async () => {
+    if (!id) return;
+    try {
+      setTimeline(await serviceOrdersApi.listServiceOrderEvents(id));
+      setTimelineError(false);
+    } catch {
+      setTimelineError(true);
+    }
+  }, [id]);
 
   useEffect(() => {
     if (!can("OS_ASSIGN")) return;
@@ -82,6 +101,7 @@ export function ServiceOrderDetailPage() {
     try {
       const updated = await serviceOrdersApi.updateServiceOrderStatus(order.id, status);
       setOrder(updated);
+      await refreshTimeline();
       setSuccessMessage("Status atualizado.");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Não foi possível atualizar o status.");
@@ -98,6 +118,7 @@ export function ServiceOrderDetailPage() {
     try {
       const updated = await serviceOrdersApi.assignTechnician(order.id, technicianId || null);
       setOrder(updated);
+      await refreshTimeline();
       setSuccessMessage("Técnico atualizado.");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Não foi possível atribuir o técnico.");
@@ -119,6 +140,7 @@ export function ServiceOrderDetailPage() {
         priority: editPriority,
       });
       setOrder(updated);
+      await refreshTimeline();
       setEditing(false);
       setSuccessMessage("Ordem atualizada.");
     } catch (err) {
@@ -330,6 +352,22 @@ export function ServiceOrderDetailPage() {
           )}
         </div>
       </div>
+
+      <section className="card detail-section">
+        <h2>Histórico operacional</h2>
+        {timelineError ? (
+          <div>
+            <p className="timeline-empty">Não foi possível atualizar o histórico.</p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void refreshTimeline()}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : timeline === null ? (
+          <p className="timeline-empty">Carregando histórico...</p>
+        ) : (
+          <InternalServiceOrderTimeline events={timeline} />
+        )}
+      </section>
 
       <ConfirmDialog
         open={deleteOpen}

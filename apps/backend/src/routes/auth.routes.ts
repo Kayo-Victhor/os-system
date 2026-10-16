@@ -20,6 +20,7 @@ import {
   customerRefreshController,
   customerServiceOrderController,
   customerServiceOrdersController,
+  customerServiceOrderEventsController,
 } from "../controllers/customer-auth.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -102,6 +103,11 @@ router.get(
   "/customer/service-orders",
   customerAuthMiddleware,
   customerServiceOrdersController,
+);
+router.get(
+  "/customer/service-orders/:id/events",
+  customerAuthMiddleware,
+  customerServiceOrderEventsController,
 );
 router.get(
   "/customer/service-orders/:id",
