@@ -142,6 +142,8 @@ describe("POST /service-orders — invalid input", () => {
       .send({ title: "Only a title" });
 
     expect(res.status).toBe(400);
+    expect(res.body.details.fieldErrors.description).toContain("Informe a descrição");
+    expect(res.body.details.fieldErrors.customerId).toContain("Informe o cliente");
   });
 
   it.each(["TECHNICIAN"] as const)("a %s cannot create a service order (403)", async (role) => {
@@ -181,6 +183,28 @@ describe("GET /service-orders/:id — nonexistent resource", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("Ordem de serviço não encontrada");
+  });
+});
+
+describe("service-order routes — malformed identifiers", () => {
+  it.each([
+    ["PATCH de dados", "patch", "/service-orders/id-invalido", { title: "Título válido" }],
+    ["DELETE", "delete", "/service-orders/id-invalido", undefined],
+    ["atribuição", "patch", "/service-orders/id-invalido/technician", { technicianId: null }],
+    ["status", "patch", "/service-orders/id-invalido/status", { status: "IN_PROGRESS" }],
+  ] as const)("returns 404 for malformed id on %s", async (_scenario, method, path, payload) => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    let operation = request(app)[method](path)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader);
+    if (payload) operation = operation.send(payload);
+    const res = await operation;
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Ordem de serviço não encontrada" });
+    expect(await testPrisma.serviceOrder.count()).toBe(0);
   });
 });
 
@@ -239,6 +263,7 @@ describe("PATCH /service-orders/:id/status — validation and authorization", ()
       .send({ status: "NOT_A_REAL_STATUS" });
 
     expect(res.status).toBe(400);
+    expect(res.body.details.fieldErrors.status).toContain("Selecione um status válido");
   });
 
   it("returns 404 for a nonexistent order", async () => {
@@ -327,6 +352,24 @@ describe("PATCH /service-orders/:id/technician — assignment", () => {
       .send({ technicianId: "00000000-0000-0000-0000-000000000000" });
 
     expect(res.status).toBe(400);
+  });
+
+  it("rejects a malformed technician identifier with a pt-BR message", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const customer = await createFixtureCustomer();
+    const order = await createFixtureServiceOrder({ customerId: customer.id, createdById: admin.id });
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app)
+      .patch(`/service-orders/${order.id}/technician`)
+      .set("Cookie", session.cookie)
+      .set("x-csrf-token", session.csrfHeader)
+      .send({ technicianId: "id-invalido" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.details.fieldErrors.technicianId).toContain("ID do técnico inválido");
+    expect((await testPrisma.serviceOrder.findUniqueOrThrow({ where: { id: order.id } })).technicianId)
+      .toBeNull();
   });
 
   it("rejects assigning a user who is not a TECHNICIAN", async () => {
@@ -470,6 +513,53 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
     expect(search.body.map((order: { id: string }) => order.id)).toEqual([urgent.id]);
   });
 
+  it("combines every supported filter without broadening the result", async () => {
+    const { user: admin } = await createFixtureUser("ADMIN");
+    const { user: technician } = await createFixtureUser("TECHNICIAN");
+    const { user: otherTechnician } = await createFixtureUser("TECHNICIAN");
+    const customer = await createFixtureCustomer({ name: "Cliente combinado" });
+    const otherCustomer = await createFixtureCustomer({ name: "Outro cliente" });
+    const matching = await createFixtureServiceOrder({
+      customerId: customer.id,
+      createdById: admin.id,
+      technicianId: technician.id,
+      status: "WAITING",
+      priority: "URGENT",
+      title: "Falha combinada de conectividade",
+      description: "Conectividade intermitente no escritório",
+    });
+    await createFixtureServiceOrder({
+      customerId: customer.id,
+      createdById: admin.id,
+      technicianId: technician.id,
+      status: "OPEN",
+      priority: "URGENT",
+      title: "Falha combinada de conectividade",
+    });
+    await createFixtureServiceOrder({
+      customerId: otherCustomer.id,
+      createdById: admin.id,
+      technicianId: otherTechnician.id,
+      status: "WAITING",
+      priority: "URGENT",
+      title: "Falha combinada de conectividade",
+    });
+    const session = await loginAs(app, admin.email, FIXTURE_PASSWORD);
+
+    const res = await request(app).get("/service-orders")
+      .query({
+        status: "WAITING",
+        priority: "URGENT",
+        customerId: customer.id,
+        technicianId: technician.id,
+        search: "CONECTIVIDADE",
+      })
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((order: { id: string }) => order.id)).toEqual([matching.id]);
+  });
+
   it("rejects an invalid status filter value", async () => {
     const { user } = await createFixtureUser("ADMIN");
     const session = await loginAs(app, user.email, FIXTURE_PASSWORD);
@@ -480,6 +570,7 @@ describe("GET /service-orders — filtering and technician-scoped queries", () =
       .set("Cookie", session.cookie);
 
     expect(res.status).toBe(400);
+    expect(res.body.details.fieldErrors.status).toContain("Status inválido");
   });
 });
 

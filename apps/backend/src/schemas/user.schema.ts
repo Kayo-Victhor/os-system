@@ -1,24 +1,31 @@
 import { z } from "zod";
 import { normalizeEmail } from "../lib/email.js";
 
-export const passwordSchema = z.string().min(8, "A senha deve ter pelo menos 8 caracteres").max(128);
+export const passwordSchema = z
+  .string({ error: "Informe a senha" })
+  .min(8, "A senha deve ter pelo menos 8 caracteres")
+  .max(128, "A senha deve ter no máximo 128 caracteres");
+
+const internalUserRoleSchema = z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"], {
+  error: "Selecione um papel interno válido",
+});
 
 export const createUserSchema = z.object({
-  name: z.string()
+  name: z.string({ error: "Informe o nome" })
     .min(2, "O nome deve ter pelo menos 2 caracteres")
     .max(100, "O nome deve ter no máximo 100 caracteres"),
-  email: z.string().email("Informe um e-mail válido"),
+  email: z.string({ error: "Informe o e-mail" }).email("Informe um e-mail válido"),
   password: passwordSchema,
-  role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).default("ATTENDANT")
+  role: internalUserRoleSchema.default("ATTENDANT")
 });
 
 export const updateUserSchema = z.object({
-  name: z.string()
+  name: z.string({ error: "Informe um nome válido" })
     .min(2, "O nome deve ter pelo menos 2 caracteres")
     .max(100, "O nome deve ter no máximo 100 caracteres")
     .optional(),
-  email: z.string().email("Informe um e-mail válido").optional(),
-  role: z.enum(["ADMIN", "ATTENDANT", "TECHNICIAN"]).optional(),
+  email: z.string({ error: "Informe um e-mail válido" }).email("Informe um e-mail válido").optional(),
+  role: internalUserRoleSchema.optional(),
 });
 
 // No `role` field, on purpose. Zod strips unknown keys before the public

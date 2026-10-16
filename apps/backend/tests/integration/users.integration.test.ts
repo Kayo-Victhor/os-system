@@ -162,6 +162,10 @@ describe("POST /users — creation (admin only)", () => {
     expect(res.body.error).toBe("Dados inválidos");
     if (scenario === "e-mail inválido") {
       expect(res.body.details.fieldErrors.email).toContain("Informe um e-mail válido");
+    } else if (scenario === "nome ausente") {
+      expect(res.body.details.fieldErrors.name).toContain("Informe o nome");
+    } else if (scenario === "senha ausente") {
+      expect(res.body.details.fieldErrors.password).toContain("Informe a senha");
     }
     expect(await testPrisma.user.count()).toBe(before);
   });
@@ -214,6 +218,7 @@ describe("POST /users — creation (admin only)", () => {
         .send({ name: "Papel inválido", email: `${role.toLowerCase()}@example.com`, password: "senha123456", role });
 
       expect(res.status).toBe(400);
+      expect(res.body.details.fieldErrors.role).toContain("Selecione um papel interno válido");
     },
   );
 });
@@ -289,7 +294,15 @@ describe("GET /users — query (admin only)", () => {
       email: target.email,
       role: "ATTENDANT",
     }));
-    expect(res.body.password).toBeUndefined();
+    expect(Object.keys(res.body).sort()).toEqual([
+      "createdAt",
+      "email",
+      "id",
+      "isPrimaryAdmin",
+      "name",
+      "role",
+      "updatedAt",
+    ]);
   });
 
   it("returns 404 for an unknown user and keeps non-admin access forbidden", async () => {
@@ -427,6 +440,7 @@ describe("PATCH /users/:id — update", () => {
         .send({ role });
 
       expect(res.status).toBe(400);
+      expect(res.body.details.fieldErrors.role).toContain("Selecione um papel interno válido");
     },
   );
 });
