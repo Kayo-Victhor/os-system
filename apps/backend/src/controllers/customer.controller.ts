@@ -20,6 +20,7 @@ import {
   customerAccountStatusSchema,
   customerIdSchema,
   emptyCustomerLifecycleSchema,
+  listCustomersQuerySchema,
 } from "../schemas/customer.schema.js";
 
 import { mapPrismaError } from "../lib/prisma-errors.js";
@@ -87,15 +88,19 @@ export async function createCustomerController(req: Request, res: Response) {
 }
 
 export async function listCustomersController(req: AuthenticatedRequest, res: Response) {
-  try {
-    const search =
-      typeof req.query.search === "string" && req.query.search.trim().length > 0
-        ? req.query.search.trim()
-        : undefined;
+  const result = listCustomersQuerySchema.safeParse(req.query);
+  if (!result.success) {
+    res.status(400).json({
+      error: "Filtros inválidos",
+      details: result.error.flatten(),
+    });
+    return;
+  }
 
+  try {
     const customers = req.userRole === "TECHNICIAN" && req.userId
-      ? await listCustomersForTechnician(req.userId, { search })
-      : await listCustomers({ search });
+      ? await listCustomersForTechnician(req.userId, result.data)
+      : await listCustomers(result.data);
 
     res.json(customers);
   } catch (error) {

@@ -9,8 +9,35 @@ export interface CustomerInput {
   address?: string;
 }
 
-export function listCustomers(search?: string, signal?: AbortSignal) {
-  return apiRequest<Customer[]>("/customers", { query: { search }, signal });
+export interface CustomerFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface CustomersPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface PaginatedCustomers {
+  items: Customer[];
+  pagination: CustomersPagination;
+}
+
+export function listCustomers(filters: CustomerFilters = {}, signal?: AbortSignal) {
+  return apiRequest<PaginatedCustomers>("/customers", {
+    query: {
+      search: filters.search,
+      page: filters.page?.toString(),
+      limit: filters.limit?.toString(),
+    },
+    signal,
+  });
 }
 
 export function getCustomer(id: string, signal?: AbortSignal) {

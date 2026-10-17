@@ -15,6 +15,7 @@ export function ServiceOrderNewPage() {
   const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<Customer[] | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<ServiceOrderPriority>("MEDIUM");
@@ -25,11 +26,17 @@ export function ServiceOrderNewPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    customersApi
-      .listCustomers()
-      .then(setCustomers)
-      .catch(() => setCustomers([]));
-  }, []);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      customersApi
+        .listCustomers({ search: customerSearch.trim() || undefined, limit: 20 }, controller.signal)
+        .then((result) => setCustomers(result.items))
+        .catch(() => {
+          if (!controller.signal.aborted) setCustomers([]);
+        });
+    }, customerSearch ? 250 : 0);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [customerSearch]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -108,6 +115,22 @@ export function ServiceOrderNewPage() {
           </Field>
 
           <div className="form-grid">
+            <Field label="Buscar cliente">
+              {(props) => (
+                <input
+                  {...props}
+                  type="search"
+                  className="input"
+                  value={customerSearch}
+                  onChange={(event) => {
+                    setCustomers(null);
+                    setCustomerSearch(event.target.value);
+                  }}
+                  placeholder="Nome, e-mail ou documento"
+                />
+              )}
+            </Field>
+
             <Field label="Cliente" required error={fieldErrors.customerId}>
               {(props) => (
                 <select
@@ -118,7 +141,7 @@ export function ServiceOrderNewPage() {
                   disabled={!customers}
                 >
                   <option value="">
-                    {customers ? "Selecione um cliente" : "Carregando clientes..."}
+                    {customers ? "Selecione um cliente" : "Buscando clientes..."}
                   </option>
                   {customers?.map((customer) => (
                     <option key={customer.id} value={customer.id}>

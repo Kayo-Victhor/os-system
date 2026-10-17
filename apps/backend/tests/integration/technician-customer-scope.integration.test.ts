@@ -53,8 +53,9 @@ describe("TECHNICIAN — Customers no escopo operacional", () => {
     const session = await loginAs(app, technicianA.email, FIXTURE_PASSWORD);
     const list = await request(app).get("/customers").set("Cookie", session.cookie);
     expect(list.status).toBe(200);
-    expect(list.body).toHaveLength(1);
-    expect(list.body[0].id).toBe(visibleCustomer.id);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.items[0].id).toBe(visibleCustomer.id);
+    expect(list.body.pagination.total).toBe(1);
 
     const own = await request(app).get(`/customers/${visibleCustomer.id}`).set("Cookie", session.cookie);
     expect(own.status).toBe(200);

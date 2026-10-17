@@ -37,7 +37,7 @@ export function DashboardPage() {
           : Promise.resolve(null)
       ))),
       Promise.allSettled([
-        can("CUSTOMER_READ") ? customersApi.listCustomers(undefined, signal) : Promise.resolve([]),
+        can("CUSTOMER_READ") ? customersApi.listCustomers({ limit: 1 }, signal) : Promise.resolve(null),
         can("OS_ASSIGN") ? serviceOrdersApi.listAssignableTechnicians(signal) : Promise.resolve([]),
       ]),
     ]);
@@ -61,7 +61,9 @@ export function DashboardPage() {
     setData({
       orders: fulfilledOrders,
       ordersByStatus,
-      customerCount: customersResult.status === "fulfilled" ? customersResult.value.length : 0,
+      customerCount: customersResult.status === "fulfilled" && customersResult.value
+        ? customersResult.value.pagination.total
+        : 0,
       technicianCount: techniciansResult.status === "fulfilled" ? techniciansResult.value.length : 0,
     });
     setLoading(false);

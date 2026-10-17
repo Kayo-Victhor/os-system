@@ -362,6 +362,31 @@ test("listagem pagina as ordens e preserva os filtros ativos", async ({
   await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
 });
 
+test("listagem pagina clientes e preserva a busca", async ({
+  page,
+  admin,
+  runId,
+}) => {
+  const searchTerm = `Cliente página ${runId}`;
+  await Promise.all(Array.from({ length: 21 }, (_, index) => (
+    createE2ECustomer(runId, `${searchTerm} ${index + 1}`)
+  )));
+
+  await login(page, admin);
+  await page.goto("/customers");
+  const search = page.getByRole("searchbox", { name: "Buscar clientes" });
+  await search.fill(searchTerm);
+
+  await expect(page.getByText("Página 1 de 2 · 21 cliente(s)")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: searchTerm })).toHaveCount(20);
+  await page.getByRole("button", { name: "Próxima página" }).click();
+
+  await expect(page.getByText("Página 2 de 2 · 21 cliente(s)")).toBeVisible();
+  await expect(search).toHaveValue(searchTerm);
+  await expect(page.getByRole("row").filter({ hasText: searchTerm })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
+});
+
 test("atendente não acessa a gestão administrativa de usuários", async ({
   page,
   runId,

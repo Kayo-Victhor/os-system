@@ -2,28 +2,31 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import * as customersApi from "../api/customers.ts";
-import type { Customer } from "../api/types.ts";
 import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { IconPlus, IconSearch } from "../components/icons.tsx";
 
 export function CustomersListPage() {
   const { can, user } = useAuth();
-  const [customers, setCustomers] = useState<Customer[] | null>(null);
+  const [customers, setCustomers] = useState<customersApi.PaginatedCustomers | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
 
     try {
-      const data = await customersApi.listCustomers(search.trim() || undefined, signal);
+      const data = await customersApi.listCustomers({
+        search: search.trim() || undefined,
+        page,
+      }, signal);
       setCustomers(data);
     } catch {
       if (signal?.aborted) return;
       setError("Não foi possível carregar os clientes.");
     }
-  }, [search]);
+  }, [page, search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,7 +62,11 @@ export function CustomersListPage() {
             placeholder="Buscar por nome, e-mail ou documento"
             style={{ paddingLeft: 30, minWidth: 260 }}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setCustomers(null);
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             aria-label="Buscar clientes"
           />
         </div>
@@ -68,14 +75,14 @@ export function CustomersListPage() {
       {customers === null && !error && <PageLoading />}
       {error && <ErrorState message={error} onRetry={load} />}
 
-      {customers && customers.length === 0 && (
+      {customers && customers.items.length === 0 && (
         <EmptyState
           title="Não há clientes cadastrados."
           description={search ? "Nenhum cliente corresponde à busca." : "Cadastre o primeiro cliente para começar."}
         />
       )}
 
-      {customers && customers.length > 0 && (
+      {customers && customers.items.length > 0 && (
         <div className="card table-wrap">
           <table className="data-table">
             <thead>
@@ -87,7 +94,7 @@ export function CustomersListPage() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer) => (
+              {customers.items.map((customer) => (
                 <tr key={customer.id}>
                   <td>
                     <Link to={`/customers/${customer.id}`} className="row-link">
@@ -102,6 +109,32 @@ export function CustomersListPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {customers && customers.pagination.total > 0 && (
+        <nav className="pagination" aria-label="Paginação dos clientes">
+          <p aria-live="polite">
+            Página {customers.pagination.page} de {customers.pagination.totalPages} · {customers.pagination.total} cliente(s)
+          </p>
+          <div className="pagination-actions">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!customers.pagination.hasPreviousPage}
+              onClick={() => setPage((currentPage) => currentPage - 1)}
+            >
+              Página anterior
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!customers.pagination.hasNextPage}
+              onClick={() => setPage((currentPage) => currentPage + 1)}
+            >
+              Próxima página
+            </button>
+          </div>
+        </nav>
       )}
     </div>
   );

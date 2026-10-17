@@ -246,6 +246,24 @@ describe("proxy server-side da Vercel", () => {
     await expect(response.json()).resolves.toEqual([]);
   });
 
+  it("preserva busca e paginação da listagem de clientes", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ items: [], pagination: {} }));
+    const response = await proxyApiRequest(
+      new Request(
+        "https://frontend.example.com/api/customers?__os_proxy_path=customers&proxyPath=customers&search=Ana+Silva&page=2&limit=20",
+        { headers: { "x-vercel-forwarded-for": "203.0.113.42" } },
+      ),
+      environment,
+      fetchMock,
+      () => 1_800_000_000_000,
+    );
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "https://backend.example.com/customers?search=Ana+Silva&page=2&limit=20",
+    );
+    await expect(response.json()).resolves.toEqual({ items: [], pagination: {} });
+  });
+
   it("preserva status, headers e múltiplos Set-Cookie", async () => {
     const upstreamHeaders = new Headers({ "content-type": "application/json" });
     upstreamHeaders.append("set-cookie", "access_token=one; Path=/; HttpOnly; Secure");

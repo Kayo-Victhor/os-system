@@ -87,51 +87,64 @@ export async function createCustomer(data: CreateCustomerInput) {
 }
 
 export interface ListCustomersFilters {
+  page: number;
+  limit: number;
   search?: string;
 }
 
-export async function listCustomers(filters: ListCustomersFilters = {}) {
-  const where: Prisma.CustomerWhereInput = filters.search
+function customerSearchWhere(search?: string): Prisma.CustomerWhereInput {
+  return search
     ? {
         OR: [
-          { name: { contains: filters.search, mode: "insensitive" } },
-          { email: { contains: filters.search, mode: "insensitive" } },
-          { document: { contains: filters.search, mode: "insensitive" } },
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { document: { contains: search, mode: "insensitive" } },
         ],
       }
     : {};
+}
 
-  return prisma.customer.findMany({
-    where,
-    include: customerWithAccount,
-    orderBy: {
-      createdAt: "desc"
-    }
-  });
+async function findCustomers(
+  where: Prisma.CustomerWhereInput,
+  filters: ListCustomersFilters,
+) {
+  const [items, total] = await prisma.$transaction([
+    prisma.customer.findMany({
+      where,
+      include: customerWithAccount,
+      skip: (filters.page - 1) * filters.limit,
+      take: filters.limit,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    prisma.customer.count({ where }),
+  ]);
+  const totalPages = Math.ceil(total / filters.limit);
+
+  return {
+    items,
+    pagination: {
+      page: filters.page,
+      limit: filters.limit,
+      total,
+      totalPages,
+      hasPreviousPage: filters.page > 1,
+      hasNextPage: filters.page < totalPages,
+    },
+  };
+}
+
+export async function listCustomers(filters: ListCustomersFilters) {
+  return findCustomers(customerSearchWhere(filters.search), filters);
 }
 
 export async function listCustomersForTechnician(
   technicianId: string,
-  filters: ListCustomersFilters = {},
+  filters: ListCustomersFilters,
 ) {
-  const searchWhere: Prisma.CustomerWhereInput = filters.search
-    ? {
-        OR: [
-          { name: { contains: filters.search, mode: "insensitive" } },
-          { email: { contains: filters.search, mode: "insensitive" } },
-          { document: { contains: filters.search, mode: "insensitive" } },
-        ],
-      }
-    : {};
-
-  return prisma.customer.findMany({
-    where: {
-      ...searchWhere,
-      serviceOrders: { some: { technicianId } },
-    },
-    include: customerWithAccount,
-    orderBy: { createdAt: "desc" },
-  });
+  return findCustomers({
+    ...customerSearchWhere(filters.search),
+    serviceOrders: { some: { technicianId } },
+  }, filters);
 }
 
 export async function getCustomerById(id: string) {
