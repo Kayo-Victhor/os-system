@@ -11,6 +11,10 @@ import {
   listAssignableTechniciansController,
   listServiceOrderEventsController,
 } from "../controllers/service-order.controller.js";
+import {
+  createServiceOrderNoteController,
+  listServiceOrderNotesController,
+} from "../controllers/service-order-note.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requirePermission } from "../middlewares/permission.middleware.js";
@@ -52,6 +56,21 @@ router.get(
   authMiddleware,
   requirePermission("OS_READ"),
   listServiceOrderEventsController,
+);
+
+router.get(
+  "/:id/notes",
+  authMiddleware,
+  requirePermission("OS_NOTE_READ"),
+  listServiceOrderNotesController,
+);
+
+router.post(
+  "/:id/notes",
+  authMiddleware,
+  writeRateLimiter,
+  requirePermission("OS_NOTE_CREATE"),
+  createServiceOrderNoteController,
 );
 
 router.patch(

@@ -5,6 +5,7 @@ import type {
   ServiceOrderStatus,
   ServiceOrderTechnician,
   ServiceOrderEvent,
+  ServiceOrderNote,
 } from "./types.ts";
 
 export interface ServiceOrderFilters {
@@ -29,6 +30,20 @@ export interface ServiceOrdersPagination {
 export interface PaginatedServiceOrders {
   items: ServiceOrder[];
   pagination: ServiceOrdersPagination;
+}
+
+export interface ServiceOrderNotesPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface PaginatedServiceOrderNotes {
+  items: ServiceOrderNote[];
+  pagination: ServiceOrderNotesPagination;
 }
 
 export interface CreateServiceOrderInput {
@@ -76,6 +91,24 @@ export function getServiceOrder(id: string, signal?: AbortSignal) {
 
 export function listServiceOrderEvents(id: string, signal?: AbortSignal) {
   return apiRequest<ServiceOrderEvent[]>(`/service-orders/${id}/events`, { signal });
+}
+
+export function listServiceOrderNotes(
+  id: string,
+  page = 1,
+  signal?: AbortSignal,
+) {
+  return apiRequest<PaginatedServiceOrderNotes>(`/service-orders/${id}/notes`, {
+    query: { page: page.toString(), limit: "20" },
+    signal,
+  });
+}
+
+export function createServiceOrderNote(id: string, content: string) {
+  return apiRequest<ServiceOrderNote>(`/service-orders/${id}/notes`, {
+    method: "POST",
+    body: { content },
+  });
 }
 
 export function listAssignableTechnicians(signal?: AbortSignal) {

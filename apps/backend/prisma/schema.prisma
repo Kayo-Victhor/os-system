@@ -67,6 +67,7 @@ model User {
   createdOrders      ServiceOrder[]      @relation("CreatedOrders")
   technicianOrders   ServiceOrder[]      @relation("TechnicianOrders")
   serviceOrderEvents ServiceOrderEvent[] @relation("ServiceOrderEventActor")
+  serviceOrderNotes  ServiceOrderNote[]  @relation("ServiceOrderNoteAuthor")
   refreshTokens      RefreshToken[]
   passwordResetToken PasswordResetToken?
 }
@@ -253,6 +254,7 @@ model ServiceOrder {
   technician User?               @relation("TechnicianOrders", fields: [technicianId], references: [id])
   createdBy  User                @relation("CreatedOrders", fields: [createdById], references: [id])
   events     ServiceOrderEvent[]
+  notes      ServiceOrderNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -280,4 +282,18 @@ model ServiceOrderEvent {
 
   @@index([serviceOrderId, createdAt, id])
   @@index([actorId])
+}
+
+model ServiceOrderNote {
+  id             String   @id @default(uuid())
+  serviceOrderId String
+  authorId       String?
+  content        String
+  createdAt      DateTime @default(now())
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  author       User?        @relation("ServiceOrderNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([serviceOrderId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([authorId])
 }

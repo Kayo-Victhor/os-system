@@ -627,6 +627,23 @@ textarea.input {
 .timeline-item span, .timeline-item time { display: block; margin-top: 3px; color: var(--color-text-muted); font-size: 12px; }
 .timeline-empty { color: var(--color-text-muted); font-size: 13px; }
 
+.notes-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.notes-header h2 { margin-bottom: 4px; }
+.notes-count { color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
+.notes-form { display: grid; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--color-border); }
+.notes-form .btn { justify-self: start; }
+.field-hint { align-self: flex-end; color: var(--color-text-muted); font-size: 12px; }
+.notes-content { padding-top: 18px; }
+.notes-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.note-item { padding: 14px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg); }
+.note-item p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: var(--color-text-muted); font-size: 12px; }
+.note-meta strong { color: var(--color-text); font-weight: 600; }
+
+@media (max-width: 560px) {
+  .notes-header, .note-meta { align-items: flex-start; flex-direction: column; }
+}
+
 .kv-list {
   display: grid;
   gap: 10px;

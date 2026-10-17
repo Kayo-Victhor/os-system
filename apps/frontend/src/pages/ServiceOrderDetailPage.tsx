@@ -16,6 +16,7 @@ import { ApiError } from "../api/client.ts";
 import { IconArrowLeft } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 import { InternalServiceOrderTimeline } from "../components/ServiceOrderTimeline.tsx";
+import { ServiceOrderNotes } from "../components/ServiceOrderNotes.tsx";
 
 export function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -352,6 +353,13 @@ export function ServiceOrderDetailPage() {
           )}
         </div>
       </div>
+
+      {can("OS_NOTE_READ") && (
+        <ServiceOrderNotes
+          serviceOrderId={order.id}
+          canCreate={can("OS_NOTE_CREATE")}
+        />
+      )}
 
       <section className="card detail-section">
         <h2>Histórico operacional</h2>

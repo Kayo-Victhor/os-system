@@ -22,6 +22,8 @@ export const PERMISSIONS = {
     "OS_DELETE",
     "OS_ASSIGN",
     "OS_UPDATE_STATUS",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE",
   ]),
   ATTENDANT: new Set([
     "CUSTOMER_CREATE",
@@ -31,8 +33,17 @@ export const PERMISSIONS = {
     "OS_READ",
     "OS_UPDATE",
     "OS_ASSIGN",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE",
   ]),
-  TECHNICIAN: new Set(["CUSTOMER_CREATE", "CUSTOMER_READ", "OS_READ", "OS_UPDATE_STATUS"]),
+  TECHNICIAN: new Set([
+    "CUSTOMER_CREATE",
+    "CUSTOMER_READ",
+    "OS_READ",
+    "OS_UPDATE_STATUS",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE",
+  ]),
 } as const satisfies Record<UserRole, Set<string>>;
 
 export type Permission =
@@ -51,7 +62,9 @@ export type Permission =
   | "OS_UPDATE"
   | "OS_DELETE"
   | "OS_ASSIGN"
-  | "OS_UPDATE_STATUS";
+  | "OS_UPDATE_STATUS"
+  | "OS_NOTE_READ"
+  | "OS_NOTE_CREATE";
 
 export function roleHasPermission(role: UserRole, permission: Permission): boolean {
   return (PERMISSIONS[role] as Set<string>).has(permission);

@@ -106,6 +106,13 @@ export interface ServiceOrderEvent {
   createdAt: string;
 }
 
+export interface ServiceOrderNote {
+  id: string;
+  content: string;
+  author: Pick<UserRecord, "id" | "name"> | null;
+  createdAt: string;
+}
+
 export interface CustomerServiceOrderEvent {
   id: string;
   type: Exclude<ServiceOrderEventType, "OPERATIONAL_UPDATED">;

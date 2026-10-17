@@ -92,6 +92,7 @@ test("cliente vê apenas suas ordens e um histórico sem dados internos", async 
     title: `Atendimento de outro cliente ${runId}`,
   });
   const internalMarker = `Atualização interna restrita ${runId}`;
+  const internalNote = `Nota interna restrita ${runId}`;
 
   await database.serviceOrderEvent.createMany({
     data: [
@@ -111,6 +112,13 @@ test("cliente vê apenas suas ordens e um histórico sem dados internos", async 
       },
     ],
   });
+  await database.serviceOrderNote.create({
+    data: {
+      serviceOrderId: ownOrder.id,
+      authorId: admin.id,
+      content: internalNote,
+    },
+  });
 
   await loginCustomer(page, customer);
   await expect(page.getByRole("link", { name: ownOrder.title })).toBeVisible();
@@ -122,6 +130,8 @@ test("cliente vê apenas suas ordens e um histórico sem dados internos", async 
     "Status alterado de Aberta para Em andamento",
   );
   await expect(page.getByText(internalMarker, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(internalNote, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Notas internas" })).toHaveCount(0);
   await expect(page.getByText(admin.name, { exact: true })).toHaveCount(0);
 
   const ownEvents = await page.request.get(
@@ -132,6 +142,12 @@ test("cliente vê apenas suas ordens e um histórico sem dados internos", async 
   expect(JSON.stringify(ownEventsBody)).not.toContain("OPERATIONAL_UPDATED");
   expect(JSON.stringify(ownEventsBody)).not.toContain(internalMarker);
   expect(JSON.stringify(ownEventsBody)).not.toContain(admin.name);
+  expect(JSON.stringify(ownEventsBody)).not.toContain(internalNote);
+
+  const unavailableNotes = await page.request.get(
+    `${API_ORIGIN}/auth/customer/service-orders/${ownOrder.id}/notes`,
+  );
+  expect(unavailableNotes.status()).toBe(404);
 
   const blockedDetail = await page.request.get(
     `${API_ORIGIN}/auth/customer/service-orders/${otherOrder.id}`,

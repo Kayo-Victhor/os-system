@@ -20,6 +20,8 @@ export const permissions = {
     "OS_DELETE",
     "OS_ASSIGN",
     "OS_UPDATE_STATUS",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE",
 
     "SETTINGS_READ",
     "SETTINGS_UPDATE"
@@ -33,14 +35,18 @@ export const permissions = {
     "OS_CREATE",
     "OS_READ",
     "OS_UPDATE",
-    "OS_ASSIGN"
+    "OS_ASSIGN",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE"
   ],
 
   TECHNICIAN: [
     "CUSTOMER_CREATE",
     "CUSTOMER_READ",
     "OS_READ",
-    "OS_UPDATE_STATUS"
+    "OS_UPDATE_STATUS",
+    "OS_NOTE_READ",
+    "OS_NOTE_CREATE"
   ],
 } as const satisfies Record<UserRole, readonly string[]>;
 
@@ -61,5 +67,7 @@ export type Permission =
   | "OS_DELETE"
   | "OS_ASSIGN"
   | "OS_UPDATE_STATUS"
+  | "OS_NOTE_READ"
+  | "OS_NOTE_CREATE"
   | "SETTINGS_READ"
   | "SETTINGS_UPDATE";

@@ -10,6 +10,8 @@ import {
   type InternalUserRole,
 } from "../support/database.js";
 
+const API_ORIGIN = "http://127.0.0.1:3333";
+
 async function login(page: Page, user: Pick<E2EUser, "email" | "password" | "name">) {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "OS System" })).toBeVisible();
@@ -94,6 +96,7 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
   const customerName = `Cliente E2E ${runId}`;
   const customerEmail = `customer-${runId}@example.test`;
   const orderTitle = `Ordem principal E2E ${runId}`;
+  const internalNote = `Orientação interna E2E ${runId}`;
 
   await test.step("autentica o administrador pela interface", async () => {
     await login(page, admin);
@@ -220,6 +223,29 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
     ).toMatchObject({ technicianId: storedTechnician.id });
   });
 
+  await test.step("registra e preserva uma nota interna após recarregar", async () => {
+    await page.getByRole("textbox", { name: "Nova nota interna" }).fill(internalNote);
+    const responsePromise = waitForWriteResponse(
+      page,
+      "POST",
+      `/service-orders/${orderId}/notes`,
+    );
+    await page.getByRole("button", { name: "Registrar nota" }).click();
+    expect((await responsePromise).status()).toBe(201);
+    await expect(page.getByText("Nota interna registrada com sucesso.", { exact: true }))
+      .toBeVisible();
+    const notesSection = page.getByRole("region", { name: "Notas internas" });
+    await expect(notesSection.getByText(internalNote, { exact: true })).toBeVisible();
+    await expect(notesSection.getByText(admin.name, { exact: true })).toBeVisible();
+    await expect(notesSection.locator("time")).toHaveCount(1);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Notas internas" })
+      .getByText(internalNote, { exact: true })).toBeVisible();
+    await expect(database.serviceOrderNote.findFirst({
+      where: { serviceOrderId: orderId, content: internalNote },
+    })).resolves.toMatchObject({ authorId: admin.id });
+  });
+
   await test.step("técnico acessa somente a fila atribuída", async () => {
     await logout(page);
     await login(page, technician);
@@ -230,6 +256,11 @@ test("ciclo completo de equipe, cliente e ordem de serviço", async ({
     await expect(page.getByRole("link", { name: new RegExp(orderTitle) })).toBeVisible();
     await expect(page.getByText(otherOrder.title, { exact: true })).toHaveCount(0);
     await expect(page.getByText(unassignedOrder.title, { exact: true })).toHaveCount(0);
+
+    const blockedNotes = await page.request.get(
+      `${API_ORIGIN}/service-orders/${otherOrder.id}/notes`,
+    );
+    expect(blockedNotes.status()).toBe(404);
   });
 
   await test.step("executa todas as transições válidas do técnico", async () => {

@@ -65,6 +65,11 @@ export const prismaMock = {
     findMany: vi.fn(),
     create: vi.fn(),
   },
+  serviceOrderNote: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    count: vi.fn(),
+  },
   passwordResetToken: {
     findUnique: vi.fn(),
     upsert: vi.fn(),
