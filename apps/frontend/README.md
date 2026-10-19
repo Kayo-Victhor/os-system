@@ -1,75 +1,56 @@
-# React + TypeScript + Vite
+# Frontend do OS-SYSTEM
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA React 19 + TypeScript + Vite responsável pelas interfaces da equipe e do
+portal do cliente. Regras de autorização e ownership permanecem no backend.
 
-Currently, two official plugins are available:
+## Execução
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Na raiz do monorepo:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+pnpm install
+cp apps/frontend/.env.example apps/frontend/.env
+pnpm --filter frontend dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+O Vite usa `http://localhost:5173`. Em desenvolvimento, `VITE_API_URL` aponta
+para o Express, por padrão `http://localhost:3333`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+pnpm --filter frontend build
+pnpm --filter frontend lint
+pnpm --filter frontend preview
 ```
+
+## Rotas principais
+
+Equipe:
+
+- `/login`, `/esqueci-senha`, `/resetar-senha`;
+- `/`, `/service-orders`, `/customers`, `/technicians`, `/users`, `/reports`.
+
+Cliente:
+
+- `/registrar`, `/confirmar-cadastro`;
+- `/customer/login`, `/customer/forgot-password`, `/customer/reset-password`;
+- `/customer/area`, `/customer/service-orders/:id`.
+
+As páginas são carregadas sob demanda. Guards de rota e permissões melhoram a
+experiência, mas respostas 401/403 do backend são a autoridade.
+
+## API em desenvolvimento e produção
+
+- desenvolvimento: o cliente usa `VITE_API_URL` e envia cookies diretamente ao
+  Express;
+- produção: o bundle usa `/api`; `vercel.json` reescreve para a Function
+  `/api/proxy`, que assina e encaminha a requisição ao Render.
+
+`API_PROXY_TARGET` e `INTERNAL_PROXY_SECRET` são server-side e nunca devem usar
+prefixo `VITE_`.
+
+Documentação completa:
+
+- [Visão geral](../../README.md)
+- [Configuração](../../docs/CONFIGURATION.md)
+- [API](../../docs/API.md)
+- [Deploy](../../docs/DEPLOYMENT.md)
