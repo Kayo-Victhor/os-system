@@ -418,6 +418,68 @@ test("listagem pagina clientes e preserva a busca", async ({
   await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
 });
 
+test("relatórios operacionais carregam indicadores, aplicam filtros e tratam período vazio", async ({
+  page,
+  admin,
+  database,
+  runId,
+}) => {
+  const customer = await createE2ECustomer(runId);
+  await createE2EServiceOrder({
+    customerId: customer.id,
+    createdById: admin.id,
+    title: `Relatório aberto ${runId}`,
+    status: "OPEN",
+    priority: "HIGH",
+    runId,
+  });
+  const completed = await createE2EServiceOrder({
+    customerId: customer.id,
+    createdById: admin.id,
+    title: `Relatório concluído ${runId}`,
+    status: "COMPLETED",
+    priority: "MEDIUM",
+    runId,
+  });
+  await database.serviceOrderEvent.create({
+    data: {
+      serviceOrderId: completed.id,
+      actorId: admin.id,
+      type: "STATUS_CHANGED",
+      previousStatus: "IN_PROGRESS",
+      newStatus: "COMPLETED",
+    },
+  });
+
+  await login(page, admin);
+  await page.getByRole("link", { name: "Relatórios" }).click();
+  await expect(page.getByRole("heading", { name: "Relatórios operacionais" })).toBeVisible();
+  await expect(page.getByText("Criadas no período", { exact: true })).toBeVisible();
+  await expect(page.getByText("Concluídas no período", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Ordens por status atual" }))
+    .toContainText("Aberta");
+  await expect(page.getByRole("region", { name: "Carga atual por técnico" }))
+    .toContainText("Sem técnico atribuído");
+
+  await page.getByLabel("Status atual", { exact: true }).selectOption("COMPLETED");
+  const filteredResponse = waitForWriteResponse(page, "GET", "/reports/operations");
+  await page.getByRole("button", { name: "Aplicar filtros" }).click();
+  expect((await filteredResponse).status()).toBe(200);
+  const completedRow = page.getByRole("region", { name: "Ordens por status atual" })
+    .getByRole("listitem")
+    .filter({ hasText: "Concluída" });
+  await expect(completedRow).toContainText("1");
+
+  await page.getByLabel("Data inicial").fill("2000-01-01");
+  await page.getByLabel("Data final").fill("2000-01-02");
+  const emptyResponse = waitForWriteResponse(page, "GET", "/reports/operations");
+  await page.getByRole("button", { name: "Aplicar filtros" }).click();
+  expect((await emptyResponse).status()).toBe(200);
+  await expect(page.getByRole("heading", {
+    name: "Nenhuma atividade encontrada no período",
+  })).toBeVisible();
+});
+
 test("atendente não acessa a gestão administrativa de usuários", async ({
   page,
   runId,
@@ -436,4 +498,24 @@ test("atendente não acessa a gestão administrativa de usuários", async ({
   await page.goto("/users");
   await expect(page.getByRole("heading", { name: "Acesso não permitido" })).toBeVisible();
   expect(usersEndpointRequested).toBe(false);
+});
+
+test("técnico não acessa relatórios globais nem consulta o endpoint", async ({
+  page,
+  runId,
+}) => {
+  const technician = await createE2EUser("TECHNICIAN", runId);
+  await login(page, technician);
+  await expect(page.getByRole("link", { name: "Relatórios" })).toHaveCount(0);
+
+  let reportEndpointRequested = false;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.origin === API_ORIGIN && url.pathname === "/reports/operations") {
+      reportEndpointRequested = true;
+    }
+  });
+  await page.goto("/reports");
+  await expect(page.getByRole("heading", { name: "Acesso não permitido" })).toBeVisible();
+  expect(reportEndpointRequested).toBe(false);
 });

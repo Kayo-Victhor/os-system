@@ -22,6 +22,7 @@ export const permissions = {
     "OS_UPDATE_STATUS",
     "OS_NOTE_READ",
     "OS_NOTE_CREATE",
+    "REPORT_READ",
 
     "SETTINGS_READ",
     "SETTINGS_UPDATE"
@@ -37,7 +38,8 @@ export const permissions = {
     "OS_UPDATE",
     "OS_ASSIGN",
     "OS_NOTE_READ",
-    "OS_NOTE_CREATE"
+    "OS_NOTE_CREATE",
+    "REPORT_READ"
   ],
 
   TECHNICIAN: [
@@ -69,5 +71,6 @@ export type Permission =
   | "OS_UPDATE_STATUS"
   | "OS_NOTE_READ"
   | "OS_NOTE_CREATE"
+  | "REPORT_READ"
   | "SETTINGS_READ"
   | "SETTINGS_UPDATE";

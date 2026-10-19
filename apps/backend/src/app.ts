@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 import serviceOrderRoutes from "./routes/service-order.routes.js";
 import healthRoutes from "./routes/health.routes.js";
+import reportRoutes from "./routes/report.routes.js";
 
 import { apiRateLimiter } from "./middlewares/rate-limit.middleware.js";
 import { csrfProtectionForSession } from "./middlewares/csrf.middleware.js";
@@ -80,6 +81,7 @@ app.use("/auth", authRoutes);
 app.use("/users", csrfProtectionForSession, userRoutes);
 app.use("/customers", csrfProtectionForSession, customerRoutes);
 app.use("/service-orders", csrfProtectionForSession, serviceOrderRoutes);
+app.use("/reports", csrfProtectionForSession, reportRoutes);
 
 // Never delegate errors to Express' development handler, which can render a
 // stack trace. CORS rejections receive a deliberate 403; all other failures

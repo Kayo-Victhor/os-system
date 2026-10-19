@@ -26,6 +26,7 @@ const CustomerDetailPage = lazy(() => import("./pages/CustomerDetailPage.tsx").t
 const TechniciansListPage = lazy(() => import("./pages/TechniciansListPage.tsx").then(({ TechniciansListPage }) => ({ default: TechniciansListPage })));
 const UsersListPage = lazy(() => import("./pages/UsersListPage.tsx").then(({ UsersListPage }) => ({ default: UsersListPage })));
 const UserNewPage = lazy(() => import("./pages/UserNewPage.tsx").then(({ UserNewPage }) => ({ default: UserNewPage })));
+const ReportsPage = lazy(() => import("./pages/ReportsPage.tsx").then(({ ReportsPage }) => ({ default: ReportsPage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx").then(({ NotFoundPage }) => ({ default: NotFoundPage })));
 
 function RouteLoading() {
@@ -144,6 +145,15 @@ function App() {
               element={
                 <RequirePermission permission="USER_CREATE">
                   <UserNewPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="/reports"
+              element={
+                <RequirePermission permission="REPORT_READ">
+                  <ReportsPage />
                 </RequirePermission>
               }
             />

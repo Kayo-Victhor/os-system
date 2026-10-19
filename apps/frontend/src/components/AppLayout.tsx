@@ -10,6 +10,7 @@ import {
   IconCustomers,
   IconTechnician,
   IconUsersAdmin,
+  IconReports,
   IconLogout,
   IconMenu,
   IconClose,
@@ -19,7 +20,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  group?: "operations" | "people" | "system";
+  group?: "operations" | "people" | "analytics" | "system";
   end?: boolean;
   permission?: Permission;
 }
@@ -29,12 +30,14 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/service-orders", label: "Ordens de serviço", icon: IconOrders, group: "operations", permission: "OS_READ" },
   { to: "/customers", label: "Clientes", icon: IconCustomers, group: "people", permission: "CUSTOMER_READ" },
   { to: "/technicians", label: "Técnicos", icon: IconTechnician, group: "people", permission: "USER_READ" },
+  { to: "/reports", label: "Relatórios", icon: IconReports, group: "analytics", permission: "REPORT_READ" },
   { to: "/users", label: "Usuários", icon: IconUsersAdmin, group: "system", permission: "USER_READ" },
 ];
 
 const NAV_GROUPS = [
   { id: "operations", label: "Operações" },
   { id: "people", label: "Pessoas" },
+  { id: "analytics", label: "Análises" },
   { id: "system", label: "Sistema" },
 ] as const;
 
