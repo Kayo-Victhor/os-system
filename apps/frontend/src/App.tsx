@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthProvider.tsx";
 import { CustomerAuthProvider } from "./context/CustomerAuthProvider.tsx";
 import { RequireAuth, RequireCustomerAuth, RequirePermission } from "./components/Guards.tsx";
 import { AppLayout } from "./components/AppLayout.tsx";
+import { CustomerPortalLayout } from "./components/CustomerPortalLayout.tsx";
 
 const LoginPage = lazy(() => import("./pages/LoginPage.tsx").then(({ LoginPage }) => ({ default: LoginPage })));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.tsx").then(({ RegisterPage }) => ({ default: RegisterPage })));
@@ -53,7 +54,7 @@ function App() {
 
           <Route path="/customer" element={<CustomerAuthScope />}>
             <Route path="login" element={<CustomerLoginPage />} />
-            <Route element={<RequireCustomerAuth><Outlet /></RequireCustomerAuth>}>
+            <Route element={<RequireCustomerAuth><CustomerPortalLayout /></RequireCustomerAuth>}>
               <Route path="area" element={<CustomerAccountPortalPage />} />
               <Route path="service-orders/:id" element={<CustomerServiceOrderDetailPage />} />
             </Route>

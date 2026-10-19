@@ -42,20 +42,20 @@ export function CustomerServiceOrderDetailPage() {
   if (!order) return <PageLoading label="Carregando ordem de serviço..." />;
 
   return (
-    <main className="main-content">
-      <div className="page-header">
+    <div className="customer-portal">
+      <header className="page-header customer-portal-header customer-order-header">
         <div>
-          <Link to="/customer/area">← Voltar para minhas ordens</Link>
+          <Link className="customer-portal-back" to="/customer/area">← Voltar para minhas ordens</Link>
           <h1>{order.title}</h1>
           <p className="page-subtitle">Ordem #{order.id.slice(0, 8)}</p>
         </div>
         <div><StatusBadge status={order.status} /> <PriorityBadge priority={order.priority} /></div>
-      </div>
-      <section className="card detail-section">
+      </header>
+      <section className="card customer-portal-section">
         <h2>Descrição</h2>
         <p>{order.description}</p>
       </section>
-      <section className="card detail-section">
+      <section className="card customer-portal-section">
         <h2>Histórico do atendimento</h2>
         {timelineError ? (
           <p className="timeline-empty">Não foi possível carregar o histórico do atendimento.</p>
@@ -65,14 +65,14 @@ export function CustomerServiceOrderDetailPage() {
           <CustomerServiceOrderTimeline events={timeline} />
         )}
       </section>
-      <section className="card detail-section">
+      <section className="card customer-portal-section">
         <h2>Atendimento</h2>
-        <dl className="detail-grid">
+        <dl className="customer-service-details">
           <div><dt>Técnico responsável</dt><dd>{order.technician?.name ?? "Ainda não atribuído"}</dd></div>
           <div><dt>Criada em</dt><dd>{new Date(order.createdAt).toLocaleString("pt-BR")}</dd></div>
           <div><dt>Última atualização</dt><dd>{new Date(order.updatedAt).toLocaleString("pt-BR")}</dd></div>
         </dl>
       </section>
-    </main>
+    </div>
   );
 }

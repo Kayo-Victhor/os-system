@@ -1,16 +1,15 @@
 import { useCallback, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { listOwnCustomerServiceOrders } from "../api/customer-auth.ts";
 import type { CustomerServiceOrder } from "../api/types.ts";
 import { PriorityBadge, StatusBadge } from "../components/Badges.tsx";
-import { ErrorState, PageLoading } from "../components/States.tsx";
+import { EmptyState, ErrorState, PageLoading } from "../components/States.tsx";
 import { useCustomerAuth } from "../hooks/useCustomerAuth.ts";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 
 export function CustomerAccountPortalPage() {
-  const { customerAccount, logout } = useCustomerAuth();
-  const navigate = useNavigate();
+  const { customerAccount } = useCustomerAuth();
   const [orders, setOrders] = useState<CustomerServiceOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,43 +33,63 @@ export function CustomerAccountPortalPage() {
     return <PageLoading label="Carregando sua área..." />;
   }
 
-  async function signOut() {
-    await logout();
-    navigate("/customer/login", { replace: true });
-  }
-
   const { customer } = customerAccount;
+  const activeOrders = orders.filter((order) =>
+    order.status === "OPEN" || order.status === "IN_PROGRESS" || order.status === "WAITING",
+  ).length;
+  const completedOrders = orders.filter((order) => order.status === "COMPLETED").length;
+
   return (
-    <main className="main-content">
-      <div className="page-header">
+    <div className="customer-portal">
+      <header className="page-header customer-portal-header">
         <div>
           <h1>Olá, {customer.name.split(" ")[0]}</h1>
-          <p className="page-subtitle">Acompanhe seus dados e atendimentos.</p>
+          <p className="page-subtitle">Acompanhe suas solicitações e o andamento dos atendimentos.</p>
         </div>
-        <button className="btn btn-secondary" type="button" onClick={signOut}>
-          Sair
-        </button>
-      </div>
+      </header>
 
-      <section className="card detail-section">
-        <h2>Meus dados</h2>
-        <dl className="detail-grid">
+      <section className="stat-grid customer-stat-grid" aria-label="Resumo das suas ordens de serviço">
+        <div className="card stat-card stat-card-progress">
+          <strong className="stat-value">{activeOrders}</strong>
+          <span className="stat-label">Em acompanhamento</span>
+        </div>
+        <div className="card stat-card stat-card-completed">
+          <strong className="stat-value">{completedOrders}</strong>
+          <span className="stat-label">Concluídas</span>
+        </div>
+        <div className="card stat-card stat-card-open">
+          <strong className="stat-value">{orders.length}</strong>
+          <span className="stat-label">Total de ordens</span>
+        </div>
+      </section>
+
+      <section className="card customer-portal-section customer-profile-section" aria-labelledby="customer-profile-title">
+        <div className="section-heading">
+          <div>
+            <h2 id="customer-profile-title">Meus dados</h2>
+            <p>Informações cadastradas para o seu atendimento.</p>
+          </div>
+        </div>
+        <dl className="customer-profile-grid">
           <div><dt>E-mail de acesso</dt><dd>{customerAccount.email}</dd></div>
           <div><dt>Telefone</dt><dd>{customer.phone ?? "Não informado"}</dd></div>
           <div><dt>Endereço</dt><dd>{customer.address ?? "Não informado"}</dd></div>
         </dl>
       </section>
 
-      <section className="card detail-section">
+      <section className="card customer-portal-section" aria-labelledby="customer-orders-title">
         <div className="section-heading">
           <div>
-            <h2>Minhas ordens de serviço</h2>
+            <h2 id="customer-orders-title">Minhas ordens de serviço</h2>
             <p>Somente atendimentos associados ao seu cadastro.</p>
           </div>
           <span className="section-count">{orders.length}</span>
         </div>
         {orders.length === 0 ? (
-          <p className="page-subtitle">Você ainda não possui ordens de serviço.</p>
+          <EmptyState
+            title="Nenhuma ordem de serviço encontrada"
+            description="Quando uma solicitação for registrada para o seu cadastro, ela aparecerá aqui."
+          />
         ) : (
           <div className="table-wrap">
             <table className="data-table">
@@ -92,6 +111,6 @@ export function CustomerAccountPortalPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }
