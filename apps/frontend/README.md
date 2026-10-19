@@ -14,7 +14,8 @@ pnpm --filter frontend dev
 ```
 
 O Vite usa `http://localhost:5173`. Em desenvolvimento, `VITE_API_URL` aponta
-para o Express, por padrão `http://localhost:3333`.
+para o Express, por padrão `http://localhost:3333`. Se o backend usar outra
+`PORT`, atualize essa URL.
 
 ```bash
 pnpm --filter frontend build

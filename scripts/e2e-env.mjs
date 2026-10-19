@@ -73,6 +73,9 @@ export function loadE2EEnvironment() {
   const environment = {
     ...process.env,
     ...fileEnvironment,
+    // Keep the Playwright topology deterministic even if the invoking shell
+    // exports a different backend PORT.
+    PORT: "3333",
     NODE_ENV: "test",
     CORS_ORIGIN: "http://127.0.0.1:5173",
     ALLOW_DIRECT_API_REQUESTS: "true",

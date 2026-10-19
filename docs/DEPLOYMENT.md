@@ -10,7 +10,7 @@ de cada publicação.
 Vercel (React/Vite + Function /api/proxy)
                │ HTTPS + HMAC
                ▼
-Render (Express, porta 3333)
+Render (Express, PORT fornecida pelo ambiente ou 3333)
                │ Prisma / Supavisor
                ▼
 Supabase PostgreSQL
@@ -48,14 +48,15 @@ pnpm --filter backend build
 pnpm --filter backend start
 ```
 
-O artefato é `apps/backend/dist` e o processo executa `dist/server.js`. O código
-atual escuta 3333; o serviço precisa encaminhar essa porta.
+O artefato é `apps/backend/dist` e o processo executa `dist/server.js`. O backend
+valida e usa `PORT` fornecida pelo ambiente; sem ela, mantém o padrão 3333.
 
 Configure no Render todas as variáveis obrigatórias descritas em
 [CONFIGURATION.md](CONFIGURATION.md), com atenção a:
 
 ```text
 NODE_ENV=production
+PORT=<porta inteira fornecida pelo ambiente, quando aplicável>
 CORS_ORIGIN=https://frontend.exemplo.com
 API_BASE_PATH=/api
 ALLOW_DIRECT_API_REQUESTS=false

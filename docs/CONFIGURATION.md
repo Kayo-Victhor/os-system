@@ -29,6 +29,7 @@ Essas variáveis não configuram automaticamente o backend; mantenha
 
 | Variável | Obrigatoriedade e padrão | Ambientes | Finalidade |
 |---|---|---|---|
+| `PORT` | opcional; padrão `3333`; inteiro de 1 a 65535 | dev/prod | porta HTTP em que o Express escuta |
 | `DATABASE_URL` | obrigatória | todos | URL PostgreSQL usada por Prisma |
 | `JWT_ACCESS_SECRET` | obrigatória no startup | todos | assinatura HS256 dos access tokens |
 | `JWT_REFRESH_SECRET` | obrigatória no startup | todos | HMAC dos refresh tokens opacos |
@@ -46,7 +47,9 @@ quando o navegador usa `/api`, defina `/api` para alinhar o `Path` dos cookies.
 Em produção, `ALLOW_DIRECT_API_REQUESTS=true` é ignorado. Não use prefixo
 `VITE_` em segredos server-side.
 
-O backend atual não lê `PORT`; ele escuta 3333.
+Valor vazio de `PORT` usa 3333. Valores parciais, decimais, negativos, zero ou
+acima de 65535 interrompem o startup com uma mensagem de configuração clara.
+Ao mudar a porta local, mantenha `VITE_API_URL` coerente.
 
 ## E-mail
 

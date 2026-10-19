@@ -88,8 +88,8 @@ não cria clientes, atendentes ou técnicos de exemplo.
 Serviços locais:
 
 - frontend: `http://localhost:5173`;
-- backend: `http://localhost:3333`;
-- saúde da API: `http://localhost:3333/health`;
+- backend padrão: `http://localhost:3333`;
+- saúde padrão da API: `http://localhost:3333/health`;
 - PostgreSQL do Compose: `localhost:5432`.
 
 O `pnpm dev` verifica dependências, presença de `apps/backend/.env` e alcance
@@ -178,8 +178,8 @@ registrados em logs.
 - notas internas não possuem edição nem exclusão pela API;
 - o portal do cliente não exibe notas internas nem eventos operacionais
   classificados como internos;
-- o backend atualmente escuta a porta fixa `3333`; a configuração do serviço
-  hospedado deve ser compatível com esse comportamento;
+- ao alterar `PORT`, atualize também `VITE_API_URL` e as verificações de saúde
+  que apontam para o backend;
 - não há especificação OpenAPI gerada: [docs/API.md](docs/API.md) documenta os
   contratos confirmados no código e nos testes.
 

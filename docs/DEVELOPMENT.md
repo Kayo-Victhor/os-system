@@ -143,7 +143,9 @@ pnpm --filter backend dev
 pnpm --filter frontend dev
 ```
 
-O backend escuta a porta fixa 3333 e o Vite usa 5173 por padrão.
+O backend usa `PORT` ou 3333 quando a variável está ausente/vazia. O Vite usa
+5173 por padrão. Se escolher outra porta para o backend local, ajuste também
+`VITE_API_URL` no frontend.
 
 ## Banco de teste
 
@@ -194,8 +196,9 @@ pnpm test:e2e:typecheck
 pnpm test:e2e
 ```
 
-O E2E verifica o banco e as portas 3333/5173, aplica migrations no banco de
-teste, inicia ambos os servidores e executa um worker Chromium. Não reutiliza
+O E2E força explicitamente `PORT=3333`, independentemente do terminal que o
+invocou. Ele verifica o banco e as portas 3333/5173, aplica migrations no banco
+de teste, inicia ambos os servidores e executa um worker Chromium. Não reutiliza
 servidores existentes. Artefatos de falha ficam em `test-results/`; o relatório
 HTML fica em `playwright-report/` e pode ser aberto com:
 

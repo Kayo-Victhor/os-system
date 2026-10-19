@@ -1,5 +1,6 @@
 import "dotenv/config";
 import app from "./app.js";
+import { resolveServerPort } from "./config/server.js";
 import { prisma } from "./lib/prisma.js";
 import {
   startEmailOutboxWorker,
@@ -10,10 +11,10 @@ import {
   stopRetentionCleanupWorker,
 } from "./services/retention-cleanup.worker.js";
 
-const PORT = 3333;
+const port = resolveServerPort();
 
-const server = app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+const server = app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
   startEmailOutboxWorker();
   startRetentionCleanupWorker();
 });
