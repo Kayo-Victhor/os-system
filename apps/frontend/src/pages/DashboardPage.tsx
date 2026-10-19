@@ -9,6 +9,7 @@ import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { PageHeader } from "../components/PageHeader.tsx";
 
 interface DashboardData {
   orders: ServiceOrder[];
@@ -95,12 +96,10 @@ export function DashboardPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Olá, {user?.name.split(" ")[0]}</h1>
-          <p className="page-subtitle">Acompanhe a fila de atendimento e as prioridades do dia.</p>
-        </div>
-      </div>
+      <PageHeader
+        title={<>Olá, {user?.name.split(" ")[0]}</>}
+        description="Acompanhe a fila de atendimento e as prioridades do dia."
+      />
 
       <div className="stat-grid">
         <div className="card stat-card stat-card-open">

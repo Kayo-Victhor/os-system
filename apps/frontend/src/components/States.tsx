@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { IconAlert, IconEmpty } from "./icons.tsx";
+import { Button } from "./Button.tsx";
 
 export function PageLoading({ label = "Carregando..." }: { label?: string }) {
   return (
@@ -42,9 +43,7 @@ export function ErrorState({
       <h3>Não foi possível carregar os dados</h3>
       <p>{message}</p>
       {onRetry && (
-        <button type="button" className="btn btn-secondary" onClick={onRetry}>
-          Tentar novamente
-        </button>
+        <Button variant="secondary" onClick={onRetry}>Tentar novamente</Button>
       )}
     </div>
   );
@@ -120,18 +119,17 @@ export function ConfirmDialog({
         <h2 id="confirm-dialog-title">{title}</h2>
         <p>{description}</p>
         <div className="modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             ref={confirmRef}
-            type="button"
-            className={danger ? "btn btn-danger" : "btn btn-primary"}
+            variant={danger ? "danger" : "primary"}
             onClick={onConfirm}
-            disabled={busy}
+            loading={busy}
           >
             {busy ? "Aguarde..." : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -166,7 +164,7 @@ export function SessionRestoreError({ onRetry, loginAction }: { onRetry: () => v
       <h3>Não foi possível verificar sua sessão</h3>
       <p>A conexão demorou mais do que o esperado. Tente novamente sem sair da sua conta.</p>
       <div className="session-error-actions">
-        <button type="button" className="btn btn-primary" onClick={onRetry}>Tentar novamente</button>
+        <Button onClick={onRetry}>Tentar novamente</Button>
         {loginAction}
       </div>
     </div>
