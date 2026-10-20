@@ -1,5 +1,4 @@
-import { useState, type ComponentType, type SVGProps } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../hooks/useAuth.ts";
 import { ROLE_LABELS } from "../api/types.ts";
@@ -11,15 +10,16 @@ import {
   IconTechnician,
   IconUsersAdmin,
   IconReports,
-  IconLogout,
-  IconMenu,
-  IconClose,
 } from "./icons.tsx";
+import {
+  ApplicationShell,
+  type ShellNavigationGroup,
+} from "./ApplicationShell.tsx";
 
 interface NavItem {
   to: string;
   label: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  icon: typeof IconDashboard;
   group?: "operations" | "people" | "analytics" | "system";
   end?: boolean;
   permission?: Permission;
@@ -41,19 +41,25 @@ const NAV_GROUPS = [
   { id: "system", label: "Sistema" },
 ] as const;
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
+function resolvePageTitle(pathname: string) {
+  if (pathname === "/") return "Painel";
+  if (pathname === "/service-orders/new") return "Nova ordem de serviço";
+  if (pathname.startsWith("/service-orders/")) return "Detalhes da ordem";
+  if (pathname.startsWith("/service-orders")) return "Ordens de serviço";
+  if (pathname === "/customers/new") return "Novo cliente";
+  if (pathname.startsWith("/customers/")) return "Detalhes do cliente";
+  if (pathname.startsWith("/customers")) return "Clientes";
+  if (pathname.startsWith("/technicians")) return "Técnicos";
+  if (pathname === "/users/new") return "Novo usuário";
+  if (pathname.startsWith("/users")) return "Usuários";
+  if (pathname.startsWith("/reports")) return "Relatórios";
+  return "OS System";
 }
 
 export function AppLayout() {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
   if (!user) return null;
 
@@ -63,85 +69,28 @@ export function AppLayout() {
   }
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
+  const navigationGroups: ShellNavigationGroup[] = [
+    {
+      id: "main",
+      items: visibleItems.filter((item) => !item.group),
+    },
+    ...NAV_GROUPS.flatMap(({ id, label }) => {
+      const items = visibleItems.filter((item) => item.group === id);
+      return items.length > 0 ? [{ id, label, items }] : [];
+    }),
+  ];
 
   return (
-    <div className="app-shell">
-      <div
-        className={`sidebar-backdrop ${mobileOpen ? "open" : ""}`}
-        onClick={() => setMobileOpen(false)}
-      />
-
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label="Navegação principal">
-        <div className="sidebar-brand">
-          <span className="brand-mark" aria-hidden="true">OS</span>
-          <span><strong>OS System</strong><small>Central de serviços</small></span>
-        </div>
-        <nav className="sidebar-nav">
-          {visibleItems.filter((item) => !item.group).map(({ to, label, icon: ItemIcon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className="sidebar-link"
-              onClick={() => setMobileOpen(false)}
-            >
-              <ItemIcon className="sidebar-icon" />
-              {label}
-            </NavLink>
-          ))}
-          {NAV_GROUPS.map(({ id, label }) => {
-            const items = visibleItems.filter((item) => item.group === id);
-            if (items.length === 0) return null;
-            return (
-              <div className="sidebar-group" key={id}>
-                <p className="sidebar-group-label">{label}</p>
-                {items.map(({ to, label: itemLabel, icon: ItemIcon, end }) => (
-                  <NavLink key={to} to={to} end={end} className="sidebar-link" onClick={() => setMobileOpen(false)}>
-                    <ItemIcon className="sidebar-icon" />
-                    {itemLabel}
-                  </NavLink>
-                ))}
-              </div>
-            );
-          })}
-        </nav>
-        <div className="sidebar-user" aria-label="Usuário conectado">
-          <div className="user-avatar" aria-hidden="true">{initials(user.name)}</div>
-          <div className="sidebar-user-copy"><strong>{user.name}</strong><span>{ROLE_LABELS[user.role]}</span></div>
-        </div>
-      </aside>
-
-      <div className="main-area">
-        <header className="topbar">
-          <div className="topbar-context">
-            <button
-              type="button"
-              className="topbar-menu-btn"
-              aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
-              onClick={() => setMobileOpen((v) => !v)}
-            >
-              {mobileOpen ? <IconClose width={20} height={20} /> : <IconMenu width={20} height={20} />}
-            </button>
-          </div>
-
-          <div className="user-menu">
-            <span className="topbar-status">Ambiente operacional</span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={handleLogout}
-              aria-label="Sair da conta"
-            >
-              <IconLogout width={16} height={16} />
-              Sair
-            </button>
-          </div>
-        </header>
-
-        <main className="page-content">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+    <ApplicationShell
+      navigationLabel="Navegação principal"
+      navigationGroups={navigationGroups}
+      brandSubtitle="Central de serviços"
+      pageTitle={resolvePageTitle(location.pathname)}
+      statusLabel="Ambiente operacional"
+      connectedUserLabel="Usuário conectado"
+      userLabel={ROLE_LABELS[user.role]}
+      userName={user.name}
+      onLogout={handleLogout}
+    />
   );
 }
