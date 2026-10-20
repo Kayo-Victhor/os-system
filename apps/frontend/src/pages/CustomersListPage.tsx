@@ -4,7 +4,13 @@ import { Link } from "react-router-dom";
 import * as customersApi from "../api/customers.ts";
 import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
-import { IconPlus, IconSearch } from "../components/icons.tsx";
+import { CustomerAccountStatusBadge } from "../components/Badges.tsx";
+import { IconPlus } from "../components/icons.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { ButtonLink } from "../components/Button.tsx";
+import { FilterBar, SearchField } from "../components/FilterBar.tsx";
+import { DataTable } from "../components/DataTable.tsx";
+import { Pagination } from "../components/Pagination.tsx";
 
 export function CustomersListPage() {
   const { can, user } = useAuth();
@@ -35,42 +41,32 @@ export function CustomersListPage() {
   }, [load, search]);
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Clientes</h1>
-          <p className="page-subtitle">{user?.role === "TECHNICIAN" ? "Consulte os clientes vinculados à sua fila e cadastre atendimentos presenciais." : "Consulte e gerencie os clientes cadastrados."}</p>
-        </div>
-        {can("CUSTOMER_CREATE") && (
-          <Link to="/customers/new" className="btn btn-primary">
+    <div className="operational-page">
+      <PageHeader
+        title="Clientes"
+        description={user?.role === "TECHNICIAN"
+          ? "Consulte os clientes vinculados à sua fila e cadastre atendimentos presenciais."
+          : "Consulte e gerencie os clientes cadastrados."}
+        actions={can("CUSTOMER_CREATE") ? (
+          <ButtonLink to="/customers/new">
             <IconPlus width={16} height={16} />
             Novo cliente
-          </Link>
-        )}
-      </div>
+          </ButtonLink>
+        ) : undefined}
+      />
 
-      <div className="toolbar">
-        <div style={{ position: "relative" }}>
-          <IconSearch
-            width={15}
-            height={15}
-            style={{ position: "absolute", left: 10, top: 10, color: "var(--color-text-faint)" }}
-          />
-          <input
-            type="search"
-            className="input"
-            placeholder="Buscar por nome, e-mail ou documento"
-            style={{ paddingLeft: 30, minWidth: 260 }}
-            value={search}
-            onChange={(e) => {
-              setCustomers(null);
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            aria-label="Buscar clientes"
-          />
-        </div>
-      </div>
+      <FilterBar label="Busca de clientes">
+        <SearchField
+          placeholder="Buscar por nome, e-mail ou documento"
+          value={search}
+          onChange={(event) => {
+            setCustomers(null);
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          aria-label="Buscar clientes"
+        />
+      </FilterBar>
 
       {customers === null && !error && <PageLoading />}
       {error && <ErrorState message={error} onRetry={load} />}
@@ -83,14 +79,14 @@ export function CustomersListPage() {
       )}
 
       {customers && customers.items.length > 0 && (
-        <div className="card table-wrap">
-          <table className="data-table">
+        <DataTable label="Clientes cadastrados">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>E-mail</th>
                 <th>Telefone</th>
                 <th>Documento</th>
+                <th>Acesso</th>
               </tr>
             </thead>
             <tbody>
@@ -104,37 +100,24 @@ export function CustomersListPage() {
                   <td>{customer.email ?? "—"}</td>
                   <td>{customer.phone ?? "—"}</td>
                   <td>{customer.document ?? "—"}</td>
+                  <td>
+                    {customer.customerAccount
+                      ? <CustomerAccountStatusBadge status={customer.customerAccount.status} />
+                      : <span className="ui-data-table__muted">Sem acesso</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </DataTable>
       )}
 
       {customers && customers.pagination.total > 0 && (
-        <nav className="pagination" aria-label="Paginação dos clientes">
-          <p aria-live="polite">
-            Página {customers.pagination.page} de {customers.pagination.totalPages} · {customers.pagination.total} cliente(s)
-          </p>
-          <div className="pagination-actions">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={!customers.pagination.hasPreviousPage}
-              onClick={() => setPage((currentPage) => currentPage - 1)}
-            >
-              Página anterior
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={!customers.pagination.hasNextPage}
-              onClick={() => setPage((currentPage) => currentPage + 1)}
-            >
-              Próxima página
-            </button>
-          </div>
-        </nav>
+        <Pagination
+          label="Paginação dos clientes"
+          pagination={customers.pagination}
+          itemLabel="cliente(s)"
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

@@ -5,9 +5,11 @@ import * as usersApi from "../api/users.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import type { ServiceOrder, UserRecord } from "../api/types.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
-import { StatusBadge } from "../components/Badges.tsx";
+import { RoleBadge, StatusBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { Surface } from "../components/Surface.tsx";
 
 export function TechniciansListPage() {
   const [technicians, setTechnicians] = useState<UserRecord[] | null>(null);
@@ -32,17 +34,15 @@ export function TechniciansListPage() {
 
   useInitialAsyncLoad(load);
 
-  if (technicians === null && !error) return <PageLoading />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Técnicos</h1>
-          <p className="page-subtitle">Equipe técnica e carga de trabalho atual.</p>
-        </div>
-      </div>
+    <div className="operational-page">
+      <PageHeader
+        title="Técnicos"
+        description="Equipe técnica e carga de trabalho atual."
+      />
+
+      {technicians === null && !error && <PageLoading label="Carregando técnicos..." />}
+      {error && <ErrorState message={error} onRetry={load} />}
 
       {technicians && technicians.length === 0 && (
         <EmptyState
@@ -52,47 +52,43 @@ export function TechniciansListPage() {
       )}
 
       {technicians && technicians.length > 0 && (
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+        <div className="technician-grid">
           {technicians.map((tech) => {
             const assigned = orders.filter((o) => o.technicianId === tech.id);
             const active = assigned.filter((o) => o.status === "OPEN" || o.status === "IN_PROGRESS");
 
             return (
-              <div key={tech.id} className="card detail-section" style={{ marginBottom: 0 }}>
-                <h2>{tech.name}</h2>
-                <p className="page-subtitle" style={{ marginBottom: 12 }}>
-                  {tech.email}
-                </p>
+              <Surface key={tech.id} className="technician-card">
+                <div className="technician-card__header">
+                  <div>
+                    <h2>{tech.name}</h2>
+                    <p>{tech.email}</p>
+                  </div>
+                  <RoleBadge role={tech.role} />
+                </div>
 
-                <p style={{ fontSize: 13, marginBottom: 10 }}>
-                  <strong>{active.length}</strong> ordem(ns) ativa(s) de {assigned.length} atribuída(s)
-                </p>
+                <dl className="technician-workload" aria-label={`Carga de trabalho de ${tech.name}`}>
+                  <div><dt>Ativas</dt><dd>{active.length}</dd></div>
+                  <div><dt>Atribuídas</dt><dd>{assigned.length}</dd></div>
+                </dl>
 
                 {active.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div className="technician-orders" aria-label={`Ordens ativas de ${tech.name}`}>
                     {active.slice(0, 3).map((order) => (
                       <Link
                         key={order.id}
                         to={`/service-orders/${order.id}`}
-                        style={{ fontSize: 12.5, display: "flex", justifyContent: "space-between", gap: 8 }}
+                        className="technician-order-link"
                       >
-                        <span
-                          style={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {order.title}
-                        </span>
+                        <span>{order.title}</span>
                         <StatusBadge status={order.status} />
                       </Link>
                     ))}
                   </div>
                 ) : (
-                  <p className="field-hint">Sem ordens ativas no momento.</p>
+                  <p className="technician-card__empty">Sem ordens ativas no momento.</p>
                 )}
-              </div>
+              </Surface>
             );
           })}
         </div>

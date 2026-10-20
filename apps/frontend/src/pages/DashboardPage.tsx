@@ -9,7 +9,11 @@ import { PageLoading, ErrorState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
-import { PageHeader } from "../components/PageHeader.tsx";
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { MetricCard } from "../components/MetricCard.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { ButtonLink } from "../components/Button.tsx";
+import { DataTable } from "../components/DataTable.tsx";
 
 interface DashboardData {
   orders: ServiceOrder[];
@@ -95,66 +99,74 @@ export function DashboardPage() {
     .slice(0, 8);
 
   return (
-    <div>
+    <div className="operational-page dashboard-page">
       <PageHeader
         title={<>Olá, {user?.name.split(" ")[0]}</>}
         description="Acompanhe a fila de atendimento e as prioridades do dia."
       />
 
-      <div className="stat-grid">
-        <div className="card stat-card stat-card-open">
-          <div className="stat-value">{openOrders}</div>
-          <div className="stat-label">Ordens abertas</div>
-        </div>
-        <div className="card stat-card stat-card-progress">
-          <div className="stat-value">{inProgressOrders}</div>
-          <div className="stat-label">Em andamento</div>
-        </div>
-        <div className="card stat-card stat-card-waiting">
-          <div className="stat-value">{waitingOrders}</div>
-          <div className="stat-label">Aguardando</div>
-        </div>
-        <div className="card stat-card stat-card-completed">
-          <div className="stat-value">{completedOrders}</div>
-          <div className="stat-label">Concluídas</div>
-        </div>
-        {can("CUSTOMER_READ") && (
-          <div className="card stat-card">
-            <div className="stat-value">{data.customerCount}</div>
-            <div className="stat-label">Clientes cadastrados</div>
+      <div className="dashboard-metric-groups">
+        <PageSection
+          title="Fluxo das ordens"
+          description="Distribuição atual dos atendimentos por etapa."
+        >
+          <div className="metric-grid">
+            <MetricCard label="Ordens abertas" value={openOrders} />
+            <MetricCard label="Em andamento" value={inProgressOrders} tone="primary" />
+            <MetricCard label="Aguardando" value={waitingOrders} tone="warning" />
+            <MetricCard label="Concluídas" value={completedOrders} tone="success" />
           </div>
-        )}
-        {can("OS_ASSIGN") && (
-          <div className="card stat-card">
-            <div className="stat-value">{data.technicianCount}</div>
-            <div className="stat-label">Técnicos</div>
-          </div>
+        </PageSection>
+
+        {(can("CUSTOMER_READ") || can("OS_ASSIGN")) && (
+          <PageSection
+            title="Base operacional"
+            description="Cadastros disponíveis para o atendimento."
+          >
+            <div className="metric-grid metric-grid--support">
+              {can("CUSTOMER_READ") && (
+                <MetricCard label="Clientes cadastrados" value={data.customerCount} />
+              )}
+              {can("OS_ASSIGN") && (
+                <MetricCard label="Técnicos" value={data.technicianCount} />
+              )}
+            </div>
+          </PageSection>
         )}
       </div>
 
       {user?.role === "TECHNICIAN" && myOrders.length > 0 && (
-        <div className="card detail-section" style={{ marginBottom: 16 }}>
-          <div className="section-heading"><div><h2>Minha fila</h2><p>Ordens atribuídas que ainda precisam de acompanhamento.</p></div><span className="section-count">{myOrdersTotal}</span></div>
-          <OrdersMiniTable orders={myOrders} />
-        </div>
+        <Surface className="dashboard-list-section">
+          <PageSection
+            title="Minha fila"
+            description="Ordens atribuídas que ainda precisam de acompanhamento."
+            actions={<span className="section-count">{myOrdersTotal}</span>}
+          >
+            <OrdersMiniTable orders={myOrders} label="Ordens da minha fila" />
+          </PageSection>
+        </Surface>
       )}
 
-      <div className="card detail-section">
-        <div className="section-heading"><div><h2>Ordens recentes</h2><p>Ordens registradas mais recentemente na central de serviços.</p></div><Link className="btn btn-secondary btn-sm" to="/service-orders">Ver todas</Link></div>
-        {recentOrders.length === 0 ? (
-          <p className="page-subtitle">Nenhuma ordem de serviço registrada ainda.</p>
-        ) : (
-          <OrdersMiniTable orders={recentOrders} />
-        )}
-      </div>
+      <Surface className="dashboard-list-section">
+        <PageSection
+          title="Ordens recentes"
+          description="Ordens registradas mais recentemente na central de serviços."
+          actions={<ButtonLink to="/service-orders" variant="secondary" size="sm">Ver todas</ButtonLink>}
+        >
+          {recentOrders.length === 0 ? (
+            <p className="dashboard-empty-copy">Nenhuma ordem de serviço registrada ainda.</p>
+          ) : (
+            <OrdersMiniTable orders={recentOrders} label="Ordens recentes" />
+          )}
+        </PageSection>
+      </Surface>
     </div>
   );
 }
 
-function OrdersMiniTable({ orders }: { orders: ServiceOrder[] }) {
+function OrdersMiniTable({ orders, label }: { orders: ServiceOrder[]; label: string }) {
   return (
-    <div className="table-wrap">
-      <table className="data-table">
+    <DataTable label={label} framed={false}>
         <thead>
           <tr>
             <th>Ordem</th>
@@ -182,7 +194,6 @@ function OrdersMiniTable({ orders }: { orders: ServiceOrder[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
+    </DataTable>
   );
 }

@@ -7,7 +7,12 @@ import { SERVICE_ORDER_STATUSES, SERVICE_ORDER_PRIORITIES, STATUS_LABELS, PRIORI
 import { useAuth } from "../hooks/useAuth.ts";
 import { PageLoading, ErrorState, EmptyState } from "../components/States.tsx";
 import { StatusBadge, PriorityBadge } from "../components/Badges.tsx";
-import { IconPlus, IconSearch } from "../components/icons.tsx";
+import { IconPlus } from "../components/icons.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { Button, ButtonLink } from "../components/Button.tsx";
+import { FilterBar, SearchField } from "../components/FilterBar.tsx";
+import { DataTable } from "../components/DataTable.tsx";
+import { Pagination } from "../components/Pagination.tsx";
 
 export function ServiceOrdersListPage() {
   const { can, user } = useAuth();
@@ -53,44 +58,38 @@ export function ServiceOrdersListPage() {
   const filtersActive = Boolean(search || status || priority);
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Ordens de serviço</h1>
-          <p className="page-subtitle">Acompanhe e gerencie as ordens de serviço.</p>
-        </div>
-        {can("OS_CREATE") && (
-          <Link to="/service-orders/new" className="btn btn-primary">
+    <div className="operational-page">
+      <PageHeader
+        title="Ordens de serviço"
+        description="Acompanhe e gerencie as ordens de serviço."
+        actions={can("OS_CREATE") ? (
+          <ButtonLink to="/service-orders/new">
             <IconPlus width={16} height={16} />
             Nova ordem
-          </Link>
-        )}
-      </div>
+          </ButtonLink>
+        ) : undefined}
+      />
 
-      <div className="toolbar">
-        <div style={{ position: "relative" }}>
-          <IconSearch
-            width={15}
-            height={15}
-            style={{ position: "absolute", left: 10, top: 10, color: "var(--color-text-faint)" }}
-          />
-          <input
-            type="search"
-            className="input"
-            placeholder="Buscar por título ou descrição"
-            style={{ paddingLeft: 30 }}
-            value={search}
-            onChange={(e) => {
-              setOrders(null);
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            aria-label="Buscar ordens de serviço"
-          />
-        </div>
+      <FilterBar
+        label="Filtros das ordens de serviço"
+        context={user?.role === "TECHNICIAN" ? "Sua fila atribuída" : undefined}
+        actions={filtersActive ? (
+          <Button variant="neutral" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+        ) : undefined}
+      >
+        <SearchField
+          placeholder="Buscar por título ou descrição"
+          value={search}
+          onChange={(event) => {
+            setOrders(null);
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          aria-label="Buscar ordens de serviço"
+        />
 
         <select
-          className="input"
+          className="input ui-filter-control"
           value={status}
           onChange={(e) => {
             setOrders(null);
@@ -108,7 +107,7 @@ export function ServiceOrdersListPage() {
         </select>
 
         <select
-          className="input"
+          className="input ui-filter-control"
           value={priority}
           onChange={(e) => {
             setOrders(null);
@@ -125,11 +124,7 @@ export function ServiceOrdersListPage() {
           ))}
         </select>
 
-        {user?.role === "TECHNICIAN" && (
-          <span className="page-subtitle">Sua fila atribuída</span>
-        )}
-        {filtersActive && <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>Limpar filtros</button>}
-      </div>
+      </FilterBar>
 
       {orders === null && !error && <PageLoading />}
       {error && <ErrorState message={error} onRetry={load} />}
@@ -146,8 +141,7 @@ export function ServiceOrdersListPage() {
       )}
 
       {orders && orders.items.length > 0 && (
-        <div className="card table-wrap">
-          <table className="data-table">
+        <DataTable label="Ordens de serviço">
             <thead>
               <tr>
                 <th>Título</th>
@@ -161,14 +155,16 @@ export function ServiceOrdersListPage() {
             <tbody>
               {orders.items.map((order) => (
                 <tr key={order.id}>
-                  <td className="wrap">
+                  <td className="ui-data-table__wrap">
                     <Link to={`/service-orders/${order.id}`} className="row-link">
                       <span className="order-title">{order.title}</span>
                       <span className="order-reference">#{order.id.slice(-6).toUpperCase()}</span>
                     </Link>
                   </td>
                   <td>{order.customer.name}</td>
-                  <td>{order.technician?.name ?? "Não atribuído"}</td>
+                  <td className={order.technician ? undefined : "ui-data-table__muted"}>
+                    {order.technician?.name ?? "Não atribuído"}
+                  </td>
                   <td>
                     <StatusBadge status={order.status} />
                   </td>
@@ -179,34 +175,16 @@ export function ServiceOrdersListPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </DataTable>
       )}
 
       {orders && orders.pagination.total > 0 && (
-        <nav className="pagination" aria-label="Paginação das ordens de serviço">
-          <p aria-live="polite">
-            Página {orders.pagination.page} de {orders.pagination.totalPages} · {orders.pagination.total} ordem(ns)
-          </p>
-          <div className="pagination-actions">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={!orders.pagination.hasPreviousPage}
-              onClick={() => setPage((currentPage) => currentPage - 1)}
-            >
-              Página anterior
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={!orders.pagination.hasNextPage}
-              onClick={() => setPage((currentPage) => currentPage + 1)}
-            >
-              Próxima página
-            </button>
-          </div>
-        </nav>
+        <Pagination
+          label="Paginação das ordens de serviço"
+          pagination={orders.pagination}
+          itemLabel="ordem(ns)"
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

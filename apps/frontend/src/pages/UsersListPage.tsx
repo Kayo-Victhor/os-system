@@ -1,6 +1,4 @@
 import { useCallback, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-
 import * as usersApi from "../api/users.ts";
 import type { UserRecord, UserRole } from "../api/types.ts";
 import { ROLE_LABELS } from "../api/types.ts";
@@ -16,12 +14,15 @@ import { RoleBadge } from "../components/Badges.tsx";
 import { ApiError } from "../api/client.ts";
 import { IconPlus } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { Button, ButtonLink } from "../components/Button.tsx";
+import { DataTable } from "../components/DataTable.tsx";
 
 // Matches the backend's internal User role enum exactly.
 const EDITABLE_ROLES: UserRole[] = ["ADMIN", "ATTENDANT", "TECHNICIAN"];
 
 export function UsersListPage() {
-  const { user: currentUser } = useAuth();
+  const { can, user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -84,33 +85,30 @@ export function UsersListPage() {
     }
   }
 
-  if (users === null && !error) return <PageLoading />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Usuários</h1>
-          <p className="page-subtitle">
-            Gerencie contas de atendentes, técnicos e administradores.
-          </p>
-        </div>
-        <Link to="/users/new" className="btn btn-primary">
-          <IconPlus width={16} height={16} />
-          Novo usuário
-        </Link>
-      </div>
+    <div className="operational-page">
+      <PageHeader
+        title="Usuários"
+        description="Gerencie contas de atendentes, técnicos e administradores."
+        actions={can("USER_CREATE") ? (
+          <ButtonLink to="/users/new">
+            <IconPlus width={16} height={16} />
+            Novo usuário
+          </ButtonLink>
+        ) : undefined}
+      />
 
       {actionError && <ErrorBanner message={actionError} />}
+
+      {users === null && !error && <PageLoading label="Carregando usuários..." />}
+      {error && <ErrorState message={error} onRetry={load} />}
 
       {users && users.length === 0 && (
         <EmptyState title="Nenhum usuário cadastrado." />
       )}
 
       {users && users.length > 0 && (
-        <div className="card table-wrap">
-          <table className="data-table">
+        <DataTable label="Usuários cadastrados">
             <thead>
               <tr>
                 <th>Nome</th>
@@ -124,26 +122,24 @@ export function UsersListPage() {
               {users.map((u) => {
                 const isSelf = u.id === currentUser?.id;
                 const isPrimaryAdmin = u.isPrimaryAdmin;
+                const canEditRole = can("USER_UPDATE") && !isSelf && !isPrimaryAdmin;
+                const canDeleteUser = can("USER_DELETE") && !isSelf && !isPrimaryAdmin;
                 return (
                   <tr key={u.id}>
                     <td>{u.name}</td>
                     <td>{u.email}</td>
                     <td>
-                      {isSelf || isPrimaryAdmin ? (
-                        <>
+                      {!canEditRole ? (
+                        <div className="user-role-summary">
                           <RoleBadge role={u.role} />
                           {isPrimaryAdmin && <span className="field-hint">Administrador principal</span>}
-                        </>
+                        </div>
                       ) : (
                         <select
-                          className="input"
-                          style={{
-                            width: "auto",
-                            padding: "4px 8px",
-                            fontSize: 12.5,
-                          }}
+                          className="input user-role-select"
                           value={u.role}
                           disabled={savingId === u.id}
+                          aria-busy={savingId === u.id || undefined}
                           onChange={(e) =>
                             handleRoleChange(
                               u.id,
@@ -162,25 +158,28 @@ export function UsersListPage() {
                     </td>
                     <td>{new Date(u.createdAt).toLocaleDateString("pt-BR")}</td>
                     <td>
-                      {isSelf || isPrimaryAdmin ? (
-                        <span className="field-hint">{isPrimaryAdmin ? "Administrador principal" : "Sua conta"}</span>
+                      {!canDeleteUser ? (
+                        <span className="field-hint">
+                          {isPrimaryAdmin
+                            ? "Administrador principal"
+                            : isSelf ? "Sua conta" : "Sem ações disponíveis"}
+                        </span>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn btn-danger btn-sm"
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => setDeleteTarget(u)}
                           disabled={savingId === u.id}
                         >
                           Excluir
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </DataTable>
       )}
 
       <ConfirmDialog

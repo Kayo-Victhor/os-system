@@ -1,4 +1,5 @@
 import type {
+  CustomerAccountStatus,
   ServiceOrderPriority,
   ServiceOrderStatus,
   UserRole,
@@ -26,6 +27,11 @@ const ROLE_COLOR: Record<UserRole, string> = {
   TECHNICIAN: "badge-green",
 };
 
+const CUSTOMER_ACCOUNT_LABELS: Record<CustomerAccountStatus, string> = {
+  ACTIVE: "Ativo",
+  SUSPENDED: "Suspenso",
+};
+
 export function StatusBadge({ status }: { status: ServiceOrderStatus }) {
   return (
     <span className={`badge ${STATUS_COLOR[status]}`}>
@@ -41,4 +47,13 @@ export function PriorityBadge({ priority }: { priority: ServiceOrderPriority }) 
 
 export function RoleBadge({ role }: { role: UserRole }) {
   return <span className={`badge ${ROLE_COLOR[role]}`}>{ROLE_LABELS[role]}</span>;
+}
+
+export function CustomerAccountStatusBadge({ status }: { status: CustomerAccountStatus }) {
+  return (
+    <span className={`badge ${status === "ACTIVE" ? "badge-green" : "badge-amber"}`}>
+      <span className="badge-dot" aria-hidden="true" />
+      {CUSTOMER_ACCOUNT_LABELS[status]}
+    </span>
+  );
 }
