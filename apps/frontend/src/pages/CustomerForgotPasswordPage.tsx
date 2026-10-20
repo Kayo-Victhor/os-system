@@ -1,3 +1,5 @@
+import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Button } from "../components/Button.tsx";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
@@ -33,8 +35,8 @@ export function CustomerForgotPasswordPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card card">
+    <AuthLayout area="customer" feedbackKey={error ?? message}>
+      <div className="auth-form-content">
         <h1>Recuperar senha de cliente</h1>
         <p className="page-subtitle">
           Informe o e-mail da sua conta de cliente para receber as instruções.
@@ -55,15 +57,15 @@ export function CustomerForgotPasswordPage() {
               />
             )}
           </Field>
-          <button className="btn btn-primary" type="submit" disabled={submitting}>
+          <Button type="submit" loading={submitting}>
             {submitting ? "Enviando..." : "Enviar instruções"}
-          </button>
+          </Button>
         </form>
 
         <p className="page-subtitle">
           <Link to="/customer/login">Voltar para entrar</Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

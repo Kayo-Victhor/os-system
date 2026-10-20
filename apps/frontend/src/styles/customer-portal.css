@@ -1,0 +1,53 @@
+/* Customer content uses the same shell, surfaces and typography as internal pages. */
+.portal-page { width: 100%; max-width: 1240px; min-width: 0; }
+.portal-page .ui-page-section { margin-bottom: 0; }
+.portal-page .ui-page-section__description { display: block; }
+.portal-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: var(--space-6); overflow: hidden; }
+.portal-summary .ui-metric-card { border: 0; border-top: 3px solid var(--border-strong); border-radius: 0; padding: var(--space-5); }
+.portal-summary .ui-metric-card--primary { border-top-color: var(--action-primary); }
+.portal-summary .ui-metric-card--success { border-top-color: var(--status-success); }
+.portal-summary .ui-metric-card + .ui-metric-card { border-left: 1px solid var(--divider-default); }
+.portal-columns { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-5); align-items: start; }
+.portal-columns > *, .portal-detail-main { min-width: 0; }
+.portal-orders-heading, .portal-orders > li { display: grid; grid-template-columns: minmax(0, 1fr) 120px 80px 90px; align-items: center; gap: var(--space-3); }
+.portal-orders-heading { padding: var(--space-3) 0; border-bottom: 1px solid var(--border-default); font-size: 11px; font-weight: 650; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.035em; }
+.portal-orders { list-style: none; padding: 0; margin: 0; }
+.portal-orders > li { padding: var(--space-4) 0; border-bottom: 1px solid var(--divider-default); }
+.portal-orders > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.portal-order-subject { min-width: 0; }
+.portal-order-subject a { color: var(--text-primary); font-weight: 600; overflow-wrap: anywhere; }
+.portal-order-subject a:hover { color: var(--action-primary); }
+.portal-order-subject > span { display: block; color: var(--text-tertiary); font-size: var(--font-size-meta); margin-top: var(--space-1); }
+.portal-orders time { color: var(--text-secondary); font-size: var(--font-size-meta); }
+.portal-mobile-date-label { display: none; }
+.portal-facts { display: grid; gap: var(--space-4); margin: 0; }
+.portal-facts > div + div { padding-top: var(--space-4); border-top: 1px solid var(--divider-default); }
+.portal-facts dt { color: var(--text-secondary); font-size: var(--font-size-meta); }
+.portal-facts dd { margin: var(--space-1) 0 0; color: var(--text-primary); font-size: var(--font-size-label); font-weight: 500; overflow-wrap: anywhere; }
+.portal-back { margin-bottom: var(--space-4); }
+.portal-detail-main { display: grid; gap: var(--space-5); }
+.portal-description { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.portal-history .timeline-list { margin-top: var(--space-5); }
+.portal-history .timeline-item { padding-bottom: var(--space-5); }
+.portal-history .timeline-item time { display: block; margin-top: var(--space-2); }
+.portal-state-action { display: flex; justify-content: center; padding-bottom: var(--space-6); }
+@media (max-width: 1200px) {
+  .portal-columns { grid-template-columns: minmax(0, 1fr); }
+  .portal-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .portal-facts > div + div { border-top: 0; padding-top: 0; border-left: 1px solid var(--divider-default); padding-left: var(--space-4); }
+}
+@media (max-width: 640px) {
+  .portal-summary { margin-bottom: var(--space-5); }
+  .portal-summary .ui-metric-card { padding: var(--space-3); }
+  .portal-summary .ui-metric-card__value { font-size: 24px; }
+  .portal-summary .ui-metric-card__label { font-size: var(--font-size-meta); }
+  .portal-orders-heading { display: none; }
+  .portal-orders > li { grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
+  .portal-order-subject, .portal-orders time { grid-column: 1 / -1; }
+  .portal-orders > li:first-child { padding-top: var(--space-2); }
+  .portal-orders > li { padding-top: var(--space-5); padding-bottom: var(--space-5); }
+  .portal-mobile-date-label { display: inline; }
+  .portal-facts { grid-template-columns: minmax(0, 1fr); }
+  .portal-facts > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--divider-default); padding-top: var(--space-4); }
+  .portal-page .ui-surface--padded { padding: var(--space-4); }
+}

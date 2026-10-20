@@ -1,3 +1,5 @@
+import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Button } from "../components/Button.tsx";
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -48,8 +50,8 @@ export function CustomerResetPasswordPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card card">
+    <AuthLayout area="customer" variant={message ? "message" : "form"} feedbackKey={error ?? message}>
+      <div className="auth-form-content">
         <h1>Redefinir senha de cliente</h1>
         <p className="page-subtitle">Escolha uma nova senha para sua conta de cliente.</p>
         {message && <SuccessBanner message={message} />}
@@ -85,9 +87,9 @@ export function CustomerResetPasswordPage() {
                 />
               )}
             </Field>
-            <button className="btn btn-primary" type="submit" disabled={submitting}>
+            <Button type="submit" loading={submitting}>
               {submitting ? "Redefinindo..." : "Redefinir senha"}
-            </button>
+            </Button>
           </form>
         )}
 
@@ -95,6 +97,6 @@ export function CustomerResetPasswordPage() {
           <Link to="/customer/login">Voltar para entrar</Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

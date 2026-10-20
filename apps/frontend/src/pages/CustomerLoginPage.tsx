@@ -1,3 +1,5 @@
+import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Button } from "../components/Button.tsx";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
@@ -42,8 +44,8 @@ export function CustomerLoginPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card card">
+    <AuthLayout area="customer" feedbackKey={error}>
+      <div className="auth-form-content">
         <h1>Área do cliente</h1>
         <p className="page-subtitle">Entre para acompanhar seus atendimentos.</p>
         {error && <ErrorBanner message={error} />}
@@ -72,9 +74,9 @@ export function CustomerLoginPage() {
               />
             )}
           </Field>
-          <button className="btn btn-primary" type="submit" disabled={submitting}>
+          <Button type="submit" loading={submitting}>
             {submitting ? "Entrando..." : "Entrar"}
-          </button>
+          </Button>
         </form>
         <p className="page-subtitle">
           <Link to="/customer/forgot-password">Esqueci minha senha</Link>
@@ -86,6 +88,6 @@ export function CustomerLoginPage() {
           Acesso da equipe? <Link to="/login">Entrar como colaborador</Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

@@ -14,7 +14,7 @@ const API_ORIGIN = "http://127.0.0.1:3333";
 
 async function login(page: Page, user: Pick<E2EUser, "email" | "password" | "name">) {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "OS System" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Entrar na central" })).toBeVisible();
   await page.getByRole("textbox", { name: "E-mail *" }).fill(user.email);
   await page.getByRole("textbox", { name: "Senha *" }).fill(user.password);
   await page.getByRole("button", { name: "Entrar" }).click();

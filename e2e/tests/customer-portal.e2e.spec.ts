@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "../support/fixtures.js";
+import { openCredentialLink } from "../support/credential-links.js";
 import {
   createE2ECustomerAccount,
   createE2EServiceOrder,
@@ -44,7 +45,7 @@ test("cliente conclui cadastro público, confirma e restaura a sessão", async (
     email,
   );
 
-  await page.goto(`/confirmar-cadastro?token=${encodeURIComponent(confirmationToken)}`);
+  await openCredentialLink(page, "/confirmar-cadastro", confirmationToken);
   await expect(page.getByRole("status")).toContainText("Cadastro confirmado com sucesso");
   await expect(database.customerAccount.findUnique({ where: { email } })).resolves.toMatchObject({
     status: "ACTIVE",
@@ -177,7 +178,7 @@ test("recuperação troca a senha, revoga a sessão e logout protege o portal", 
   await expect(page.getByRole("status")).toContainText("enviaremos instruções");
   const resetToken = await readE2EOutboxToken("CUSTOMER_PASSWORD_RESET", customer.email);
 
-  await page.goto(`/customer/reset-password?token=${encodeURIComponent(resetToken)}`);
+  await openCredentialLink(page, "/customer/reset-password", resetToken);
   await page.getByRole("textbox", { name: "Nova senha *", exact: true }).fill(newPassword);
   await page.getByRole("textbox", { name: "Confirmar nova senha *" }).fill(newPassword);
   await page.getByRole("button", { name: "Redefinir senha" }).click();

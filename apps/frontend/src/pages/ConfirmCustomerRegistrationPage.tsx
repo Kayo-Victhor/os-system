@@ -1,3 +1,5 @@
+import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Button, ButtonLink } from "../components/Button.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -61,8 +63,8 @@ export function ConfirmCustomerRegistrationPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card card" aria-live="polite">
+    <AuthLayout area="customer" variant="message" feedbackKey={message}>
+      <div className="auth-form-content" aria-live="polite">
         <h1>Confirmação de cadastro</h1>
 
         {state === "confirming" && (
@@ -76,14 +78,12 @@ export function ConfirmCustomerRegistrationPage() {
         )}
 
         {state === "confirmed" && (
-          <Link className="btn btn-primary" to="/customer/login">
-            Ir para o login
-          </Link>
+          <ButtonLink to="/customer/login">Ir para o login</ButtonLink>
         )}
         {state === "temporary-error" && (
-          <button className="btn btn-primary" type="button" onClick={retry}>
+          <Button type="button" onClick={retry}>
             Tentar novamente
-          </button>
+          </Button>
         )}
         {state === "invalid" && (
           <p className="page-subtitle">
@@ -91,6 +91,6 @@ export function ConfirmCustomerRegistrationPage() {
           </p>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }

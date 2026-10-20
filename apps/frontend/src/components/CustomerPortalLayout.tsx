@@ -1,3 +1,4 @@
+import "../styles/customer-portal.css";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useCustomerAuth } from "../hooks/useCustomerAuth.ts";

@@ -1,3 +1,6 @@
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { MetricCard } from "../components/MetricCard.tsx";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -28,9 +31,13 @@ export function CustomerAccountPortalPage() {
   );
   useInitialAsyncLoad(load);
 
-  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (error) return <Surface className="portal-page">
+    <ErrorState message={error} onRetry={() => void load()} />
+  </Surface>;
   if (!customerAccount || orders === null) {
-    return <PageLoading label="Carregando sua área..." />;
+    return <Surface className="portal-page">
+      <PageLoading label="Carregando sua área..." />
+    </Surface>;
   }
 
   const { customer } = customerAccount;
@@ -40,77 +47,86 @@ export function CustomerAccountPortalPage() {
   const completedOrders = orders.filter((order) => order.status === "COMPLETED").length;
 
   return (
-    <div className="customer-portal">
-      <header className="page-header customer-portal-header">
-        <div>
-          <h1>Olá, {customer.name.split(" ")[0]}</h1>
-          <p className="page-subtitle">Acompanhe suas solicitações e o andamento dos atendimentos.</p>
-        </div>
-      </header>
-
-      <section className="stat-grid customer-stat-grid" aria-label="Resumo das suas ordens de serviço">
-        <div className="card stat-card stat-card-progress">
-          <strong className="stat-value">{activeOrders}</strong>
-          <span className="stat-label">Em acompanhamento</span>
-        </div>
-        <div className="card stat-card stat-card-completed">
-          <strong className="stat-value">{completedOrders}</strong>
-          <span className="stat-label">Concluídas</span>
-        </div>
-        <div className="card stat-card stat-card-open">
-          <strong className="stat-value">{orders.length}</strong>
-          <span className="stat-label">Total de ordens</span>
-        </div>
-      </section>
-
-      <section className="card customer-portal-section customer-profile-section" aria-labelledby="customer-profile-title">
-        <div className="section-heading">
-          <div>
-            <h2 id="customer-profile-title">Meus dados</h2>
-            <p>Informações cadastradas para o seu atendimento.</p>
-          </div>
-        </div>
-        <dl className="customer-profile-grid">
-          <div><dt>E-mail de acesso</dt><dd>{customerAccount.email}</dd></div>
-          <div><dt>Telefone</dt><dd>{customer.phone ?? "Não informado"}</dd></div>
-          <div><dt>Endereço</dt><dd>{customer.address ?? "Não informado"}</dd></div>
-        </dl>
-      </section>
-
-      <section className="card customer-portal-section" aria-labelledby="customer-orders-title">
-        <div className="section-heading">
-          <div>
-            <h2 id="customer-orders-title">Minhas ordens de serviço</h2>
-            <p>Somente atendimentos associados ao seu cadastro.</p>
-          </div>
-          <span className="section-count">{orders.length}</span>
-        </div>
-        {orders.length === 0 ? (
-          <EmptyState
-            title="Nenhuma ordem de serviço encontrada"
-            description="Quando uma solicitação for registrada para o seu cadastro, ela aparecerá aqui."
-          />
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead><tr><th>Ordem</th><th>Status</th><th>Prioridade</th></tr></thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id}>
-                    <td>
-                      <Link className="row-link" to={`/customer/service-orders/${order.id}`}>
-                        {order.title}
-                      </Link>
-                    </td>
-                    <td><StatusBadge status={order.status} /></td>
-                    <td><PriorityBadge priority={order.priority} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+    <div className="portal-page">
+      <PageHeader
+        title={"Olá, " + customer.name.split(" ")[0]}
+        description="Acompanhe suas solicitações e o andamento dos atendimentos."
+      />
+      <Surface
+        className="portal-summary"
+        padded={false}
+        role="region"
+        aria-label="Resumo das suas ordens de serviço"
+      >
+        <MetricCard value={activeOrders} label="Em acompanhamento" tone="primary" />
+        <MetricCard value={completedOrders} label="Concluídas" tone="success" />
+        <MetricCard value={orders.length} label="Total de ordens" />
+      </Surface>
+      <div className="portal-columns">
+        <Surface className="portal-orders-panel">
+          <PageSection
+            title="Minhas ordens de serviço"
+            description="Abra uma ordem para consultar a descrição e o histórico do atendimento."
+          >
+            {orders.length === 0 ? <EmptyState
+              title="Nenhuma ordem de serviço encontrada"
+              description="Quando uma solicitação for registrada para o seu cadastro, ela aparecerá aqui."
+            /> : <>
+              <div className="portal-orders-heading" aria-hidden="true">
+                <span>Ordem</span>
+                <span>Status</span>
+                <span>Prioridade</span>
+                <span>Atualização</span>
+              </div>
+              <ul className="portal-orders" aria-label="Suas ordens de serviço">
+                {orders.map(order => <li key={order.id}>
+                  <div className="portal-order-subject">
+                    <Link to={"/customer/service-orders/" + order.id}>
+                      {order.title}
+                    </Link>
+                    <span>#{order.id.slice(0, 8)}
+                    </span>
+                  </div>
+                  <div>
+                    <StatusBadge status={order.status} />
+                  </div>
+                  <div>
+                    <PriorityBadge priority={order.priority} />
+                  </div>
+                  <time dateTime={order.updatedAt} title={new Date(order.updatedAt).toLocaleString("pt-BR")}>
+                    <span className="portal-mobile-date-label">Atualizada em </span>
+                    {new Date(order.updatedAt).toLocaleDateString("pt-BR")}
+                  </time>
+                </li>)}
+              </ul>
+            </>}
+          </PageSection>
+        </Surface>
+        <Surface className="portal-profile">
+          <PageSection title="Meus dados" description="Informações cadastradas para o seu atendimento.">
+            <dl className="portal-facts">
+              <div>
+                <dt>E-mail de acesso</dt>
+                <dd>
+                  {customerAccount.email}
+                </dd>
+              </div>
+              <div>
+                <dt>Telefone</dt>
+                <dd>
+                  {customer.phone ?? "Não informado"}
+                </dd>
+              </div>
+              <div>
+                <dt>Endereço</dt>
+                <dd>
+                  {customer.address ?? "Não informado"}
+                </dd>
+              </div>
+            </dl>
+          </PageSection>
+        </Surface>
+      </div>
     </div>
   );
 }
