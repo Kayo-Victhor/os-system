@@ -1,3 +1,5 @@
+@import "./styles/internal-pages.css";
+
 /* Shared component classes used across the whole app. Kept in one file on
    purpose — this is a mid-size admin tool, not a design system product;
    a single stylesheet is easier to keep consistent than a component per

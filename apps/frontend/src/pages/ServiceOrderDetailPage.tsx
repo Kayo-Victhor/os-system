@@ -17,6 +17,12 @@ import { IconArrowLeft } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
 import { InternalServiceOrderTimeline } from "../components/ServiceOrderTimeline.tsx";
 import { ServiceOrderNotes } from "../components/ServiceOrderNotes.tsx";
+import { Button } from "../components/Button.tsx";
+import { Field } from "../components/Field.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { InternalForm, FormActions } from "../components/InternalForm.tsx";
+import { fieldErrorsFromDetails } from "../api/errors.ts";
 
 export function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +43,7 @@ export function ServiceOrderDetailPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState<ServiceOrderPriority>("MEDIUM");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const latestLoadRef = useRef(0);
   const load = useCallback(async (isActive: () => boolean = () => true, signal?: AbortSignal) => {
@@ -83,7 +90,7 @@ export function ServiceOrderDetailPage() {
     return () => controller.abort();
   }, [can]);
 
-  if (loadError) return <ErrorState message={loadError} onRetry={load} />;
+  if (loadError) return <ErrorState message={loadError} onRetry={() => void load()} />;
   if (!order) return <PageLoading label="Carregando ordem de serviço..." />;
 
   const nextStatuses = user
@@ -95,7 +102,7 @@ export function ServiceOrderDetailPage() {
     nextStatuses.length > 0;
 
   async function handleStatusChange(status: ServiceOrderStatus) {
-    if (!order) return;
+    if (!order || savingField) return;
     setActionError(null);
     setSavingField("status");
 
@@ -112,7 +119,7 @@ export function ServiceOrderDetailPage() {
   }
 
   async function handleAssign(technicianId: string) {
-    if (!order) return;
+    if (!order || savingField) return;
     setActionError(null);
     setSavingField("technician");
 
@@ -130,8 +137,9 @@ export function ServiceOrderDetailPage() {
 
   async function handleSaveEdit(event: FormEvent) {
     event.preventDefault();
-    if (!order) return;
+    if (!order || savingField) return;
     setActionError(null);
+    setEditErrors({});
     setSavingField("edit");
 
     try {
@@ -145,6 +153,9 @@ export function ServiceOrderDetailPage() {
       setEditing(false);
       setSuccessMessage("Ordem atualizada.");
     } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        setEditErrors(fieldErrorsFromDetails(err.details));
+      }
       setActionError(err instanceof ApiError ? err.message : "Não foi possível salvar as alterações.");
     } finally {
       setSavingField(null);
@@ -152,7 +163,7 @@ export function ServiceOrderDetailPage() {
   }
 
   async function handleDelete() {
-    if (!order) return;
+    if (!order || savingField) return;
     setSavingField("delete");
 
     try {
@@ -167,215 +178,203 @@ export function ServiceOrderDetailPage() {
   }
 
   return (
-    <div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/service-orders")}>
+    <div className="internal-page">
+      <Button variant="neutral" size="sm" className="internal-page__back" onClick={() => navigate("/service-orders")}>
         <IconArrowLeft width={16} height={16} />
         Voltar para ordens
-      </button>
-
-      <div className="page-header" style={{ marginTop: 8 }}>
-        <div>
-          <h1>{order.title}</h1>
-          <p className="page-subtitle">
-            Criada por {order.createdBy.name} em {new Date(order.createdAt).toLocaleDateString("pt-BR")}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <StatusBadge status={order.status} />
-          <PriorityBadge priority={order.priority} />
-        </div>
-      </div>
-
-      {actionError && <ErrorBanner message={actionError} />}
-      {successMessage && <SuccessBanner message={successMessage} />}
-
-      <div className="detail-grid">
-        <div>
-          <div className="card detail-section">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2>Detalhes</h2>
-              {can("OS_UPDATE") && !editing && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-                  Editar
-                </button>
-              )}
-            </div>
-
-            {!editing ? (
-              <p style={{ whiteSpace: "pre-wrap" }}>{order.description}</p>
-            ) : (
-              <form onSubmit={handleSaveEdit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div className="field">
-                  <label htmlFor="edit-title">Título</label>
-                  <input
-                    id="edit-title"
-                    className="input"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="edit-description">Descrição</label>
-                  <textarea
-                    id="edit-description"
-                    className="input"
-                    rows={4}
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="edit-priority">Prioridade</label>
-                  <select
-                    id="edit-priority"
-                    className="input"
-                    value={editPriority}
-                    onChange={(e) => setEditPriority(e.target.value as ServiceOrderPriority)}
-                  >
-                    {SERVICE_ORDER_PRIORITIES.map((p) => (
-                      <option key={p} value={p}>
-                        {PRIORITY_LABELS[p]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={savingField === "edit"}>
-                    {savingField === "edit" ? "Salvando..." : "Salvar"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setEditing(false);
-                      setEditTitle(order.title);
-                      setEditDescription(order.description);
-                      setEditPriority(order.priority);
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            )}
+      </Button>
+      <Surface padded={false} className="internal-order-workspace">
+        <div className="internal-order-heading">
+          <PageHeader
+            title={order.title}
+            description={`Ordem #${order.id.slice(-6).toUpperCase()} · Criada por ${order.createdBy.name} em ${new Date(order.createdAt).toLocaleDateString("pt-BR")}`}
+            actions={can("OS_UPDATE") && !editing ? (
+              <Button variant="primary" size="sm" disabled={Boolean(savingField)} onClick={() => { setEditErrors({}); setEditing(true); }}>Editar</Button>
+            ) : undefined}
+          />
+          <div className="internal-page__badges">
+            <StatusBadge status={order.status} />
+            <PriorityBadge priority={order.priority} />
           </div>
-
-          {can("OS_DELETE") && (
-            <div className="card detail-section">
-              <h2>Zona de risco</h2>
-              <p className="page-subtitle" style={{ marginBottom: 12 }}>
-                Excluir uma ordem de serviço é permanente e não pode ser desfeito.
-              </p>
-              <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteOpen(true)}>
-                Excluir ordem de serviço
-              </button>
-            </div>
-          )}
         </div>
 
-        <div>
-          <div className="card detail-section">
-            <h2>Cliente</h2>
-            <dl className="kv-list">
-              <div className="kv-row">
-                <dt>Nome</dt>
-                <dd>
-                  <Link to={`/customers/${order.customer.id}`}>{order.customer.name}</Link>
-                </dd>
-              </div>
-              {order.customer.phone && (
-                <div className="kv-row">
-                  <dt>Telefone</dt>
-                  <dd>{order.customer.phone}</dd>
-                </div>
+        {(actionError || successMessage) && <div className="internal-order-feedback">
+          {actionError && <ErrorBanner message={actionError} />}
+          {successMessage && <SuccessBanner message={successMessage} />}
+        </div>}
+
+        <div className="internal-detail-grid internal-order-grid">
+          <section className="internal-order-description">
+            <PageSection title={editing ? "Editar ordem de serviço" : "Descrição do problema"}>
+
+              {!editing ? (
+                <p className="internal-description">{order.description}</p>
+              ) : (
+                <InternalForm onSubmit={handleSaveEdit} noValidate busy={savingField === "edit"} errors={editErrors}>
+                  <Field label="Título" required error={editErrors.title}>
+                    {(props) => (
+                      <input
+                        {...props}
+                        className="input"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Descrição" required error={editErrors.description}>
+                    {(props) => (
+                      <textarea
+                        {...props}
+                        className="input"
+                        rows={4}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Prioridade" required error={editErrors.priority}>
+                    {(props) => (
+                      <select
+                        {...props}
+                        className="input"
+                        value={editPriority}
+                        onChange={(e) => setEditPriority(e.target.value as ServiceOrderPriority)}
+                      >
+                        {SERVICE_ORDER_PRIORITIES.map((p) => (
+                          <option key={p} value={p}>
+                            {PRIORITY_LABELS[p]}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </Field>
+                  <FormActions busy={savingField === "edit"} label="Salvar" onCancel={() => {
+                    setEditing(false);
+                    setEditErrors({});
+                    setActionError(null);
+                    setEditTitle(order.title);
+                    setEditDescription(order.description);
+                    setEditPriority(order.priority);
+                  }} />
+                </InternalForm>
               )}
-              {order.customer.email && (
-                <div className="kv-row">
-                  <dt>E-mail</dt>
-                  <dd>{order.customer.email}</dd>
-                </div>
-              )}
-            </dl>
-          </div>
-
-          {canUpdateStatus && (
-            <div className="card detail-section">
-              <h2>Status</h2>
-              <div className="field">
-                <label htmlFor="status-select">Alterar status</label>
-                <select
-                  id="status-select"
-                  className="input"
-                  value={order.status}
-                  disabled={savingField === "status"}
-                  onChange={(e) => handleStatusChange(e.target.value as ServiceOrderStatus)}
-                >
-                  {[order.status, ...nextStatuses].map((s) => (
-                    <option key={s} value={s}>
-                      {s === order.status
-                        ? `${STATUS_LABELS[s]} (atual)`
-                        : STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            </PageSection>
+          </section>
+          <aside className="internal-order-context" aria-label="Informações e acompanhamento da ordem">
+            <div className="internal-order-context__section">
+              <PageSection title="Cliente">
+                <dl className="internal-facts internal-facts--single">
+                  <div>
+                    <dt>Nome</dt>
+                    <dd>
+                      <Link to={`/customers/${order.customer.id}`}>{order.customer.name}</Link>
+                    </dd>
+                  </div>
+                  {order.customer.phone && (
+                    <div>
+                      <dt>Telefone</dt>
+                      <dd>{order.customer.phone}</dd>
+                    </div>
+                  )}
+                  {order.customer.email && (
+                    <div>
+                      <dt>E-mail</dt>
+                      <dd>{order.customer.email}</dd>
+                    </div>
+                  )}
+                </dl>
+              </PageSection>
             </div>
-          )}
 
-          {can("OS_ASSIGN") && (
-            <div className="card detail-section">
-              <h2>Técnico responsável</h2>
-              <div className="field">
-                <label htmlFor="technician-select">Atribuir técnico</label>
-                <select
-                  id="technician-select"
-                  className="input"
-                  value={order.technicianId ?? ""}
-                  disabled={savingField === "technician"}
-                  onChange={(e) => handleAssign(e.target.value)}
-                >
-                  <option value="">Não atribuído</option>
-                  {technicians.map((tech) => (
-                    <option key={tech.id} value={tech.id}>
-                      {tech.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+            <div className="internal-order-context__section">
+              <PageSection title="Acompanhamento">
+                {canUpdateStatus && (
+                  <div>
+                    <div className="field">
+                      <label htmlFor="status-select">Alterar status</label>
+                      <select
+                        id="status-select"
+                        className="input"
+                        value={order.status}
+                        disabled={Boolean(savingField)}
+                        aria-busy={savingField === "status" || undefined}
+                        onChange={(e) => handleStatusChange(e.target.value as ServiceOrderStatus)}
+                      >
+                        {[order.status, ...nextStatuses].map((s) => (
+                          <option key={s} value={s}>
+                            {s === order.status
+                              ? `${STATUS_LABELS[s]} (atual)`
+                              : STATUS_LABELS[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {!canUpdateStatus && (
+                  <dl className="internal-facts internal-facts--single">
+                    <div><dt>Status</dt><dd>{STATUS_LABELS[order.status]} (atual)</dd></div>
+                  </dl>
+                )}
 
-          {!can("OS_ASSIGN") && (
-            <div className="card detail-section">
-              <h2>Técnico responsável</h2>
-              <p>{order.technician?.name ?? "Não atribuído"}</p>
+                {can("OS_ASSIGN") && (
+                  <div className="internal-page__actions">
+                    <div className="field">
+                      <label htmlFor="technician-select">Atribuir técnico</label>
+                      <select
+                        id="technician-select"
+                        className="input"
+                        value={order.technicianId ?? ""}
+                        disabled={Boolean(savingField)}
+                        aria-busy={savingField === "technician" || undefined}
+                        onChange={(e) => handleAssign(e.target.value)}
+                      >
+                        <option value="">Não atribuído</option>
+                        {technicians.map((tech) => (
+                          <option key={tech.id} value={tech.id}>
+                            {tech.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {!can("OS_ASSIGN") && (
+                  <dl className="internal-facts internal-facts--single internal-page__actions">
+                    <div><dt>Técnico responsável</dt><dd>{order.technician?.name ?? "Não atribuído"}</dd></div>
+                  </dl>
+                )}
+                <dl className="internal-facts internal-facts--single internal-order-context__facts">
+                  <div><dt>Prioridade</dt><dd>{PRIORITY_LABELS[order.priority]} (atual)</dd></div>
+                  <div><dt>Última atualização</dt><dd>{new Date(order.updatedAt).toLocaleString("pt-BR")}</dd></div>
+                </dl>
+              </PageSection>
             </div>
-          )}
+          </aside>
+          <section className="internal-order-history">
+            <PageSection title="Histórico operacional" description="Eventos registrados automaticamente durante o atendimento.">
+              {timelineError ? (
+                <ErrorState message="Não foi possível atualizar o histórico." onRetry={() => void refreshTimeline()} />
+              ) : timeline === null ? (
+                <PageLoading label="Carregando histórico..." />
+              ) : <InternalServiceOrderTimeline events={timeline} />}
+            </PageSection>
+          </section>
+          {can("OS_NOTE_READ") && <ServiceOrderNotes serviceOrderId={order.id} canCreate={can("OS_NOTE_CREATE")} />}
         </div>
-      </div>
+      </Surface>
 
-      {can("OS_NOTE_READ") && (
-        <ServiceOrderNotes
-          serviceOrderId={order.id}
-          canCreate={can("OS_NOTE_CREATE")}
-        />
+      {can("OS_DELETE") && (
+        <Surface className="internal-panel internal-danger">
+          <PageSection title="Zona de risco">
+            <p>Excluir uma ordem de serviço é permanente e não pode ser desfeito.</p>
+            <div className="internal-page__actions">
+              <Button variant="danger" size="sm" disabled={Boolean(savingField)} onClick={() => setDeleteOpen(true)}>Excluir ordem de serviço</Button>
+            </div>
+          </PageSection>
+        </Surface>
       )}
-
-      <section className="card detail-section">
-        <h2>Histórico operacional</h2>
-        {timelineError ? (
-          <div>
-            <p className="timeline-empty">Não foi possível atualizar o histórico.</p>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void refreshTimeline()}>
-              Tentar novamente
-            </button>
-          </div>
-        ) : timeline === null ? (
-          <p className="timeline-empty">Carregando histórico...</p>
-        ) : (
-          <InternalServiceOrderTimeline events={timeline} />
-        )}
-      </section>
 
       <ConfirmDialog
         open={deleteOpen}

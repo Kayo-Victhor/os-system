@@ -8,6 +8,9 @@ import { ApiError } from "../api/client.ts";
 import { fieldErrorsFromDetails } from "../api/errors.ts";
 import { CustomerForm } from "./CustomerForm.tsx";
 import { IconArrowLeft } from "../components/icons.tsx";
+import { Button } from "../components/Button.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { Surface } from "../components/Surface.tsx";
 
 export function CustomerNewPage() {
   const navigate = useNavigate();
@@ -16,6 +19,7 @@ export function CustomerNewPage() {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(data: CustomerInput) {
+    if (submitting) return;
     setFormError(null);
     setFieldErrors({});
     setSubmitting(true);
@@ -38,14 +42,14 @@ export function CustomerNewPage() {
   }
 
   return (
-    <div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>
+    <div className="internal-page internal-create">
+      <Button variant="neutral" size="sm" className="internal-page__back" onClick={() => navigate(-1)}>
         <IconArrowLeft width={16} height={16} />
         Voltar
-      </button>
-      <h1 style={{ marginTop: 8, marginBottom: 20 }}>Novo cliente</h1>
+      </Button>
+      <PageHeader title="Novo cliente" description="Cadastre os dados do cliente para organizar seus atendimentos." />
 
-      <div className="card detail-section" style={{ maxWidth: 640 }}>
+      <Surface className="internal-panel">
         {formError && <ErrorBanner message={formError} />}
         <CustomerForm
           fieldErrors={fieldErrors}
@@ -54,7 +58,7 @@ export function CustomerNewPage() {
           onSubmit={handleSubmit}
           onCancel={() => navigate(-1)}
         />
-      </div>
+      </Surface>
     </div>
   );
 }

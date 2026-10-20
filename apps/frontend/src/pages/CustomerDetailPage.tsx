@@ -12,6 +12,10 @@ import { fieldErrorsFromDetails } from "../api/errors.ts";
 import { CustomerForm } from "./CustomerForm.tsx";
 import { IconArrowLeft } from "../components/icons.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { Button } from "../components/Button.tsx";
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { DataTable } from "../components/DataTable.tsx";
 
 type LifecycleAction =
   | "SUSPEND"
@@ -105,11 +109,11 @@ export function CustomerDetailPage() {
 
   useInitialAsyncLoad(load);
 
-  if (loadError) return <ErrorState message={loadError} onRetry={load} />;
+  if (loadError) return <ErrorState message={loadError} onRetry={() => void load()} />;
   if (!customer) return <PageLoading label="Carregando cliente..." />;
 
   async function handleSave(data: customersApi.CustomerInput) {
-    if (!customer) return;
+    if (!customer || submitting) return;
     setFormError(null);
     setFieldErrors({});
     setSubmitting(true);
@@ -134,7 +138,7 @@ export function CustomerDetailPage() {
   }
 
   async function handleDelete() {
-    if (!customer) return;
+    if (!customer || deleting) return;
     setDeleting(true);
     setDeleteError(null);
 
@@ -154,7 +158,7 @@ export function CustomerDetailPage() {
   }
 
   async function handleLifecycleAction() {
-    if (!customer || !lifecycleAction) return;
+    if (!customer || !lifecycleAction || lifecycleBusy) return;
     setLifecycleBusy(true);
     setDeleteError(null);
 
@@ -199,172 +203,155 @@ export function CustomerDetailPage() {
   }
 
   return (
-    <div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/customers")}>
+    <div className="internal-page">
+      <Button variant="neutral" size="sm" className="internal-page__back" onClick={() => navigate("/customers")}>
         <IconArrowLeft width={16} height={16} />
         Voltar para clientes
-      </button>
+      </Button>
 
-      <div className="page-header" style={{ marginTop: 8 }}>
-        <h1>{customer.name}</h1>
-        {can("CUSTOMER_UPDATE") && !editing && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-            Editar
-          </button>
-        )}
-      </div>
+      <PageHeader title={customer.name} description={`Cliente desde ${new Date(customer.createdAt).toLocaleDateString("pt-BR")}`} actions={can("CUSTOMER_UPDATE") && !editing ? (
+        <Button variant="secondary" size="sm" onClick={() => { setFormError(null); setFieldErrors({}); setEditing(true); }}>
+          Editar
+        </Button>
+      ) : undefined} />
 
       {deleteError && <ErrorBanner message={deleteError} />}
       {successMessage && !editing && <SuccessBanner message={successMessage} />}
 
-      <div className="detail-grid">
-        <div>
-          <div className="card detail-section">
-            <h2>{editing ? "Editar informações" : "Informações"}</h2>
+      <Surface className="internal-panel internal-customer-sheet">
+        <PageSection title={editing ? "Editar informações" : "Informações"}>
 
-            {editing ? (
-              <>
-                {formError && <ErrorBanner message={formError} />}
-                <CustomerForm
-                  initial={{
-                    name: customer.name,
-                    email: customer.email ?? undefined,
-                    phone: customer.phone ?? undefined,
-                    document: customer.document ?? undefined,
-                    address: customer.address ?? undefined,
-                  }}
-                  fieldErrors={fieldErrors}
-                  submitting={submitting}
-                  submitLabel="Salvar alterações"
-                  onSubmit={handleSave}
-                  onCancel={() => setEditing(false)}
-                />
-              </>
-            ) : (
-              <dl className="kv-list">
-                <div className="kv-row">
-                  <dt>E-mail</dt>
-                  <dd>{customer.email ?? "—"}</dd>
-                </div>
-                <div className="kv-row">
-                  <dt>Telefone</dt>
-                  <dd>{customer.phone ?? "—"}</dd>
-                </div>
-                <div className="kv-row">
-                  <dt>Documento</dt>
-                  <dd>{customer.document ?? "—"}</dd>
-                </div>
-                <div className="kv-row">
-                  <dt>Endereço</dt>
-                  <dd>{customer.address ?? "—"}</dd>
-                </div>
-                <div className="kv-row">
-                  <dt>Cliente desde</dt>
-                  <dd>{new Date(customer.createdAt).toLocaleDateString("pt-BR")}</dd>
-                </div>
-              </dl>
-            )}
-          </div>
-
-          <div className="card detail-section">
-            <h2>Conta de acesso</h2>
-            <dl className="kv-list">
-              <div className="kv-row">
-                <dt>Situação</dt>
-                <dd>
-                  {customer.customerAccount?.status === "ACTIVE"
-                    ? "Ativa"
-                    : customer.customerAccount?.status === "SUSPENDED"
-                      ? "Suspensa"
-                      : "Sem conta de acesso"}
-                </dd>
+          {editing ? (
+            <>
+              {formError && <ErrorBanner message={formError} />}
+              <CustomerForm
+                initial={{
+                  name: customer.name,
+                  email: customer.email ?? undefined,
+                  phone: customer.phone ?? undefined,
+                  document: customer.document ?? undefined,
+                  address: customer.address ?? undefined,
+                }}
+                fieldErrors={fieldErrors}
+                submitting={submitting}
+                submitLabel="Salvar alterações"
+                onSubmit={handleSave}
+                onCancel={() => setEditing(false)}
+              />
+            </>
+          ) : (
+            <dl className="internal-facts internal-customer-facts">
+              <div>
+                <dt>E-mail</dt>
+                <dd>{customer.email ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Telefone</dt>
+                <dd>{customer.phone ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Documento</dt>
+                <dd>{customer.document ?? "—"}</dd>
+              </div>
+              <div className="internal-facts__wide">
+                <dt>Endereço</dt>
+                <dd>{customer.address ?? "—"}</dd>
               </div>
             </dl>
-
-            {can("CUSTOMER_ACCOUNT_MANAGE") && customer.customerAccount && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    setLifecycleAction(
-                      customer.customerAccount?.status === "ACTIVE"
-                        ? "SUSPEND"
-                        : "REACTIVATE",
-                    )
-                  }
-                >
-                  {customer.customerAccount.status === "ACTIVE"
-                    ? "Suspender conta"
-                    : "Reativar conta"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => setLifecycleAction("DELETE_ACCOUNT")}
-                >
-                  Excluir conta de acesso
-                </button>
-              </div>
-            )}
-          </div>
-
-          {(can("CUSTOMER_DELETE") || can("CUSTOMER_ANONYMIZE")) && !editing && (
-            <div className="card detail-section">
-              <h2>Zona de risco</h2>
-              <p className="page-subtitle" style={{ marginBottom: 12 }}>
-                A exclusão física só é permitida quando não há histórico de ordens.
-                Para preservar o histórico, use a anonimização.
-              </p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {can("CUSTOMER_ANONYMIZE") && (
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-sm"
-                    onClick={() => setLifecycleAction("ANONYMIZE")}
-                  >
-                    Anonimizar cliente
-                  </button>
-                )}
-                {can("CUSTOMER_DELETE") && (
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteOpen(true)}>
-                    Excluir cliente sem histórico
-                  </button>
-                )}
-              </div>
-            </div>
           )}
-        </div>
+        </PageSection>
 
-        {can("OS_READ") && (
-          <div className="card detail-section">
-            <h2>Histórico de ordens de serviço</h2>
+        <div className="internal-customer-access">
+          <PageSection title="Conta de acesso">
+            <div className="internal-customer-access__row">
+              <p className="internal-customer-access__status">
+                <span className={`internal-account-dot ${customer.customerAccount?.status === "ACTIVE" ? "internal-account-dot--active" : ""}`} aria-hidden="true" />
+                {customer.customerAccount?.status === "ACTIVE"
+                  ? "Ativa"
+                  : customer.customerAccount?.status === "SUSPENDED"
+                    ? "Suspensa"
+                    : "Sem conta de acesso"}
+              </p>
+
+              {can("CUSTOMER_ACCOUNT_MANAGE") && customer.customerAccount && (
+                <div className="internal-customer-access__actions">
+                  <Button
+                    variant="secondary" size="sm" disabled={lifecycleBusy}
+                    onClick={() =>
+                      setLifecycleAction(
+                        customer.customerAccount?.status === "ACTIVE"
+                          ? "SUSPEND"
+                          : "REACTIVATE",
+                      )
+                    }
+                  >
+                    {customer.customerAccount.status === "ACTIVE"
+                      ? "Suspender conta"
+                      : "Reativar conta"}
+                  </Button>
+                  <Button
+                    variant="danger" size="sm" disabled={lifecycleBusy}
+                    onClick={() => setLifecycleAction("DELETE_ACCOUNT")}
+                  >
+                    Excluir conta de acesso
+                  </Button>
+                </div>
+              )}
+            </div>
+          </PageSection>
+        </div>
+      </Surface>
+
+      {can("OS_READ") && (
+        <Surface className="internal-panel">
+          <PageSection title="Histórico de ordens de serviço">
             {orderHistoryError ? (
               <ErrorBanner message={orderHistoryError} />
             ) : orders.length === 0 ? (
               <EmptyState title="Nenhuma ordem de serviço para este cliente." />
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {orders.map((order) => (
-                  <Link
-                    key={order.id}
-                    to={`/service-orders/${order.id}`}
-                    style={{ display: "block", color: "inherit" }}
-                  >
-                    <div className="card" style={{ padding: 12 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{order.title}</div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                        <StatusBadge status={order.status} />
-                        <PriorityBadge priority={order.priority} />
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              <DataTable label="Ordens de serviço do cliente" framed={false}>
+                <thead><tr><th>Ordem</th><th>Status</th><th>Prioridade</th></tr></thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr key={order.id}>
+                      <td className="ui-data-table__wrap"><Link className="row-link" to={`/service-orders/${order.id}`}>{order.title}</Link></td>
+                      <td><StatusBadge status={order.status} /></td>
+                      <td><PriorityBadge priority={order.priority} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
             )}
-          </div>
-        )}
-      </div>
+          </PageSection>
+        </Surface>
+      )}
+
+      {(can("CUSTOMER_DELETE") || can("CUSTOMER_ANONYMIZE")) && !editing && (
+        <Surface className="internal-panel internal-danger">
+          <PageSection title="Zona de risco">
+            <p>
+              A exclusão física só é permitida quando não há histórico de ordens.
+              Para preservar o histórico, use a anonimização.
+            </p>
+            <div className="internal-page__actions">
+              {can("CUSTOMER_ANONYMIZE") && (
+                <Button
+                  variant="danger" size="sm" disabled={lifecycleBusy || deleting}
+                  onClick={() => setLifecycleAction("ANONYMIZE")}
+                >
+                  Anonimizar cliente
+                </Button>
+              )}
+              {can("CUSTOMER_DELETE") && (
+                <Button variant="danger" size="sm" disabled={lifecycleBusy || deleting} onClick={() => setDeleteOpen(true)}>
+                  Excluir cliente sem histórico
+                </Button>
+              )}
+            </div>
+          </PageSection>
+        </Surface>
+      )}
 
       <ConfirmDialog
         open={deleteOpen}

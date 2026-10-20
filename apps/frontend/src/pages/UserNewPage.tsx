@@ -7,6 +7,10 @@ import { ErrorBanner } from "../components/States.tsx";
 import { ApiError } from "../api/client.ts";
 import { fieldErrorsFromDetails } from "../api/errors.ts";
 import { IconArrowLeft } from "../components/icons.tsx";
+import { Button } from "../components/Button.tsx";
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { FormActions, InternalForm } from "../components/InternalForm.tsx";
 
 export function UserNewPage() {
   const navigate = useNavigate();
@@ -22,6 +26,7 @@ export function UserNewPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     setFormError(null);
     setFieldErrors({});
     setSubmitting(true);
@@ -44,65 +49,66 @@ export function UserNewPage() {
   }
 
   return (
-    <div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>
+    <div className="internal-page internal-create">
+      <Button variant="neutral" size="sm" className="internal-page__back" onClick={() => navigate(-1)}>
         <IconArrowLeft width={16} height={16} />
         Voltar
-      </button>
-      <h1 style={{ marginTop: 8, marginBottom: 20 }}>Novo usuário</h1>
+      </Button>
+      <PageHeader title="Novo usuário" description="Cadastre uma conta para a equipe interna de atendimento." />
 
-      <div className="card detail-section" style={{ maxWidth: 480 }}>
+      <Surface className="internal-panel">
         {formError && <ErrorBanner message={formError} />}
 
-        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Field label="Nome" required error={fieldErrors.name}>
-            {(props) => <input {...props} className="input" value={name} onChange={(e) => setName(e.target.value)} />}
-          </Field>
+        <InternalForm onSubmit={handleSubmit} noValidate busy={submitting} errors={fieldErrors}>
+          <PageSection title="Identificação">
+            <div className="form-grid">
+              <Field label="Nome" required error={fieldErrors.name}>
+                {(props) => <input {...props} className="input" value={name} onChange={(e) => setName(e.target.value)} />}
+              </Field>
 
-          <Field label="E-mail" required error={fieldErrors.email}>
-            {(props) => (
-              <input {...props} type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
-            )}
-          </Field>
+              <Field label="E-mail" required error={fieldErrors.email}>
+                {(props) => (
+                  <input {...props} type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+                )}
+              </Field>
 
-          <Field
-            label="Senha temporária"
-            required
-            error={fieldErrors.password}
-            hint="O usuário poderá alterá-la depois do primeiro acesso."
-          >
-            {(props) => (
-              <input
-                {...props}
-                type="password"
-                className="input"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            )}
-          </Field>
+            </div>
+          </PageSection>
+          <PageSection title="Acesso ao sistema">
+            <div className="form-grid">
+              <Field
+                label="Senha temporária"
+                required
+                error={fieldErrors.password}
+                hint="O usuário poderá alterá-la depois do primeiro acesso."
+              >
+                {(props) => (
+                  <input
+                    {...props}
+                    type="password"
+                    className="input"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                )}
+              </Field>
 
-          <Field label="Papel" required>
-            {(props) => (
-              <select {...props} className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "ATTENDANT" | "TECHNICIAN")}>
-                <option value="ADMIN">Administrador</option>
-                <option value="ATTENDANT">Atendente</option>
-                <option value="TECHNICIAN">Técnico</option>
-              </select>
-            )}
-          </Field>
+              <Field label="Papel" required error={fieldErrors.role}>
+                {(props) => (
+                  <select {...props} className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "ATTENDANT" | "TECHNICIAN")}>
+                    <option value="ADMIN">Administrador</option>
+                    <option value="ATTENDANT">Atendente</option>
+                    <option value="TECHNICIAN">Técnico</option>
+                  </select>
+                )}
+              </Field>
 
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? "Criando..." : "Criar usuário"}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
+            </div>
+          </PageSection>
+          <FormActions busy={submitting} label="Criar usuário" onCancel={() => navigate(-1)} />
+        </InternalForm>
+      </Surface>
     </div>
   );
 }

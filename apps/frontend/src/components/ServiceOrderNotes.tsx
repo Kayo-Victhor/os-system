@@ -4,7 +4,10 @@ import { ApiError } from "../api/client.ts";
 import * as serviceOrdersApi from "../api/service-orders.ts";
 import type { PaginatedServiceOrderNotes } from "../api/service-orders.ts";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
-import { ErrorBanner, SuccessBanner } from "./States.tsx";
+import { SuccessBanner } from "./States.tsx";
+import { PageSection } from "./PageHeader.tsx";
+import { Button } from "./Button.tsx";
+import { Field } from "./Field.tsx";
 
 const NOTE_MAX_LENGTH = 2000;
 
@@ -98,108 +101,97 @@ export function ServiceOrderNotes({
   }
 
   return (
-    <section className="card detail-section service-order-notes" aria-labelledby="notes-title">
-      <div className="notes-header">
-        <div>
-          <h2 id="notes-title">Notas internas</h2>
-          <p className="page-subtitle">Visíveis somente para a equipe interna.</p>
-        </div>
-        {notes && notes.pagination.total > 0 && (
-          <span className="notes-count">{notes.pagination.total} nota(s)</span>
-        )}
-      </div>
+    <section className="internal-notes" aria-label="Notas internas">
+      <PageSection title="Notas internas" description="Visíveis somente para a equipe interna."
+        actions={notes && notes.pagination.total > 0 ? <span className="notes-count">{notes.pagination.total} nota(s)</span> : undefined}>
 
-      {canCreate && (
-        <form className="notes-form" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="internal-note">Nova nota interna</label>
-            <textarea
-              id="internal-note"
-              className="input"
-              rows={4}
-              maxLength={NOTE_MAX_LENGTH}
-              value={content}
-              aria-describedby="internal-note-limit"
-              placeholder="Registre uma observação útil para a equipe..."
-              onChange={(event) => setContent(event.target.value)}
-            />
-            <span id="internal-note-limit" className="field-hint">
-              {content.length}/{NOTE_MAX_LENGTH} caracteres
-            </span>
-          </div>
-          {submitError && <ErrorBanner message={submitError} />}
-          {successMessage && <SuccessBanner message={successMessage} />}
-          <button
-            type="submit"
-            className="btn btn-primary btn-sm"
-            disabled={submitting || content.trim().length === 0}
-          >
-            {submitting ? "Registrando..." : "Registrar nota"}
-          </button>
-        </form>
-      )}
-
-      <div className="notes-content" aria-live="polite">
-        {loadError ? (
-          <div>
-            <p className="timeline-empty">Não foi possível carregar as notas internas.</p>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => void loadNotes()}
+        {canCreate && (
+          <form className="notes-form" onSubmit={handleSubmit} aria-busy={submitting}>
+            <Field label="Nova nota interna" hint={`${content.length}/${NOTE_MAX_LENGTH} caracteres`} error={submitError ?? undefined}>
+              {(props) => (
+                <textarea
+                  {...props}
+                  className="input"
+                  rows={4}
+                  maxLength={NOTE_MAX_LENGTH}
+                  value={content}
+                  disabled={submitting}
+                  placeholder="Registre uma observação útil para a equipe..."
+                  onChange={(event) => setContent(event.target.value)}
+                />
+              )}
+            </Field>
+            {successMessage && <SuccessBanner message={successMessage} />}
+            <Button
+              type="submit"
+              size="sm"
+              loading={submitting}
+              disabled={submitting || content.trim().length === 0}
             >
-              Tentar novamente
-            </button>
-          </div>
-        ) : notes === null ? (
-          <p className="timeline-empty">Carregando notas internas...</p>
-        ) : notes.items.length === 0 ? (
-          <p className="timeline-empty">
-            Nenhuma nota interna registrada. As observações da equipe aparecerão aqui.
-          </p>
-        ) : (
-          <>
-            <ol className="notes-list" aria-label="Notas internas da ordem de serviço">
-              {notes.items.map((note) => (
-                <li key={note.id} className="note-item">
-                  <p>{note.content}</p>
-                  <div className="note-meta">
-                    <strong>{note.author?.name ?? "Autor removido"}</strong>
-                    <time dateTime={note.createdAt}>
-                      {new Date(note.createdAt).toLocaleString("pt-BR")}
-                    </time>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            {notes.pagination.totalPages > 1 && (
-              <nav className="pagination" aria-label="Paginação das notas internas">
-                <span>
-                  Página {notes.pagination.page} de {notes.pagination.totalPages}
-                </span>
-                <div className="pagination-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={!notes.pagination.hasPreviousPage}
-                    onClick={() => setPage((current) => current - 1)}
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={!notes.pagination.hasNextPage}
-                    onClick={() => setPage((current) => current + 1)}
-                  >
-                    Próxima
-                  </button>
-                </div>
-              </nav>
-            )}
-          </>
+              {submitting ? "Registrando..." : "Registrar nota"}
+            </Button>
+          </form>
         )}
-      </div>
+
+        <div className="notes-content" aria-live="polite">
+          {loadError ? (
+            <div>
+              <p className="timeline-empty">Não foi possível carregar as notas internas.</p>
+              <Button
+                variant="secondary" size="sm"
+                onClick={() => void loadNotes()}
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          ) : notes === null ? (
+            <p className="timeline-empty">Carregando notas internas...</p>
+          ) : notes.items.length === 0 ? (
+            <p className="timeline-empty">
+              Nenhuma nota interna registrada. As observações da equipe aparecerão aqui.
+            </p>
+          ) : (
+            <>
+              <ol className="notes-list" aria-label="Notas internas da ordem de serviço">
+                {notes.items.map((note) => (
+                  <li key={note.id} className="note-item">
+                    <p>{note.content}</p>
+                    <div className="note-meta">
+                      <strong>{note.author?.name ?? "Autor removido"}</strong>
+                      <time dateTime={note.createdAt}>
+                        {new Date(note.createdAt).toLocaleString("pt-BR")}
+                      </time>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              {notes.pagination.totalPages > 1 && (
+                <nav className="pagination" aria-label="Paginação das notas internas">
+                  <span>
+                    Página {notes.pagination.page} de {notes.pagination.totalPages}
+                  </span>
+                  <div className="pagination-actions">
+                    <Button
+                      variant="secondary" size="sm"
+                      disabled={!notes.pagination.hasPreviousPage}
+                      onClick={() => setPage((current) => current - 1)}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="secondary" size="sm"
+                      disabled={!notes.pagination.hasNextPage}
+                      onClick={() => setPage((current) => current + 1)}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </nav>
+              )}
+            </>
+          )}
+        </div>
+      </PageSection>
     </section>
   );
 }

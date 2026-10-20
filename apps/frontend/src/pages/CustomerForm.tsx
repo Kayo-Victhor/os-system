@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 
 import type { CustomerInput } from "../api/customers.ts";
 import { Field } from "../components/Field.tsx";
+import { PageSection } from "../components/PageHeader.tsx";
+import { FormActions, InternalForm } from "../components/InternalForm.tsx";
 
 interface CustomerFormProps {
   initial?: Partial<CustomerInput>;
@@ -28,6 +30,7 @@ export function CustomerForm({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     onSubmit({
       name,
       email: email || undefined,
@@ -38,47 +41,42 @@ export function CustomerForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Field label="Nome" required error={fieldErrors.name}>
-        {(props) => <input {...props} className="input" value={name} onChange={(e) => setName(e.target.value)} />}
-      </Field>
+    <InternalForm onSubmit={handleSubmit} noValidate busy={submitting} errors={fieldErrors}>
+      <PageSection title="Dados cadastrais">
+        <div className="form-grid">
+          <Field label="Nome" required error={fieldErrors.name}>
+            {(props) => <input {...props} className="input" value={name} onChange={(e) => setName(e.target.value)} />}
+          </Field>
 
-      <div className="form-grid">
-        <Field label="E-mail" error={fieldErrors.email} hint="Opcional">
-          {(props) => (
-            <input {...props} type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
-          )}
-        </Field>
+          <Field label="Documento (CPF/CNPJ)" error={fieldErrors.document} hint="Opcional">
+            {(props) => <input {...props} className="input" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} />}
+          </Field>
+        </div>
+      </PageSection>
+      <PageSection title="Contato e endereço">
+        <div className="internal-form__group">
+          <div className="form-grid">
+            <Field label="E-mail" error={fieldErrors.email} hint="Opcional">
+              {(props) => (
+                <input {...props} type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+              )}
+            </Field>
 
-        <Field label="Telefone" error={fieldErrors.phone} hint="Opcional">
-          {(props) => (
-            <input {...props} className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          )}
-        </Field>
+            <Field label="Telefone" error={fieldErrors.phone} hint="Opcional">
+              {(props) => (
+                <input {...props} type="tel" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              )}
+            </Field>
 
-        <Field label="Documento (CPF/CNPJ)" error={fieldErrors.document} hint="Opcional">
-          {(props) => (
-            <input {...props} className="input" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} />
-          )}
-        </Field>
-
-        <Field label="Endereço" error={fieldErrors.address} hint="Opcional">
-          {(props) => (
-            <input {...props} className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
-          )}
-        </Field>
-      </div>
-
-      <div className="form-actions">
-        <button type="submit" className="btn btn-primary" disabled={submitting}>
-          {submitting ? "Salvando..." : submitLabel}
-        </button>
-        {onCancel && (
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
+          </div>
+          <Field label="Endereço" error={fieldErrors.address} hint="Opcional">
+            {(props) => (
+              <input {...props} className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+            )}
+          </Field>
+        </div>
+      </PageSection>
+      <FormActions busy={submitting} label={submitLabel} onCancel={onCancel} />
+    </InternalForm>
   );
 }
