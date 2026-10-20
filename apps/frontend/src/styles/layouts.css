@@ -127,6 +127,10 @@
   background: var(--nav-surface-active);
 }
 
+.sidebar :focus-visible {
+  outline-color: var(--nav-text-strong);
+}
+
 .sidebar-icon {
   width: 17px;
   height: 17px;

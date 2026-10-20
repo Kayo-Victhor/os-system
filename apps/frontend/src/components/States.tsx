@@ -43,7 +43,7 @@ export function ErrorState({
       <h3>Não foi possível carregar os dados</h3>
       <p>{message}</p>
       {onRetry && (
-        <Button variant="secondary" onClick={onRetry}>Tentar novamente</Button>
+        <Button variant="secondary" onClick={() => onRetry()}>Tentar novamente</Button>
       )}
     </div>
   );
@@ -85,11 +85,17 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) {
-      confirmRef.current?.focus();
-    }
+    if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    confirmRef.current?.focus();
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -97,7 +103,26 @@ export function ConfirmDialog({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.preventDefault();
         onCancel();
+        return;
+      }
+      if (event.key === "Tab") {
+        const controls = panelRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+        );
+        if (!controls?.length) {
+          event.preventDefault();
+          panelRef.current?.focus();
+          return;
+        }
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        const outside = !panelRef.current?.contains(document.activeElement);
+        if (outside || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
       }
     }
 
@@ -110,14 +135,17 @@ export function ConfirmDialog({
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div
+        ref={panelRef}
         className="modal-panel"
         role="alertdialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="confirm-dialog-title">{title}</h2>
-        <p>{description}</p>
+        <p id="confirm-dialog-description">{description}</p>
         <div className="modal-actions">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
             Cancelar

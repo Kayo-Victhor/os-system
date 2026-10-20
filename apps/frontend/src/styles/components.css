@@ -28,7 +28,8 @@
 .ui-surface--padded { padding: var(--space-5); }
 
 .ui-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); flex-wrap: wrap; }
-.ui-page-header__title { font-size: var(--font-size-title); letter-spacing: -0.025em; }
+.ui-page-header > div:first-child { min-width: 0; }
+.ui-page-header__title { font-size: var(--font-size-title); letter-spacing: -0.025em; overflow-wrap: anywhere; }
 .ui-page-header__description { margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--font-size-label); }
 .ui-page-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
@@ -141,6 +142,7 @@
 }
 
 .ui-data-table td.ui-data-table__wrap {
+  min-width: 220px;
   white-space: normal;
 }
 
