@@ -11,8 +11,16 @@ import {
   type ServiceOrderPriority,
   type ServiceOrderStatus,
 } from "../api/types.ts";
-import { EmptyState, ErrorBanner, ErrorState, PageLoading } from "../components/States.tsx";
+import { EmptyState, ErrorState, PageLoading } from "../components/States.tsx";
 import { useInitialAsyncLoad } from "../hooks/useInitialAsyncLoad.ts";
+import { PageHeader, PageSection } from "../components/PageHeader.tsx";
+import { MetricCard } from "../components/MetricCard.tsx";
+import { FilterBar } from "../components/FilterBar.tsx";
+import { Surface } from "../components/Surface.tsx";
+import { Button } from "../components/Button.tsx";
+import { Field } from "../components/Field.tsx";
+import { DataTable } from "../components/DataTable.tsx";
+import "../styles/reports.css";
 
 const REPORT_TIME_ZONE = "America/Sao_Paulo";
 
@@ -48,10 +56,7 @@ function formatReportDate(date: string) {
 }
 
 function MetricBars({
-  id,
-  title,
-  description,
-  items,
+  id, title, description, items,
 }: {
   id: string;
   title: string;
@@ -60,22 +65,26 @@ function MetricBars({
 }) {
   const maximum = Math.max(...items.map((item) => item.count), 1);
   return (
-    <section className="card report-card" aria-labelledby={`${id}-title`}>
-      <div className="section-heading">
-        <div>
-          <h2 id={`${id}-title`}>{title}</h2>
-          <p>{description}</p>
-        </div>
-      </div>
-      <ul className="report-bars">
+    <section className="reports-distribution" aria-labelledby={id + "-title"}>
+      <h3 id={id + "-title"}>
+        {title}
+      </h3>
+      <p className="reports-description">
+        {description}
+      </p>
+      <ul className="reports-bars">
         {items.map((item) => (
           <li key={item.key}>
-            <div className="report-bar-label">
-              <span>{item.label}</span>
-              <strong>{item.count.toLocaleString("pt-BR")}</strong>
+            <div className="reports-bar-label">
+              <span>
+                {item.label}
+              </span>
+              <strong>
+                {item.count.toLocaleString("pt-BR")}
+              </strong>
             </div>
-            <div className="report-bar-track" aria-hidden="true">
-              <span style={{ width: `${(item.count / maximum) * 100}%` }} />
+            <div className="reports-bar-track" aria-hidden="true">
+              <span style={{ width: ((item.count / maximum) * 100) + "%" }} />
             </div>
           </li>
         ))}
@@ -85,68 +94,98 @@ function MetricBars({
 }
 
 function ActivityChart({ report }: { report: OperationalReport }) {
-  const maximum = Math.max(
-    ...report.activity.daily.flatMap((item) => [item.created, item.completed]),
-    1,
-  );
+  const maximum = Math.max(...report.activity.daily.flatMap((item) => [item.created, item.completed]), 1);
   const labelInterval = Math.max(1, Math.ceil(report.activity.daily.length / 8));
-
+  const hasActivity = report.activity.createdTotal > 0 || report.activity.completedTotal > 0;
   return (
-    <section className="card report-card report-activity" aria-labelledby="activity-title">
-      <div className="section-heading">
-        <div>
-          <h2 id="activity-title">Evolução no período</h2>
-          <p>Criações pela data da ordem; conclusões pela transição real para Concluída.</p>
-        </div>
-        <div className="report-legend" aria-label="Legenda do gráfico">
-          <span><i className="created" />Criadas</span>
-          <span><i className="completed" />Concluídas</span>
-        </div>
-      </div>
-      <div className="report-trend-scroll">
-        <ol
-          className="report-trend"
-          aria-label="Evolução diária de ordens criadas e concluídas"
-        >
-          {report.activity.daily.map((item, index) => (
-            <li
-              className="report-trend-day"
-              key={item.date}
-              aria-label={`${formatReportDate(item.date)}: ${item.created} criada(s), ${item.completed} concluída(s)`}
+    <Surface className="reports-panel" role="region" aria-label="Evolução no período">
+      <PageSection title="Evolução no período" description="Criações pela data da ordem; conclusões pela transição real para Concluída."
+        actions={<div className="reports-legend" aria-label="Legenda do gráfico">
+          <span>
+            <i className="reports-series-created" aria-hidden="true" />Criadas</span>
+          <span>
+            <i className="reports-series-completed" aria-hidden="true" />Concluídas</span>
+        </div>}>
+        {!hasActivity ? <EmptyState
+          title="Sem movimentação no período"
+          description="Não há criações ou conclusões registradas nas datas selecionadas."
+        /> : <>
+          <div className="reports-plot">
+            <div className="reports-chart-scale" aria-hidden="true">
+              <span>
+                {maximum.toLocaleString("pt-BR")}
+              </span>
+              <span>0</span>
+            </div>
+            <div
+              className="reports-chart-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Gráfico de evolução diária, com rolagem horizontal"
             >
-              <div className="report-trend-bars" aria-hidden="true">
-                <span
-                  className="created"
-                  style={{ height: item.created ? `${(item.created / maximum) * 100}%` : 0 }}
-                />
-                <span
-                  className="completed"
-                  style={{ height: item.completed ? `${(item.completed / maximum) * 100}%` : 0 }}
-                />
-              </div>
-              <small>{index % labelInterval === 0 ? item.date.slice(5) : ""}</small>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+              <ol
+                className="reports-trend"
+                style={{ minWidth: report.activity.daily.length * 8 }}
+                aria-label="Evolução diária de ordens criadas e concluídas"
+              >
+                {report.activity.daily.map((item, index) => (
+                  <li className="reports-trend-day" key={item.date}
+                    title={formatReportDate(item.date) + ": " + item.created + " criada(s), " + item.completed + " concluída(s)"}
+                    aria-label={formatReportDate(item.date) + ": " + item.created + " criada(s), " + item.completed + " concluída(s)"}>
+                    <div className="reports-trend-bars" aria-hidden="true">
+                      <span className="reports-series-created" style={{ height: ((item.created / maximum) * 100) + "%" }} />
+                      <span className="reports-series-completed" style={{ height: ((item.completed / maximum) * 100) + "%" }} />
+                    </div>
+                    <small aria-hidden="true">
+                      {index % labelInterval === 0 ? formatReportDate(item.date).slice(0, 5) : ""}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+          <details className="reports-daily-data">
+            <summary>Consultar valores por dia</summary>
+            <DataTable label="Valores diários de criações e conclusões" framed={false}>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Criadas</th>
+                  <th>Concluídas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.activity.daily.map((item) => <tr key={item.date}>
+                  <th scope="row">
+                    {formatReportDate(item.date)}
+                  </th>
+                  <td>
+                    {item.created.toLocaleString("pt-BR")}
+                  </td>
+                  <td>
+                    {item.completed.toLocaleString("pt-BR")}
+                  </td>
+                </tr>)}
+              </tbody>
+            </DataTable>
+          </details>
+        </>}
+      </PageSection>
+      <p className="reports-history-note" role="note">
+        <strong>Sobre as conclusões:</strong> a série utiliza somente eventos reais de mudança para Concluída. Ordens concluídas antes da adoção do histórico podem não possuir esse evento e não são estimadas pela data de atualização.</p>
+    </Surface>
   );
 }
 
 function WorkloadTable({ report }: { report: OperationalReport }) {
   return (
-    <section className="card report-card" aria-labelledby="workload-title">
-      <div className="section-heading">
-        <div>
-          <h2 id="workload-title">Carga atual por técnico</h2>
-          <p>Ordens ativas, criadas no período e atualmente atribuídas ou sem técnico.</p>
-        </div>
-      </div>
-      {report.workload.length === 0 ? (
-        <p className="report-empty-copy">Nenhuma ordem ativa corresponde aos filtros.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="data-table">
+    <Surface className="reports-panel" role="region" aria-label="Carga atual por técnico">
+      <PageSection
+        title="Carga atual por técnico"
+        description="Ordens ativas, criadas no período e atualmente atribuídas ou sem técnico."
+      >
+        {report.workload.length === 0 ? <p className="reports-description">Nenhuma ordem ativa corresponde aos filtros.</p> : (
+          <DataTable label="Ordens ativas por responsável" framed={false}>
             <thead>
               <tr>
                 <th>Técnico</th>
@@ -157,20 +196,30 @@ function WorkloadTable({ report }: { report: OperationalReport }) {
               </tr>
             </thead>
             <tbody>
-              {report.workload.map((item) => (
-                <tr key={item.technician?.id ?? "unassigned"}>
-                  <td>{item.technician?.name ?? "Sem técnico atribuído"}</td>
-                  <td>{item.byStatus.OPEN}</td>
-                  <td>{item.byStatus.IN_PROGRESS}</td>
-                  <td>{item.byStatus.WAITING}</td>
-                  <td><strong>{item.total}</strong></td>
-                </tr>
-              ))}
+              {report.workload.map((item) => <tr key={item.technician?.id ?? "unassigned"}>
+                <th scope="row">
+                  {item.technician?.name ?? "Sem técnico atribuído"}
+                </th>
+                <td>
+                  {item.byStatus.OPEN.toLocaleString("pt-BR")}
+                </td>
+                <td>
+                  {item.byStatus.IN_PROGRESS.toLocaleString("pt-BR")}
+                </td>
+                <td>
+                  {item.byStatus.WAITING.toLocaleString("pt-BR")}
+                </td>
+                <td>
+                  <strong>
+                    {item.total.toLocaleString("pt-BR")}
+                  </strong>
+                </td>
+              </tr>)}
             </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+          </DataTable>
+        )}
+      </PageSection>
+    </Surface>
   );
 }
 
@@ -246,164 +295,130 @@ export function ReportsPage() {
   );
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Relatórios operacionais</h1>
-          <p className="page-subtitle">
-            Analise volume, situação atual e carga da equipe sem expor dados de clientes.
-          </p>
-        </div>
-      </div>
-
-      <form className="card report-filters" onSubmit={applyFilters}>
-        <div className="field">
-          <label htmlFor="report-start-date">Data inicial</label>
-          <input
-            id="report-start-date"
-            className="input"
-            type="date"
-            required
-            value={draftFilters.startDate}
-            onChange={(event) => setDraftFilters((current) => ({
-              ...current,
-              startDate: event.target.value,
-            }))}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="report-end-date">Data final</label>
-          <input
-            id="report-end-date"
-            className="input"
-            type="date"
-            required
-            value={draftFilters.endDate}
-            onChange={(event) => setDraftFilters((current) => ({
-              ...current,
-              endDate: event.target.value,
-            }))}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="report-status">Status atual</label>
-          <select
-            id="report-status"
-            className="input"
-            value={draftFilters.status ?? ""}
-            onChange={(event) => setDraftFilters((current) => ({
-              ...current,
-              status: (event.target.value || undefined) as ServiceOrderStatus | undefined,
-            }))}
-          >
-            <option value="">Todos</option>
-            {SERVICE_ORDER_STATUSES.map((status) => (
-              <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="report-priority">Prioridade atual</label>
-          <select
-            id="report-priority"
-            className="input"
-            value={draftFilters.priority ?? ""}
-            onChange={(event) => setDraftFilters((current) => ({
-              ...current,
-              priority: (event.target.value || undefined) as ServiceOrderPriority | undefined,
-            }))}
-          >
-            <option value="">Todas</option>
-            {SERVICE_ORDER_PRIORITIES.map((priority) => (
-              <option key={priority} value={priority}>{PRIORITY_LABELS[priority]}</option>
-            ))}
-          </select>
-        </div>
-        <div className="report-filter-actions">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+    <div className="reports-page">
+      <PageHeader
+        title="Relatórios operacionais"
+        description="Analise volume, situação atual e carga da equipe sem expor dados de clientes."
+      />
+      <form className="reports-filters" onSubmit={applyFilters} aria-label="Filtros do relatório operacional">
+        <FilterBar label="Período, status e prioridade do relatório" actions={<>
+          <Button type="submit" loading={loading}>
             {loading ? "Aplicando..." : "Aplicar filtros"}
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={resetFilters} disabled={loading}>
-            Restaurar período
-          </button>
-        </div>
-        {filterError && <div className="report-filter-error"><ErrorBanner message={filterError} /></div>}
+          </Button>
+          <Button variant="secondary" onClick={resetFilters} disabled={loading}>Restaurar período</Button>
+        </>}>
+          <div className="reports-period-fields">
+            <Field label="Data inicial" required>
+              {(props) => <input
+                {...props}
+                className="input"
+                type="date"
+                value={draftFilters.startDate}
+                onChange={(event) => setDraftFilters((current) => ({ ...current, startDate: event.target.value }))}
+              />}
+            </Field>
+            <Field label="Data final" required error={filterError ?? undefined}>
+              {(props) => <input
+                {...props}
+                className="input"
+                type="date"
+                value={draftFilters.endDate}
+                onChange={(event) => setDraftFilters((current) => ({ ...current, endDate: event.target.value }))}
+              />}
+            </Field>
+          </div>
+          <Field label="Status atual">
+            {(props) => <select
+              {...props}
+              className="input"
+              value={draftFilters.status ?? ""}
+              onChange={(event) => setDraftFilters((current) => ({ ...current, status: (event.target.value || undefined) as ServiceOrderStatus | undefined }))}
+            >
+              <option value="">Todos</option>
+              {SERVICE_ORDER_STATUSES.map((status) => <option key={status} value={status}>
+                {STATUS_LABELS[status]}
+              </option>)}
+            </select>}
+          </Field>
+          <Field label="Prioridade atual">
+            {(props) => <select
+              {...props}
+              className="input"
+              value={draftFilters.priority ?? ""}
+              onChange={(event) => setDraftFilters((current) => ({ ...current, priority: (event.target.value || undefined) as ServiceOrderPriority | undefined }))}
+            >
+              <option value="">Todas</option>
+              {SERVICE_ORDER_PRIORITIES.map((priority) => <option key={priority} value={priority}>
+                {PRIORITY_LABELS[priority]}
+              </option>)}
+            </select>}
+          </Field>
+        </FilterBar>
       </form>
 
-      {loading && !report ? (
-        <PageLoading label="Carregando relatórios operacionais..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : report ? (
-        <>
-          <div className="report-period-copy">
-            Período de <strong>{formatReportDate(report.period.startDate)}</strong> a{" "}
-            <strong>{formatReportDate(report.period.endDate)}</strong> · horário de Brasília
+      {loading && !report ? <PageLoading label="Carregando relatórios operacionais..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : report ? (
+        <div className="reports-results" aria-busy={loading}>
+          <div className="reports-period-copy">
+            <p>
+              Período de <strong>{formatReportDate(report.period.startDate)}</strong> a{" "}
+              <strong>{formatReportDate(report.period.endDate)}</strong> · horário de Brasília
+            </p>
+            {loading && <span role="status">Atualizando relatório...</span>}
           </div>
-
-          <div className="stat-grid report-stats">
-            <div className="card stat-card">
-              <div className="stat-value">{report.activity.createdTotal}</div>
-              <div className="stat-label">Criadas no período</div>
-            </div>
-            <div className="card stat-card stat-card-completed">
-              <div className="stat-value">{report.activity.completedTotal}</div>
-              <div className="stat-label">Concluídas no período</div>
-            </div>
-            <div className="card stat-card stat-card-progress">
-              <div className="stat-value">{report.currentDistribution.total}</div>
-              <div className="stat-label">Ordens criadas no período</div>
-            </div>
-            <div className="card stat-card stat-card-waiting">
-              <div className="stat-value">
-                {report.workload.reduce((sum, item) => sum + item.total, 0)}
-              </div>
-              <div className="stat-label">Carga ativa atual</div>
-            </div>
+          <div className="reports-summary">
+            <Surface className="reports-summary-history">
+              <PageSection title="Movimentação no período" description="Criações e conclusões registradas nas datas selecionadas.">
+                <div className="reports-summary-values">
+                  <MetricCard value={report.activity.createdTotal} label="Criadas no período" tone="primary" />
+                  <MetricCard value={report.activity.completedTotal} label="Concluídas no período" tone="success" />
+                </div>
+              </PageSection>
+            </Surface>
+            <Surface className="reports-summary-current">
+              <PageSection title="Situação atual" description="Entre as ordens criadas no período.">
+                <MetricCard
+                  value={report.workload.reduce((sum, item) => sum + item.total, 0)}
+                  label="Carga ativa atual"
+                  tone="warning"
+                />
+              </PageSection>
+            </Surface>
           </div>
-
-          {!hasResults && (
-            <div className="card report-empty">
-              <EmptyState
-                title="Nenhuma atividade encontrada no período"
-                description="Ajuste as datas ou remova filtros para consultar outros registros."
-              />
-            </div>
-          )}
-
-          <div className="report-grid">
-            <MetricBars
-              id="status-report"
-              title="Ordens por status atual"
-              description="Distribuição das ordens criadas no período selecionado."
-              items={report.currentDistribution.byStatus.map((item) => ({
-                key: item.status,
-                label: STATUS_LABELS[item.status],
-                count: item.count,
-              }))}
+          {!hasResults ? <Surface className="reports-panel">
+            <EmptyState
+              title="Nenhuma atividade encontrada no período"
+              description="Ajuste as datas ou remova filtros para consultar outros registros."
             />
-            <MetricBars
-              id="priority-report"
-              title="Ordens por prioridade atual"
-              description="Prioridade atual das ordens criadas no período."
-              items={report.currentDistribution.byPriority.map((item) => ({
-                key: item.priority,
-                label: PRIORITY_LABELS[item.priority],
-                count: item.count,
-              }))}
-            />
-          </div>
-
-          <ActivityChart report={report} />
-          <WorkloadTable report={report} />
-
-          <div className="report-caveat" role="note">
-            <strong>Sobre as conclusões:</strong>{" "}
-            a série utiliza somente eventos reais de mudança para Concluída. Ordens concluídas antes
-            da adoção do histórico podem não possuir esse evento e não são estimadas por
-            <code> updatedAt</code>.
-          </div>
-        </>
+          </Surface> : <>
+            <ActivityChart report={report} />
+            <Surface className="reports-panel">
+              <PageSection
+                title="Situação atual das ordens"
+                description={report.currentDistribution.total.toLocaleString("pt-BR") +
+                  (report.currentDistribution.total === 1 ? " ordem criada" : " ordens criadas") +
+                  " no período selecionado. Status e prioridade refletem a situação atual."}
+              >
+                <div className="reports-distributions">
+                  <MetricBars
+                    id="status-report"
+                    title="Ordens por status atual"
+                    description="Distribuição das ordens criadas no período selecionado."
+                    items={report.currentDistribution.byStatus.map(item => ({ key: item.status, label: STATUS_LABELS[item.status], count: item.count }))}
+                  />
+                  <MetricBars
+                    id="priority-report"
+                    title="Ordens por prioridade atual"
+                    description="Prioridade atual das ordens criadas no período."
+                    items={report.currentDistribution.byPriority.map(item => ({ key: item.priority, label: PRIORITY_LABELS[item.priority], count: item.count }))}
+                  />
+                </div>
+              </PageSection>
+            </Surface>
+            <WorkloadTable report={report} />
+          </>}
+          {!hasResults && <p className="reports-history-note" role="note">
+            <strong>Sobre as conclusões:</strong> somente eventos reais de mudança para Concluída são contabilizados. Conclusões antigas sem evento histórico não são estimadas.</p>}
+        </div>
       ) : null}
     </div>
   );
