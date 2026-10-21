@@ -1,10 +1,89 @@
-# Deploy e operação
+# Deploy, validação e rollback
 
-Este guia descreve o que o repositório suporta. A presença de configuração não
-prova que um serviço externo esteja ativo; confirme o estado nos provedores antes
-de cada publicação.
+Este guia descreve o procedimento operacional confirmado para publicar e
+recuperar o OS-SYSTEM. A presença de uma configuração no repositório não prova
+que um serviço externo esteja ativo ou usando o commit esperado: confira o
+estado e o identificador da versão nos provedores em toda publicação.
 
-## Topologia prevista
+## Pré-requisitos
+
+### Ferramentas e acessos
+
+- Git e acesso de escrita ao repositório GitHub;
+- Node.js compatível com as dependências atuais e pnpm `11.21.0`;
+- acesso autorizado aos projetos corretos da Vercel e do Render;
+- acesso operacional ao projeto e aos backups do PostgreSQL no Supabase;
+- permissão para consultar logs de build e runtime nos dois provedores;
+- remetente Brevo validado para os testes de e-mail autorizados.
+
+Trabalhe em uma estação confiável. Não copie segredos para comandos, issues,
+releases, logs ou este documento. Consulte [CONFIGURATION.md](CONFIGURATION.md)
+para a lista completa e a finalidade de cada variável.
+
+Na **Vercel**, confirme `API_PROXY_TARGET` e `INTERNAL_PROXY_SECRET` no ambiente
+de produção. No **Render**, confira todas as variáveis obrigatórias do backend,
+em especial `NODE_ENV`, `PORT`, `DATABASE_URL`, `CORS_ORIGIN`, `API_BASE_PATH`,
+`ALLOW_DIRECT_API_REQUESTS`, `INTERNAL_PROXY_SECRET`, os segredos JWT/HMAC e as
+variáveis da Brevo.
+
+Em produção, os valores de configuração esperados são `NODE_ENV=production`,
+`API_BASE_PATH=/api` e acesso direto desabilitado. `CORS_ORIGIN` e
+`APP_BASE_URL` devem corresponder à origem pública do frontend. `PORT` é
+fornecida pelo ambiente do Render. O frontend de produção usa `/api`, não
+`VITE_API_URL`.
+
+`INTERNAL_PROXY_SECRET` precisa representar o mesmo segredo nos dois serviços,
+mas sua conferência deve usar os mecanismos protegidos dos provedores, sem
+exibir ou comparar os valores em texto aberto. Não use prefixo `VITE_` em
+nenhum segredo.
+
+## Preparação da release
+
+Na raiz do repositório, confira o estado e identifique exatamente o commit:
+
+```bash
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log --oneline -10
+git diff --check
+```
+
+1. Confirme que a branch é a configurada como produção na Vercel e será usada
+   no deploy manual do Render.
+2. Revise todo arquivo modificado e não rastreado. Arquivos necessários devem
+   estar no commit; `.env`, relatórios e artefatos locais não devem entrar.
+3. Use o SHA completo como identidade canônica. Em registros humanos, use
+   `git-<12 primeiros caracteres do SHA>`, nunca apenas data ou “latest”.
+4. Confirme que esse commit está no remoto antes de iniciar os deploys.
+
+Execute as validações compatíveis com o escopo da release:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter backend exec prisma validate
+pnpm --filter backend exec prisma generate
+pnpm lint
+pnpm test:migrate
+pnpm test
+pnpm build
+pnpm test:e2e:typecheck
+pnpm test:e2e
+git diff --check
+```
+
+Os testes que usam banco devem apontar exclusivamente para o banco local
+descartável configurado para testes. Se uma validação não puder ser executada,
+registre-a como pendente na release; não a marque como aprovada.
+
+Para cada pasta nova em `apps/backend/prisma/migrations/`, revise o SQL e
+confirme que nenhuma migration histórica foi editada. Procure remoção ou
+renomeação de estruturas, conversões de tipo, índices bloqueantes, `NOT NULL`
+sem backfill e qualquer perda de dados. Teste o histórico completo em banco
+descartável e verifique se o schema novo continua compatível com a versão
+anterior da aplicação durante um possível rollback.
+
+## Topologia de produção
 
 ```text
 Vercel (React/Vite + Function /api/proxy)
@@ -67,33 +146,121 @@ APP_BASE_URL=https://frontend.exemplo.com
 
 Não configure `VITE_API_URL`, `API_PROXY_TARGET` ou chaves públicas no Render.
 
-## Banco e migrations
+## Banco de produção
 
-Faça backup e confira o destino antes de aplicar migrations. A operação de
-release usa o histórico versionado:
+O banco de produção é PostgreSQL no Supabase. Antes de uma release com migration:
+
+1. Confirme, sem imprimir credenciais, que `DATABASE_URL` no Render aponta para
+   o projeto e banco pretendidos.
+2. Em um ambiente autorizado que receba essa variável de forma segura, consulte
+   o histórico com:
+
+   ```bash
+   pnpm --filter backend exec prisma migrate status
+   ```
+
+   Não escreva a URL na linha de comando e não use o `.env` local como prova do
+   estado de produção.
+3. Compare as migrations pendentes com as pastas versionadas no SHA da release.
+4. Para alteração relevante, confirme no Supabase a existência de backup ou
+   ponto de recuperação utilizável, o horário coberto, a retenção e o
+   procedimento de restauração permitido pelo plano. Quando o plano permitir,
+   valide a recuperação em ambiente separado; a mera indicação de “backup
+   ativo” não comprova que o objetivo de recuperação será atendido.
+5. Registre esse ponto de recuperação e os responsáveis pela decisão antes de
+   iniciar o build do backend.
+
+Atualmente, a configuração operacional do Render executa `prisma migrate
+deploy` durante o build do backend. Assim, iniciar o deploy manual também pode
+alterar o schema antes de a nova instância atender tráfego. Confira no Dashboard
+o comando exato: ele não está versionado neste repositório. Este guia não move a
+etapa de migration para outro ponto do pipeline.
+
+Se a migration for aplicada e uma etapa posterior do build ou deploy falhar, o
+schema pode ficar adiantado enquanto a versão anterior continua atendendo
+tráfego. Por isso, compatibilidade retroativa não é opcional nesse pipeline.
+
+Em produção, nunca execute `prisma migrate dev`, `prisma migrate reset` ou
+`prisma db push`; nunca edite migration aplicada e não trate rollback de
+aplicação como rollback do banco.
+
+## Publicação coordenada
+
+A sequência abaixo pressupõe que o frontend novo funcione temporariamente com o
+backend anterior e que o backend novo aceite o contrato já publicado. Se uma
+mudança quebrar essa compatibilidade, não execute a sequência em uma única
+release: divida-a em etapas aditivas e só remova o contrato antigo depois que
+ambos os serviços tiverem migrado.
+
+### 1. Registrar a release no GitHub
+
+Confirme no terminal que o SHA preparado está no remoto e que o working tree
+continua limpo. No GitHub, publique a release ou registro adotado pelo projeto
+apontando exatamente para esse commit. Inclua migrations, alterações
+operacionais, validações executadas e limitações conhecidas.
+
+O repositório não contém workflow que comprove publicação automática de uma
+GitHub Release. Não presuma que criar a release publica os provedores.
+
+### 2. Confirmar o deploy da Vercel
+
+No Dashboard da Vercel:
+
+1. confira a Production Branch configurada;
+2. localize o deployment de produção correspondente à release;
+3. confirme que o SHA exibido é exatamente o SHA registrado;
+4. confira build concluído e ausência de erro na Function `/api/proxy`.
+
+`apps/frontend/vercel.json` processa `/api/:proxyPath*` antes do fallback da SPA,
+desde que `apps/frontend` seja a raiz configurada do projeto.
+
+### 3. Iniciar manualmente o deploy do Render
+
+Depois de confirmar Vercel e o preparo do banco, use o Dashboard do Render para
+iniciar o deploy manual do commit exato. Antes da ação, confira:
+
+- repositório, branch e SHA selecionados;
+- comando de build, incluindo a etapa atual de `prisma migrate deploy`;
+- comando de início que executa `apps/backend/dist/server.js`;
+- health check HTTP configurado para `/health`;
+- nomes das variáveis obrigatórias, sem revelar valores.
+
+### 4. Conferir build e inicialização
+
+Nos logs do Render, confirme instalação com lockfile, migrations, build e o
+processo escutando a `PORT` fornecida. Os workers não emitem uma mensagem
+positiva de inicialização; verifique a ausência de falhas de ciclo e, quando
+houver trabalho, os registros seguros de processamento da outbox e da limpeza.
+Confirme no detalhe do deploy que o SHA do Render é o mesmo do GitHub e da
+Vercel. Um serviço `Live` não prova igualdade de versão.
+
+### 5. Verificações HTTP
+
+Valide o caminho completo Vercel → proxy → Render:
 
 ```bash
-pnpm --filter backend exec prisma migrate status
-pnpm --filter backend exec prisma migrate deploy
+curl --fail-with-body --show-error --silent \
+  https://os-system-nine.vercel.app/api/health
 ```
 
-Não execute `migrate dev`, `migrate reset` ou `db push` em produção. Publique a
-versão do backend que dependa de uma migration somente depois que o schema
-compatível estiver aplicado.
+Resultado esperado: HTTP 200 e:
 
-## Ordem segura do proxy
+```json
+{"status":"ok","service":"os-system-api"}
+```
 
-Em primeira configuração ou rotação coordenada:
+Confirme também o health check do Render para `/health`. Esse endpoint responde
+HTTP 200 enquanto o processo Express está operacional; ele não consulta banco
+ou Brevo.
 
-1. gere um segredo independente com ao menos 32 bytes;
-2. configure-o somente nos ambientes server-side da Vercel e do Render;
-3. confirme `API_PROXY_TARGET` e `CORS_ORIGIN`;
-4. publique a Function/rewrite;
-5. publique o backend com validação de proxy;
-6. valide `/health` diretamente e uma rota `/api/*` pelo frontend;
-7. confirme que acesso direto não assinado às rotas protegidas retorna 403.
+Para validar a fronteira HMAC, faça uma requisição direta e sem headers internos
+a uma rota protegida do Render, por exemplo `GET /service-orders`. O esperado é
+HTTP 403 com `Acesso não permitido`. Não use `/health`, que é público, nem tente
+fabricar a assinatura ou copiar o segredo para a linha de comando.
 
-Não troque o segredo em um único lado. O valor nunca deve usar prefixo `VITE_`.
+Em primeira configuração ou rotação do proxy, altere o segredo de forma
+coordenada nos dois serviços. Não troque apenas um lado e nunca use prefixo
+`VITE_`.
 
 ## Saúde e workers
 
@@ -115,25 +282,88 @@ Ambos coordenam concorrência por locks/claims no PostgreSQL. Em desligamento
 `SIGTERM`/`SIGINT`, o servidor para de agendar ciclos, aguarda o ciclo corrente,
 fecha conexões HTTP e desconecta Prisma, com limite de 15 segundos para conexões.
 
-## Checklist pré-publicação
+## Smoke tests pós-deploy
 
-- [ ] `git status` contém somente mudanças revisadas.
-- [ ] exemplos e segredos reais continuam separados.
-- [ ] `pnpm lint`, `pnpm test` e `pnpm build` passaram.
-- [ ] `pnpm test:e2e:typecheck` e `pnpm test:e2e` passaram quando o fluxo foi afetado.
-- [ ] migration necessária foi revisada e testada em banco descartável.
-- [ ] `prisma migrate status` aponta para o banco pretendido.
-- [ ] segredos têm valores diferentes por finalidade e ambiente.
-- [ ] Vercel e Render compartilham somente `INTERNAL_PROXY_SECRET`.
-- [ ] remetente Brevo e `APP_BASE_URL` estão corretos.
-- [ ] CORS aceita somente a origem pública do frontend.
-- [ ] cookies de refresh usam `API_BASE_PATH=/api` em produção.
-- [ ] `/health`, login, refresh, logout e uma operação autenticada foram validados.
-- [ ] logs não exibem tokens, senhas, cookies ou credenciais.
+Registre horário, release, conta de teste e resultado. Use somente contas e
+registros previamente autorizados; nunca modifique dados reais apenas para
+“testar o deploy”.
 
-## Rollback
+### Leitura de dados de domínio
 
-Reverter aplicação não reverte schema automaticamente. Antes de publicar uma
-migration, confirme compatibilidade com a versão anterior. Em incidente, faça
-rollback do código pelo provedor e trate reversão de banco como operação separada
-e deliberada; nunca edite o histórico aplicado para simular rollback.
+Autenticar cria registros técnicos de sessão mesmo quando nenhum dado de
+negócio é alterado. Use contas de teste autorizadas e considere esse efeito ao
+executar a checklist.
+
+- [ ] Abrir a SPA e confirmar que rotas internas não interceptam `/api/*`.
+- [ ] Entrar como `ADMIN`, `ATTENDANT` e `TECHNICIAN` e conferir os escopos.
+- [ ] Listar e abrir uma ordem autorizada; confirmar a fila limitada do técnico.
+- [ ] Conferir timeline e sua projeção pública no portal do cliente.
+- [ ] Confirmar que notas internas são visíveis somente à equipe autorizada.
+- [ ] Abrir relatórios com papel autorizado e conferir período e filtros.
+- [ ] Entrar no portal com cliente de teste e confirmar isolamento de perfil,
+      ordens e eventos.
+- [ ] Revisar logs e estado da outbox sem expor tokens ou dados pessoais.
+
+### Operações que modificam dados
+
+- [ ] Com conta interna e cliente de teste, criar e editar uma OS.
+- [ ] Atribuir/reatribuir técnico e executar somente transições válidas.
+- [ ] Criar nota interna de teste e reconfirmar sua confidencialidade.
+- [ ] Validar login, refresh e logout de sessão interna e de cliente.
+- [ ] Com endereço controlado, testar cadastro, confirmação de e-mail e
+      recuperação de senha, incluindo uso único dos links.
+- [ ] Confirmar na outbox/logs a entrega, retry ou falha permanente prevista.
+
+Se não houver massa de teste autorizada, registre os itens mutáveis como
+pendentes em vez de executá-los em contas reais.
+
+## Rollback e recuperação
+
+### Escolha do escopo
+
+- **Somente frontend:** reverta/promova na Vercel o último deployment saudável
+  quando o defeito estiver na SPA ou Function e o backend continuar compatível.
+- **Somente backend:** selecione no Render o último deploy saudável quando
+  frontend e schema forem compatíveis. A ação é manual.
+- **Ambos:** coordene os rollbacks quando houve mudança de contrato, cookies,
+  proxy, autenticação ou dependência de ordem entre os componentes.
+
+Antes da ação, registre incidente, versões atual e alvo, migrations já aplicadas
+e compatibilidade esperada. Use as ações de rollback/redeploy dos Dashboards;
+este repositório não possui comando próprio de rollback dos provedores.
+
+### Banco de dados
+
+Restaurar a aplicação anterior **não desfaz uma migration**. Migrations devem
+ser compatíveis com a versão anterior quando o plano permitir rollback do
+código. Mudanças destrutivas exigem estratégia antes do deploy, como expansão e
+contração em releases separadas, backfill controlado e remoção posterior.
+
+Não existe comando genérico seguro de rollback de banco neste projeto. Não
+edite o histórico aplicado nem execute SQL inverso automaticamente. Restaurar
+backup é excepcional: interrompa escritas, determine o ponto de recuperação,
+estime a perda de dados, alinhe as versões da aplicação ao schema restaurado e
+obtenha aprovação operacional explícita.
+
+### Validação após rollback
+
+Após qualquer rollback, confirme os SHAs ativos, repita `/api/health`, o health
+check do Render e a recusa do acesso direto. Revise logs de inicialização,
+migrations e workers e repita os smoke tests compatíveis com o incidente.
+
+## Limitações e observabilidade
+
+- `/health` verifica somente a resposta básica do processo Express. Não valida
+  PostgreSQL, Supabase, Brevo, workers ou autenticação.
+- E-mail é assíncrono: a resposta HTTP não comprova entrega. Falhas permanentes
+  da outbox devem ser investigadas nos logs e no provedor.
+- O `DeprecationWarning` do `pg` sobre consultas concorrentes em um cliente
+  transacional está em acompanhamento. A causa mais provável envolve Prisma 7,
+  `@prisma/adapter-pg` e relações dentro de transações; nenhuma correção foi
+  aplicada. Não suprima o aviso nem atualize dependências sem regressão.
+- O deploy do Render precisa ser iniciado manualmente enquanto o deploy
+  automático permanecer desativado.
+- Como não há `render.yaml`, branch, comandos, health check e variáveis do
+  Dashboard podem divergir do repositório e devem ser conferidos por release.
+- HTTP 200 em `/health` não substitui smoke tests e não prova que migrations,
+  banco ou e-mails estejam funcionais.
