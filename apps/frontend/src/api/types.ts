@@ -11,6 +11,8 @@ export type ServiceOrderStatus =
 
 export type ServiceOrderPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
+export type ResolutionSlaStatus = "ON_TRACK" | "DUE_SOON" | "BREACHED" | "MET" | "CANCELLED" | "UNTRACKED";
+
 export type ServiceOrderEventType =
   | "CREATED"
   | "OPERATIONAL_UPDATED"
@@ -72,6 +74,10 @@ export interface ServiceOrder {
   createdBy: Pick<UserRecord, "id" | "name">;
   createdAt: string;
   updatedAt: string;
+  resolutionSlaMinutes?: number | null;
+  resolutionDueAt?: string | null;
+  resolutionSlaStatus?: ResolutionSlaStatus | null;
+  completedAt?: string | null;
 }
 
 export interface ServiceOrderTechnician {

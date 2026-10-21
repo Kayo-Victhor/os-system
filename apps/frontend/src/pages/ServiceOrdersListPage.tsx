@@ -13,6 +13,7 @@ import { Button, ButtonLink } from "../components/Button.tsx";
 import { FilterBar, SearchField } from "../components/FilterBar.tsx";
 import { DataTable } from "../components/DataTable.tsx";
 import { Pagination } from "../components/Pagination.tsx";
+import { ResolutionSlaIndicator } from "../components/ResolutionSla.tsx";
 
 export function ServiceOrdersListPage() {
   const { can, user } = useAuth();
@@ -149,6 +150,7 @@ export function ServiceOrdersListPage() {
                 <th>Técnico</th>
                 <th>Status</th>
                 <th>Prioridade</th>
+                <th>Prazo / SLA</th>
                 <th>Atualizada em</th>
               </tr>
             </thead>
@@ -171,6 +173,7 @@ export function ServiceOrdersListPage() {
                   <td>
                     <PriorityBadge priority={order.priority} />
                   </td>
+                  <td><ResolutionSlaIndicator order={order} /></td>
                   <td>{new Date(order.updatedAt).toLocaleDateString("pt-BR")}</td>
                 </tr>
               ))}

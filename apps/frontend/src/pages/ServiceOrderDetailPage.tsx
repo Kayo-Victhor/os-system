@@ -23,6 +23,7 @@ import { Surface } from "../components/Surface.tsx";
 import { PageHeader, PageSection } from "../components/PageHeader.tsx";
 import { InternalForm, FormActions } from "../components/InternalForm.tsx";
 import { fieldErrorsFromDetails } from "../api/errors.ts";
+import { ResolutionSlaDetails } from "../components/ResolutionSla.tsx";
 
 export function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -350,6 +351,9 @@ export function ServiceOrderDetailPage() {
                   <div><dt>Última atualização</dt><dd>{new Date(order.updatedAt).toLocaleString("pt-BR")}</dd></div>
                 </dl>
               </PageSection>
+              <div className="internal-page__actions">
+                <ResolutionSlaDetails key={`${order.id}:${order.updatedAt}:${order.resolutionSlaStatus}`} order={order} />
+              </div>
             </div>
           </aside>
           <section className="internal-order-history">

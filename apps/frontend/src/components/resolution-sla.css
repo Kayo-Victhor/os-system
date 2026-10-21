@@ -1,0 +1,7 @@
+.resolution-sla { display: grid; justify-items: start; gap: var(--space-1); }
+.resolution-sla .badge { white-space: normal; }
+.resolution-sla__due { color: var(--text-secondary); font-size: var(--font-size-meta); white-space: nowrap; }
+.resolution-sla__facts { margin-top: var(--space-3); }
+.resolution-sla__estimate { margin-top: var(--space-3); font-size: var(--font-size-label); }
+.resolution-sla__note { margin-top: var(--space-2); font-size: var(--font-size-meta); color: var(--text-secondary); }
+.ui-data-table .resolution-sla { min-width: 156px; max-width: 190px; }
