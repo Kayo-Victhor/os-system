@@ -4,19 +4,26 @@ import type {
   UpdateServiceOrderInput,
 } from "../schemas/service-order.schema.js";
 
-import type {
-  ServiceOrderStatus,
-  ServiceOrderPriority,
-  UserRole,
+import {
   Prisma,
+  type ServiceOrderStatus,
+  type ServiceOrderPriority,
+  type UserRole,
 } from "../generated/prisma/client.js";
+import {
+  classifyResolutionSla,
+  resolutionSlaForPriority,
+} from "../domain/service-order-sla.js";
 
-const serviceOrderSelect = {
+const serviceOrderRecordSelect = {
   id: true,
   title: true,
   description: true,
   status: true,
   priority: true,
+  resolutionSlaMinutes: true,
+  resolutionDueAt: true,
+  completedAt: true,
   customerId: true,
   technicianId: true,
   createdById: true,
@@ -34,6 +41,22 @@ const serviceOrderSelect = {
   technician: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true } },
 } satisfies Prisma.ServiceOrderSelect;
+
+type ServiceOrderRecord = Prisma.ServiceOrderGetPayload<{
+  select: typeof serviceOrderRecordSelect;
+}>;
+
+function withResolutionSla(record: ServiceOrderRecord) {
+  return {
+    ...record,
+    resolutionSlaStatus: classifyResolutionSla({
+      status: record.status,
+      targetMinutes: record.resolutionSlaMinutes,
+      dueAt: record.resolutionDueAt,
+      completedAt: record.completedAt,
+    }),
+  };
+}
 
 export const SERVICE_ORDER_STATUS_TRANSITIONS = {
   OPEN: ["IN_PROGRESS", "CANCELLED"],
@@ -63,6 +86,7 @@ export type ServiceOrderDomainErrorCode =
   | "STATUS_FORBIDDEN"
   | "INVALID_STATUS_TRANSITION"
   | "STATUS_CONFLICT"
+  | "OPERATIONAL_CONFLICT"
   | "ASSIGNMENT_CONFLICT";
 
 const internalEventSelect = {
@@ -116,6 +140,8 @@ export async function createServiceOrder(
     });
     if (!customer) throw new ServiceOrderDomainError("CUSTOMER_NOT_FOUND");
 
+    const createdAt = new Date();
+    const resolutionSla = resolutionSlaForPriority(data.priority, createdAt);
     const order = await tx.serviceOrder.create({
       data: {
         title: data.title,
@@ -124,8 +150,11 @@ export async function createServiceOrder(
         customerId: customer.id,
         createdById,
         status: "OPEN",
+        createdAt,
+        resolutionSlaMinutes: resolutionSla.targetMinutes,
+        resolutionDueAt: resolutionSla.dueAt,
       },
-      select: serviceOrderSelect,
+      select: serviceOrderRecordSelect,
     });
     await tx.serviceOrderEvent.create({
       data: {
@@ -136,7 +165,7 @@ export async function createServiceOrder(
         newPriority: data.priority,
       },
     });
-    return order;
+    return withResolutionSla(order);
   });
 }
 
@@ -177,14 +206,14 @@ export async function listServiceOrders(
       skip: (filters.page - 1) * filters.limit,
       take: filters.limit,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: serviceOrderSelect,
+      select: serviceOrderRecordSelect,
     }),
     prisma.serviceOrder.count({ where }),
   ]);
   const totalPages = Math.ceil(total / filters.limit);
 
   return {
-    items,
+    items: items.map(withResolutionSla),
     pagination: {
       page: filters.page,
       limit: filters.limit,
@@ -200,10 +229,11 @@ export async function getServiceOrderById(
   id: string,
   actor?: ServiceOrderActor,
 ) {
-  return prisma.serviceOrder.findFirst({
+  const order = await prisma.serviceOrder.findFirst({
     where: { id, ...technicianScope(actor) },
-    select: serviceOrderSelect,
+    select: serviceOrderRecordSelect,
   });
+  return order ? withResolutionSla(order) : null;
 }
 
 export async function updateServiceOrder(
@@ -214,20 +244,65 @@ export async function updateServiceOrder(
   return prisma.$transaction(async (tx) => {
     const current = await tx.serviceOrder.findUnique({
       where: { id },
-      select: { id: true, title: true, description: true, priority: true },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        priority: true,
+        status: true,
+        createdAt: true,
+        resolutionSlaMinutes: true,
+        resolutionDueAt: true,
+      },
     });
     if (!current) throw new ServiceOrderDomainError("SERVICE_ORDER_NOT_FOUND");
 
     const changedFields = (Object.keys(data) as Array<keyof UpdateServiceOrderInput>)
       .filter((field) => data[field] !== current[field]);
     if (changedFields.length === 0) {
-      return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+      const unchanged = await tx.serviceOrder.findUniqueOrThrow({
+        where: { id },
+        select: serviceOrderRecordSelect,
+      });
+      return withResolutionSla(unchanged);
     }
 
-    const updated = await tx.serviceOrder.update({
+    const priorityChanged = changedFields.includes("priority");
+    if (priorityChanged && (current.status === "COMPLETED" || current.status === "CANCELLED")) {
+      throw new ServiceOrderDomainError("OPERATIONAL_CONFLICT");
+    }
+    const resolutionSla = priorityChanged
+      && current.resolutionSlaMinutes !== null
+      && current.resolutionDueAt !== null
+      ? resolutionSlaForPriority(data.priority!, current.createdAt)
+      : null;
+    const updateResult = await tx.serviceOrder.updateMany({
+      where: {
+        id,
+        ...(priorityChanged
+          ? {
+              priority: current.priority,
+              status: current.status,
+              completedAt: null,
+            }
+          : {}),
+      },
+      data: {
+        ...data,
+        ...(resolutionSla
+          ? {
+              resolutionSlaMinutes: resolutionSla.targetMinutes,
+              resolutionDueAt: resolutionSla.dueAt,
+            }
+          : {}),
+      },
+    });
+    if (updateResult.count !== 1) {
+      throw new ServiceOrderDomainError("OPERATIONAL_CONFLICT");
+    }
+    const updated = await tx.serviceOrder.findUniqueOrThrow({
       where: { id },
-      data,
-      select: serviceOrderSelect,
+      select: serviceOrderRecordSelect,
     });
     await tx.serviceOrderEvent.create({
       data: {
@@ -239,7 +314,7 @@ export async function updateServiceOrder(
         newPriority: changedFields.includes("priority") ? updated.priority : null,
       },
     });
-    return updated;
+    return withResolutionSla(updated);
   });
 }
 
@@ -278,7 +353,11 @@ export async function assignTechnician(
     }
 
     if (order.technicianId === technicianId) {
-      return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+      const unchanged = await tx.serviceOrder.findUniqueOrThrow({
+        where: { id },
+        select: serviceOrderRecordSelect,
+      });
+      return withResolutionSla(unchanged);
     }
 
     const updated = await tx.serviceOrder.updateMany({
@@ -302,7 +381,11 @@ export async function assignTechnician(
         newTechnicianId: technicianId,
       },
     });
-    return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+    const result = await tx.serviceOrder.findUniqueOrThrow({
+      where: { id },
+      select: serviceOrderRecordSelect,
+    });
+    return withResolutionSla(result);
   });
 }
 
@@ -333,11 +416,31 @@ export async function updateServiceOrderStatus(
       );
     }
 
-    const updated = await tx.serviceOrder.updateMany({
-      where: { id, status: order.status, ...technicianScope(actor) },
-      data: { status },
-    });
-    if (updated.count !== 1) throw new ServiceOrderDomainError("STATUS_CONFLICT");
+    let completedAt: Date | null = null;
+    if (status === "COMPLETED") {
+      const technicianCondition = actor.role === "TECHNICIAN"
+        ? Prisma.sql`AND "technicianId" = ${actor.userId}`
+        : Prisma.empty;
+      const rows = await tx.$queryRaw<Array<{ completedAt: Date }>>(Prisma.sql`
+        UPDATE "ServiceOrder"
+        SET
+          "status" = 'COMPLETED'::"ServiceOrderStatus",
+          "updatedAt" = clock_timestamp()
+        WHERE "id" = ${id}
+          AND "status" = CAST(${order.status} AS "ServiceOrderStatus")
+          AND "completedAt" IS NULL
+          ${technicianCondition}
+        RETURNING "completedAt"
+      `);
+      completedAt = rows[0]?.completedAt ?? null;
+      if (!completedAt) throw new ServiceOrderDomainError("STATUS_CONFLICT");
+    } else {
+      const updated = await tx.serviceOrder.updateMany({
+        where: { id, status: order.status, ...technicianScope(actor) },
+        data: { status, completedAt: null },
+      });
+      if (updated.count !== 1) throw new ServiceOrderDomainError("STATUS_CONFLICT");
+    }
 
     await tx.serviceOrderEvent.create({
       data: {
@@ -346,9 +449,14 @@ export async function updateServiceOrderStatus(
         type: "STATUS_CHANGED",
         previousStatus: order.status,
         newStatus: status,
+        ...(completedAt ? { createdAt: completedAt } : {}),
       },
     });
-    return tx.serviceOrder.findUniqueOrThrow({ where: { id }, select: serviceOrderSelect });
+    const result = await tx.serviceOrder.findUniqueOrThrow({
+      where: { id },
+      select: serviceOrderRecordSelect,
+    });
+    return withResolutionSla(result);
   });
 }
 

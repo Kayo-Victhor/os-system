@@ -11,6 +11,8 @@ fonte de verdade.
 - [Configuração](CONFIGURATION.md): todas as variáveis reconhecidas e sua
   distribuição entre desenvolvimento, testes, Vercel e Render.
 - [API](API.md): rotas, autenticação, filtros, corpos, respostas e escopos.
+- [SLA de resolução](SLA.md): metas, relógio, estados e tratamento de ordens
+  legadas.
 - [Segurança](SECURITY.md): identidades, cookies, CSRF, permissões, ownership,
   rate limiting, RLS, retenção e anonimização.
 - [Deploy e operação](DEPLOYMENT.md): proxy Vercel → Render, banco, migrations,

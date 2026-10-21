@@ -240,11 +240,14 @@ model EmailOutbox {
 }
 
 model ServiceOrder {
-  id          String               @id @default(uuid())
-  title       String
-  description String
-  status      ServiceOrderStatus   @default(OPEN)
-  priority    ServiceOrderPriority @default(MEDIUM)
+  id                   String               @id @default(uuid())
+  title                String
+  description          String
+  status               ServiceOrderStatus   @default(OPEN)
+  priority             ServiceOrderPriority @default(MEDIUM)
+  resolutionSlaMinutes Int?
+  resolutionDueAt      DateTime?            @db.Timestamptz(3)
+  completedAt          DateTime?            @db.Timestamptz(3)
 
   customerId   String
   technicianId String?

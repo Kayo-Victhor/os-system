@@ -60,6 +60,7 @@ function respondToDomainError(error: unknown, res: Response): boolean {
     STATUS_FORBIDDEN: { status: 403, error: "Você não pode realizar esta alteração de status" },
     INVALID_STATUS_TRANSITION: { status: 409, error: "Transição de status não permitida" },
     STATUS_CONFLICT: { status: 409, error: "O status foi alterado por outra operação. Recarregue e tente novamente." },
+    OPERATIONAL_CONFLICT: { status: 409, error: "A ordem foi alterada por outra operação. Recarregue e tente novamente." },
     ASSIGNMENT_CONFLICT: { status: 409, error: "A atribuição foi alterada por outra operação. Recarregue e tente novamente." },
   };
   const response = responses[error.code];

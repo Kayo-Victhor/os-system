@@ -174,6 +174,18 @@ page, limit, status, priority, customerId, technicianId, search
 manipulado é ignorado em favor do usuário autenticado. IDs malformados ou fora
 do escopo são tratados como recurso não encontrado.
 
+As respostas internas de criação, listagem, detalhe e alterações incluem:
+
+```text
+resolutionSlaMinutes: number | null
+resolutionDueAt: data ISO 8601 | null
+completedAt: data ISO 8601 | null
+resolutionSlaStatus: ON_TRACK | DUE_SOON | BREACHED | MET | CANCELLED | UNTRACKED
+```
+
+As metas e a semântica desses campos estão em [SLA de resolução](SLA.md). As
+projeções de `/auth/customer/service-orders` não expõem esses dados internos.
+
 Notas são append-only: não há rotas de edição ou exclusão. Timeline e alterações
 de OS são persistidas na mesma transação sempre que formam uma unidade lógica.
 

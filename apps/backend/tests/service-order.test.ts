@@ -25,11 +25,15 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     description: "Impressora não liga",
     status: "OPEN",
     priority: "MEDIUM",
+    resolutionSlaMinutes: 1_440,
+    resolutionDueAt: new Date(Date.now() + 1_440 * 60_000),
+    completedAt: null,
     customerId: CUSTOMER_ID,
     technicianId: null,
     createdById: "staff-1",
     createdAt: new Date(),
     updatedAt: new Date(),
+    events: [],
     ...overrides,
   };
 }
