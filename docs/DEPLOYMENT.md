@@ -262,6 +262,47 @@ Em primeira configuração ou rotação do proxy, altere o segredo de forma
 coordenada nos dois serviços. Não troque apenas um lado e nunca use prefixo
 `VITE_`.
 
+### Verificador público automatizado
+
+Com Vercel e Render disponíveis, execute na raiz do repositório:
+
+```bash
+pnpm smoke:production
+```
+
+O comando usa somente requisições `GET`, sem cookies, tokens ou credenciais, e
+executa estas verificações:
+
+| Destino | Resultado esperado | O que confirma |
+|---|---:|---|
+| frontend `/` | 200 final | SPA pública acessível; redirecionamentos são seguidos |
+| frontend `/api/health` | 200 + JSON de saúde | rewrite, Function, assinatura HMAC e backend acessíveis |
+| backend `/health` | 200 + JSON de saúde | processo Express acessível diretamente |
+| frontend `/api/service-orders` | 401 | proxy alcançou a autenticação normal sem sessão |
+| backend `/service-orders` | 403 | acesso direto sem assinatura continua bloqueado |
+
+O timeout padrão é de 30 segundos por requisição. Para validar outro deployment
+ou ajustar o timeout, informe somente origens sem caminho, query ou credenciais:
+
+```bash
+OS_SYSTEM_FRONTEND_URL=https://frontend.exemplo.com \
+OS_SYSTEM_BACKEND_URL=https://backend.exemplo.com \
+OS_SYSTEM_SMOKE_TIMEOUT_MS=30000 \
+pnpm smoke:production
+```
+
+Cada item imprime `PASS` ou `FAIL`. Falhas são classificadas como timeout, rede,
+resposta HTTP/JSON inesperada ou erro do próprio script. Qualquer falha termina
+com código diferente de zero. Para rotas de API, redirecionamentos são tratados
+como resposta inesperada; somente a página inicial permite e informa o
+redirecionamento até a resposta final.
+
+O verificador não lê cabeçalhos sensíveis nem imprime corpos de erro. Ele não
+compara os commits publicados porque a API não expõe um identificador confiável
+de build. Confirme manualmente os SHAs nos painéis da Vercel e do Render. Essa
+checagem pública também não substitui os smoke tests autenticados, os testes de
+permissão ou a validação de e-mails, banco e workers.
+
 ## Saúde e workers
 
 `GET /health` retorna:
