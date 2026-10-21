@@ -298,10 +298,100 @@ como resposta inesperada; somente a página inicial permite e informa o
 redirecionamento até a resposta final.
 
 O verificador não lê cabeçalhos sensíveis nem imprime corpos de erro. Ele não
-compara os commits publicados porque a API não expõe um identificador confiável
-de build. Confirme manualmente os SHAs nos painéis da Vercel e do Render. Essa
-checagem pública também não substitui os smoke tests autenticados, os testes de
-permissão ou a validação de e-mails, banco e workers.
+compara os commits publicados porque os endpoints públicos da aplicação não
+expõem um identificador confiável de build; a comparação autenticada é uma
+responsabilidade separada do relatório de releases abaixo. Essa checagem pública
+também não substitui os smoke tests autenticados, os testes de permissão ou a
+validação de e-mails, banco e workers.
+
+### Consistência entre releases
+
+O relatório de releases complementa o smoke test HTTP consultando metadados
+autenticados e somente de leitura do GitHub, da Vercel e do Render:
+
+```bash
+VERCEL_TOKEN=<token-local-de-leitura> \
+VERCEL_PROJECT_ID=<project-id> \
+VERCEL_TEAM_ID=<team-id-opcional> \
+RENDER_API_KEY=<chave-local-de-leitura> \
+RENDER_SERVICE_ID=<service-id> \
+pnpm release:check
+```
+
+As credenciais são do operador local. O script não carrega `.env`, não grava
+tokens e faz somente requisições HTTP `GET`. Configure as variáveis no ambiente
+do processo ou no mecanismo protegido do terminal; não coloque valores reais
+neste documento, no `package.json` ou em arquivos versionados.
+
+Os identificadores não secretos podem ser obtidos nestes locais:
+
+- `VERCEL_PROJECT_ID`: Settings > General do projeto Vercel ou o
+  `.vercel/project.json` local não versionado, quando ele já existir;
+- `VERCEL_TEAM_ID`: Settings da equipe Vercel ou `orgId` do mesmo arquivo; é
+  opcional para projetos pessoais;
+- `RENDER_SERVICE_ID`: URL ou página Settings do serviço no Dashboard Render.
+
+Por padrão, a Vercel é verificada resolvendo diretamente o domínio de produção
+`os-system-nine.vercel.app`. Para outro domínio, informe somente o hostname,
+sem protocolo ou caminho:
+
+```bash
+VERCEL_PRODUCTION_DOMAIN=frontend.exemplo.com pnpm release:check
+```
+
+O timeout padrão por consulta é 15 segundos e pode ser ajustado entre 1 e
+120000 milissegundos com `OS_SYSTEM_RELEASE_CHECK_TIMEOUT_MS`.
+
+O comando:
+
+1. consulta `refs/heads/main` diretamente em `origin` com `git ls-remote`, sem
+   executar `fetch`, `pull`, merge, rebase ou reset;
+2. resolve o domínio de produção pela API da Vercel e exige um deployment
+   `READY`, com target `production`, pertencente ao projeto esperado e com SHA
+   Git completo;
+3. consulta pela API do Render os deploys filtrados por `status=live` e exige
+   exatamente um deploy ativo com SHA Git completo;
+4. compara cada SHA publicado com o `main` remoto usando apenas objetos Git já
+   disponíveis no repositório local;
+5. lista os arquivos entre as revisões e os classifica para frontend/proxy,
+   backend, código compartilhado, operação/documentação ou revisão ambígua.
+
+Se um commit necessário não estiver disponível localmente, o relatório não faz
+um `fetch` implícito: retorna `UNKNOWN` e solicita que o operador disponibilize
+o histórico de forma consciente antes de repetir a verificação.
+
+Os estados possíveis são:
+
+| Estado | Significado |
+|---|---|
+| `UP_TO_DATE` | o SHA publicado é exatamente o mesmo de `origin/main` |
+| `NO_RUNTIME_DRIFT` | os SHAs diferem, mas somente caminhos/campos operacionais conhecidos foram identificados |
+| `RUNTIME_DRIFT` | há mudanças conhecidas que podem afetar o runtime daquele serviço |
+| `UNKNOWN` | credencial, metadata, SHA, histórico ou classificação não permitem uma conclusão segura |
+
+O código de saída é `0` quando não há drift de runtime conhecido, `1` quando há
+drift relevante que requer decisão operacional e `2` quando ao menos uma fonte
+essencial não pôde ser verificada.
+
+As regras consideram `apps/frontend/**` no runtime da Vercel,
+`apps/backend/**` no runtime do Render e `packages/**`, lockfile, workspace,
+Turbo e configurações raiz conhecidas como potencialmente compartilhados.
+Testes, documentação e scripts operacionais isolados não contam como runtime.
+O `package.json` raiz é analisado por campo: por exemplo, adicionar apenas
+`release:check` ou `smoke:production` é operacional, enquanto dependências,
+gerenciador de pacotes ou scripts de build são compartilhados. Arquivos sem uma
+regra segura produzem `UNKNOWN`.
+
+`NO_RUNTIME_DRIFT` é uma triagem por caminhos e campos conhecidos, não uma prova
+absoluta de compatibilidade e nem autorização automática para deixar de
+publicar. Revise o diff e as recomendações do relatório. Um rollback, alias
+ambíguo, deploy sem metadata Git ou histórico divergente também exige revisão
+manual.
+
+Este comando não substitui `pnpm smoke:production`: o relatório compara releases
+e não valida que os endpoints estejam respondendo. O smoke test valida o caminho
+HTTP público e não compara versões. Nenhum dos dois substitui testes autenticados,
+validação de banco, migrations, workers ou e-mails.
 
 ## Saúde e workers
 

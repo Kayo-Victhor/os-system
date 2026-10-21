@@ -13,7 +13,8 @@
     "test:e2e:ui": "node scripts/e2e-check.mjs && playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "test:e2e:typecheck": "tsc --noEmit -p e2e/tsconfig.json",
-    "smoke:production": "node scripts/smoke-production.mjs"
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "release:check": "node scripts/check-release-consistency.mjs"
   },
   "type": "module",
   "packageManager": "pnpm@11.21.0+sha512.521705bce689924eac72f5a3587122f362689ef6571e55ba80076fd637c11132ecffada26fad4ea79c485bfddbfd3d5a2a5b05805a77e893de71ec8a6cca3bb1",
