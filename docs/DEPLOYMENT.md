@@ -184,6 +184,37 @@ Em produção, nunca execute `prisma migrate dev`, `prisma migrate reset` ou
 `prisma db push`; nunca edite migration aplicada e não trate rollback de
 aplicação como rollback do banco.
 
+### Recuperação de uma migration Prisma com falha
+
+Quando `prisma migrate deploy` falhar, interrompa novas tentativas automáticas
+e preserve os logs completos do deploy e da migration. Mantenha a versão
+anterior da aplicação atendendo tráfego quando ela continuar operacional e
+compatível com o estado parcial do schema; não promova a versão nova apenas
+para tentar contornar a falha.
+
+Em um ambiente operacional autorizado, confira `prisma migrate status` e o
+registro correspondente em `_prisma_migrations`, incluindo `migration_name`,
+`started_at`, `finished_at`, `rolled_back_at`, `applied_steps_count` e `logs`.
+Não exponha a URL de conexão nem outros segredos ao registrar o diagnóstico.
+Inspecione também os efeitos reais da migration no schema e nos dados: não
+deduza o estado apenas pelo arquivo SQL ou pela mensagem final do deploy.
+
+Depois de identificar e tratar a causa, escolha explicitamente uma destas
+estratégias:
+
+- use `prisma migrate resolve --rolled-back <migration>` somente quando todos
+  os efeitos parciais tiverem sido revertidos ou tornados seguros e a migration
+  puder ser executada novamente sem duplicar nem corromper alterações;
+- use `prisma migrate resolve --applied <migration>` somente quando todos os
+  efeitos previstos estiverem comprovadamente presentes e corretos no banco.
+
+Nunca marque uma migration como aplicada apenas para desbloquear o deploy e
+nunca execute `prisma migrate reset` em produção. Qualquer recuperação que
+execute SQL corretivo, altere dados ou restaure um backup exige aprovação
+operacional explícita e confirmação prévia de um backup ou ponto de recuperação
+utilizável. Registre a decisão, as evidências verificadas, o responsável e a
+validação posterior antes de retomar o deploy.
+
 ## Publicação coordenada
 
 A sequência abaixo pressupõe que o frontend novo funcione temporariamente com o
