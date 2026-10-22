@@ -282,6 +282,33 @@ textarea.input {
   margin-top: var(--space-4);
 }
 
+.app-load-error {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-load-error h1 {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-title);
+}
+
+.app-load-error details {
+  max-width: min(640px, 100%);
+  margin-top: var(--space-5);
+  text-align: left;
+}
+
+.app-load-error code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+}
+
 .spinner {
   width: 20px;
   height: 20px;

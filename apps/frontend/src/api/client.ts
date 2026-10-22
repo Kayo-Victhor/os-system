@@ -28,17 +28,44 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+const READ_REQUEST_TIMEOUT_MS = 30_000;
+const SESSION_REFRESH_TIMEOUT_MS = 30_000;
+
 let refreshInFlight: Promise<boolean> | null = null;
 let customerRefreshInFlight: Promise<boolean> | null = null;
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+) {
+  const controller = new AbortController();
+  const externalSignal = init.signal;
+  const forwardAbort = () => controller.abort(externalSignal?.reason);
+  const timeout = window.setTimeout(() => {
+    controller.abort(new DOMException("Tempo limite da requisição excedido.", "TimeoutError"));
+  }, timeoutMs);
+
+  if (externalSignal?.aborted) {
+    forwardAbort();
+  } else {
+    externalSignal?.addEventListener("abort", forwardAbort, { once: true });
+  }
+
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+    window.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", forwardAbort);
+  });
+}
 
 async function attemptRefresh(): Promise<boolean> {
   if (!refreshInFlight) {
     const csrfToken = readCookie("csrf_token");
-    refreshInFlight = fetch(`${API_URL}/auth/refresh`, {
+    refreshInFlight = fetchWithTimeout(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
-    })
+    }, SESSION_REFRESH_TIMEOUT_MS)
       .then((res) => res.ok)
       .catch(() => false)
       .finally(() => {
@@ -52,11 +79,11 @@ async function attemptRefresh(): Promise<boolean> {
 async function attemptCustomerRefresh(): Promise<boolean> {
   if (!customerRefreshInFlight) {
     const csrfToken = readCookie("customer_csrf_token");
-    customerRefreshInFlight = fetch(`${API_URL}/auth/customer/refresh`, {
+    customerRefreshInFlight = fetchWithTimeout(`${API_URL}/auth/customer/refresh`, {
       method: "POST",
       credentials: "include",
       headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
-    })
+    }, SESSION_REFRESH_TIMEOUT_MS)
       .then((res) => res.ok)
       .catch(() => false)
       .finally(() => {
@@ -103,13 +130,17 @@ async function rawRequest(
     }
   }
 
-  return fetch(buildUrl(path, options.query), {
+  const request = {
     method,
     credentials: "include",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
-  });
+  } satisfies RequestInit;
+
+  return method === "GET"
+    ? fetchWithTimeout(buildUrl(path, options.query), request, READ_REQUEST_TIMEOUT_MS)
+    : fetch(buildUrl(path, options.query), request);
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
