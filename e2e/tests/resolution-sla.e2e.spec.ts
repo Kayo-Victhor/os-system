@@ -53,6 +53,67 @@ test("estimativas têm relógio explícito, limites de minuto e não afetam esta
   expect(resolutionSlaEstimate(tracked, NaN)).toBeNull();
 });
 
+test("fila renderiza a criticidade do SLA antes dos itens sem prazo e terminais", async ({ page, admin, database, runId }) => {
+  const customer = await createE2ECustomerAccount(runId, { name: "Cliente da fila SLA" });
+  const now = Date.now();
+  const cases = [
+    ["Vencida baixa", "OPEN", "LOW", -240],
+    ["Vencida urgente", "WAITING", "URGENT", -60],
+    ["Vigente próxima", "IN_PROGRESS", "LOW", 30],
+    ["Vigente distante", "OPEN", "URGENT", 120],
+    ["Sem prazo", "OPEN", "URGENT", null],
+    ["Concluída", "COMPLETED", "URGENT", -480],
+  ] as const;
+
+  for (const [label, status, priority, minutes] of cases) {
+    const order = await createE2EServiceOrder({
+      customerId: customer.customer.id,
+      createdById: admin.id,
+      runId,
+      title: `Fila SLA ${label}`,
+      status,
+      priority,
+    });
+    if (minutes !== null) {
+      await database.serviceOrder.update({
+        where: { id: order.id },
+        data: {
+          resolutionSlaMinutes: 480,
+          resolutionDueAt: new Date(now + minutes * 60_000),
+        },
+      });
+    }
+  }
+
+  await page.goto("/login");
+  await page.getByLabel("E-mail *").fill(admin.email);
+  await page.getByLabel("Senha *").fill(admin.password);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/service-orders");
+
+  await expect(page.locator(".order-title")).toHaveText([
+    "Fila SLA Vencida urgente",
+    "Fila SLA Vencida baixa",
+    "Fila SLA Vigente próxima",
+    "Fila SLA Vigente distante",
+    "Fila SLA Sem prazo",
+    "Fila SLA Concluída",
+  ]);
+
+  const captureDir = process.env.OS_SLA_CAPTURE_DIR;
+  if (captureDir) {
+    mkdirSync(captureDir, { recursive: true });
+    await page.screenshot({ path: `${captureDir}/fila-ordenada.png`, fullPage: false, animations: "disabled" });
+  }
+
+  await page.getByLabel("Filtrar por prioridade").selectOption("LOW");
+  await expect(page.locator(".order-title")).toHaveText([
+    "Fila SLA Vencida baixa",
+    "Fila SLA Vigente próxima",
+  ]);
+});
+
 test("lista e detalhe exibem SLA real sem consultas por linha e sem expor campos no portal", async ({ page, admin, database, runId }) => {
   const customer = await createE2ECustomerAccount(runId, { name: "Cliente de demonstração" });
   const now = Date.now();

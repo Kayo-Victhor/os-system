@@ -179,6 +179,113 @@ export interface ListServiceOrdersFilters {
   search?: string;
 }
 
+function serviceOrderQueueWhere(
+  filters: ListServiceOrdersFilters,
+  actor?: ServiceOrderActor,
+) {
+  const conditions: Prisma.Sql[] = [];
+  const technicianId = actor?.role === "TECHNICIAN"
+    ? actor.userId
+    : filters.technicianId;
+
+  if (filters.status) {
+    conditions.push(Prisma.sql`service_order."status" = CAST(${filters.status} AS "ServiceOrderStatus")`);
+  }
+  if (filters.priority) {
+    conditions.push(Prisma.sql`service_order."priority" = CAST(${filters.priority} AS "ServiceOrderPriority")`);
+  }
+  if (filters.customerId) {
+    conditions.push(Prisma.sql`service_order."customerId" = ${filters.customerId}`);
+  }
+  if (technicianId) {
+    conditions.push(Prisma.sql`service_order."technicianId" = ${technicianId}`);
+  }
+  if (filters.search) {
+    const pattern = `%${filters.search}%`;
+    conditions.push(Prisma.sql`(
+      service_order."title" ILIKE ${pattern}
+      OR service_order."description" ILIKE ${pattern}
+    )`);
+  }
+
+  return conditions.length > 0
+    ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`
+    : Prisma.empty;
+}
+
+function serviceOrderQueueIdsQuery(
+  filters: ListServiceOrdersFilters,
+  actor?: ServiceOrderActor,
+) {
+  const where = serviceOrderQueueWhere(filters, actor);
+  const offset = (filters.page - 1) * filters.limit;
+
+  return Prisma.sql`
+    SELECT service_order."id"
+    FROM "ServiceOrder" AS service_order
+    ${where}
+    ORDER BY
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionSlaMinutes" IS NOT NULL
+          AND service_order."resolutionDueAt" IS NOT NULL
+          AND service_order."resolutionDueAt" < CURRENT_TIMESTAMP
+          THEN 0
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionSlaMinutes" IS NOT NULL
+          AND service_order."resolutionDueAt" IS NOT NULL
+          THEN 1
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          THEN 2
+        ELSE 3
+      END ASC,
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionDueAt" < CURRENT_TIMESTAMP
+          THEN CASE service_order."priority"
+            WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1
+            WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3
+          END
+      END ASC,
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionDueAt" < CURRENT_TIMESTAMP
+          THEN service_order."resolutionDueAt"
+      END ASC,
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionDueAt" >= CURRENT_TIMESTAMP
+          THEN service_order."resolutionDueAt"
+      END ASC,
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionDueAt" >= CURRENT_TIMESTAMP
+          THEN CASE service_order."priority"
+            WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1
+            WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3
+          END
+      END ASC,
+      CASE
+        WHEN service_order."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          AND service_order."resolutionDueAt" IS NULL
+          THEN CASE service_order."priority"
+            WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1
+            WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3
+          END
+      END ASC,
+      CASE
+        WHEN service_order."status" NOT IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+          THEN CASE service_order."status"
+            WHEN 'COMPLETED' THEN 0 WHEN 'CANCELLED' THEN 1
+          END
+      END ASC,
+      service_order."createdAt" DESC,
+      service_order."id" DESC
+    LIMIT ${filters.limit}
+    OFFSET ${offset}
+  `;
+}
+
 export async function listServiceOrders(
   filters: ListServiceOrdersFilters,
   actor?: ServiceOrderActor,
@@ -200,29 +307,36 @@ export async function listServiceOrders(
       : {}),
   };
 
-  const [items, total] = await prisma.$transaction([
-    prisma.serviceOrder.findMany({
-      where,
-      skip: (filters.page - 1) * filters.limit,
-      take: filters.limit,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: serviceOrderRecordSelect,
-    }),
-    prisma.serviceOrder.count({ where }),
-  ]);
-  const totalPages = Math.ceil(total / filters.limit);
+  return prisma.$transaction(async (tx) => {
+    const total = await tx.serviceOrder.count({ where });
+    const orderedIds = await tx.$queryRaw<Array<{ id: string }>>(
+      serviceOrderQueueIdsQuery(filters, actor),
+    );
+    const records = orderedIds.length > 0
+      ? await tx.serviceOrder.findMany({
+          where: { id: { in: orderedIds.map(({ id }) => id) } },
+          select: serviceOrderRecordSelect,
+        })
+      : [];
+    const recordsById = new Map(records.map((record) => [record.id, record]));
+    const items = orderedIds.flatMap(({ id }) => {
+      const record = recordsById.get(id);
+      return record ? [withResolutionSla(record)] : [];
+    });
+    const totalPages = Math.ceil(total / filters.limit);
 
-  return {
-    items: items.map(withResolutionSla),
-    pagination: {
-      page: filters.page,
-      limit: filters.limit,
-      total,
-      totalPages,
-      hasPreviousPage: filters.page > 1,
-      hasNextPage: filters.page < totalPages,
-    },
-  };
+    return {
+      items,
+      pagination: {
+        page: filters.page,
+        limit: filters.limit,
+        total,
+        totalPages,
+        hasPreviousPage: filters.page > 1,
+        hasNextPage: filters.page < totalPages,
+      },
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
 export async function getServiceOrderById(
